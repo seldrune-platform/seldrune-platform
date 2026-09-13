@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -8,6 +8,10 @@ from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, Uuid, 
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.db.base import Base
+
+
+def utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 class Task(Base):
@@ -77,5 +81,9 @@ class TaskEvent(Base):
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+        DateTime(timezone=True),
+        default=utc_now,
+        server_default=func.now(),
+        nullable=False,
+        index=True,
     )
