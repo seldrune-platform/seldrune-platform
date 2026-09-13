@@ -6,7 +6,7 @@ def test_owner_command_requires_approval_then_executes(_client) -> None:  # noqa
     client = _client
     token, organization_id = register_owner(client)
     headers = {"Authorization": f"Bearer {token}"}
-    for capability in ["research", "analysis", "architecture"]:
+    for capability in ["research", "analysis", "architecture", "engineering", "validation"]:
         create_agent(client, organization_id, headers, name=f"{capability.title()} Agent",
                      slug=f"owner-{capability}", capabilities=[capability])
 
@@ -18,7 +18,7 @@ def test_owner_command_requires_approval_then_executes(_client) -> None:  # noqa
     assert created.status_code == 201
     command = created.json()
     assert command["context"]["owner_command"]["approval_status"] == "awaiting_approval"
-    assert len(command["steps"]) == 3
+    assert len(command["steps"]) == 5
 
     execute_url = (
         f"/api/v1/organizations/{organization_id}/owner-commands/{command['id']}/execute"
@@ -35,7 +35,7 @@ def test_owner_command_requires_approval_then_executes(_client) -> None:  # noqa
     executed = client.post(execute_url, headers=headers, json={})
     assert executed.status_code == 200
     assert executed.json()["run"]["status"] == "succeeded"
-    assert executed.json()["execution"]["executed_steps"] == 3
+    assert executed.json()["execution"]["executed_steps"] == 5
 
 
 def test_owner_command_list_excludes_regular_orchestrations(_client) -> None:  # noqa: F811
