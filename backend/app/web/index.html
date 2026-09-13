@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Seldrune Owner Console</title><link rel="stylesheet" href="/console-assets/console.css">
+</head>
+<body>
+  <aside><div class="brand"><span>SE</span><div>Seldrune<small>Owner Console</small></div></div>
+    <nav><a class="active" href="#overview">Overview</a><a href="#command">New command</a>
+      <a href="#commands">Command center</a></nav><div class="secure">Governed runtime<br><b>Approval gates active</b></div></aside>
+  <main>
+    <header><div><p class="eyebrow">EXECUTIVE OPERATING SYSTEM</p><h1>Good work starts with one clear command.</h1></div>
+      <button id="connect">Connect workspace</button></header>
+    <section id="auth" class="panel auth hidden"><input id="org" placeholder="Organization ID">
+      <input id="token" type="password" placeholder="Access token"><button id="save">Open console</button></section>
+    <section id="overview" class="metrics">
+      <article><label>Strategic commands</label><strong id="total">—</strong><small>all owner objectives</small></article>
+      <article><label>Awaiting approval</label><strong id="pending">—</strong><small>needs your decision</small></article>
+      <article><label>Execution progress</label><strong id="progress">—</strong><small>steps completed</small></article>
+      <article><label>Estimated AI cost</label><strong id="cost">—</strong><small>USD across commands</small></article>
+    </section>
+    <section id="command" class="command panel"><div><p class="eyebrow">OWNER COMMAND</p>
+      <h2>What should Seldrune accomplish?</h2><p>Describe the outcome. Seldrune will research, analyze, design, assign Agentic AIs, and wait for approval.</p></div>
+      <form id="command-form"><textarea id="objective" minlength="5" required placeholder="Example: Find a healthcare automation opportunity, validate the market, design the solution, and estimate delivery cost."></textarea>
+        <button type="submit">Create governed plan <span>→</span></button></form></section>
+    <section id="commands"><div class="section-head"><div><p class="eyebrow">LIVE PORTFOLIO</p><h2>Strategic commands</h2></div>
+      <button class="ghost" id="refresh">Refresh</button></div><div id="command-list" class="list"><div class="empty">Connect your workspace to load commands.</div></div></section>
+  </main><dialog id="brief"><button class="close" aria-label="Close">×</button><p class="eyebrow">DECISION BRIEF</p><div id="brief-body"></div></dialog>
+  <div id="toast"></div><script src="/console-assets/console.js" defer></script>
+</body></html>

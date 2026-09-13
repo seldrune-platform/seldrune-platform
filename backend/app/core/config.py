@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Seldrune Platform"
-    app_version: str = "0.13.0"
+    app_version: str = "0.14.0"
     environment: str = "development"
     api_v1_prefix: str = "/api/v1"
     enable_docs: bool = True
