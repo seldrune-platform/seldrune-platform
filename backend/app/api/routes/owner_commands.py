@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -19,6 +19,7 @@ from backend.app.schemas.orchestration import (
 from backend.app.services.audit import record_audit
 from backend.app.services.autonomous_execution import execute_orchestration_autonomously
 from backend.app.services.orchestrator import create_orchestration_run, refresh_orchestration_status
+from backend.app.services.owner_dashboard import build_decision_brief, build_owner_dashboard
 
 router = APIRouter(prefix="/organizations", tags=["owner-command-center"])
 OwnerDep = Annotated[Membership, Depends(require_org_permission(Permission.ORG_MANAGE))]
@@ -79,6 +80,30 @@ def list_owner_commands(
         refresh_orchestration_status(session, run)
     session.commit()
     return [_to_public(session, run) for run in commands]
+
+
+@router.get("/{organization_id}/owner-dashboard", response_model=dict[str, Any])
+def get_owner_dashboard(
+    organization_id: UUID, membership: OwnerDep, session: SessionDep
+) -> dict[str, Any]:
+    _require_owner(membership)
+    return build_owner_dashboard(session, organization_id)
+
+
+@router.get(
+    "/{organization_id}/owner-commands/{run_id}/brief",
+    response_model=dict[str, Any],
+)
+def get_owner_command_brief(
+    organization_id: UUID, run_id: UUID, membership: OwnerDep, session: SessionDep
+) -> dict[str, Any]:
+    _require_owner(membership)
+    run = _get_run(session, organization_id, run_id)
+    if not _is_owner_command(run):
+        raise HTTPException(status_code=404, detail="Owner command not found")
+    refresh_orchestration_status(session, run)
+    session.commit()
+    return build_decision_brief(session, run)
 
 
 @router.post(
