@@ -52,3 +52,41 @@ class ResearchSessionPublic(BaseModel):
     completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class ResearchSourceIngest(BaseModel):
+    title: str = Field(min_length=2, max_length=300)
+    uri: str | None = None
+    content: str = Field(min_length=1, max_length=100000)
+    provider: str = Field(default="manual", max_length=40)
+    source_type: str = Field(default="external", max_length=40)
+    connector_id: UUID | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ResearchSourcePublic(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    organization_id: UUID
+    research_session_id: UUID
+    connector_id: UUID | None
+    knowledge_entry_id: UUID | None
+    title: str
+    uri: str | None
+    provider: str
+    source_type: str
+    status: str
+    content_sha256: str
+    metadata_json: dict[str, Any]
+    retrieved_at: datetime | None
+    created_at: datetime
+
+
+class ResearchExecuteRequest(BaseModel):
+    connector_ids: list[UUID] | None = None
+    max_results_per_connector: int = Field(default=10, ge=1, le=50)
+
+
+class ResearchExecutionResponse(BaseModel):
+    session: ResearchSessionPublic
+    sources: list[ResearchSourcePublic]
