@@ -5,6 +5,7 @@ from backend.app.api.routes.auth import router as auth_router
 from backend.app.api.routes.knowledge import router as knowledge_router
 from backend.app.api.routes.orchestrations import router as orchestrations_router
 from backend.app.api.routes.organizations import router as organizations_router
+from backend.app.api.routes.research import router as research_router
 from backend.app.api.routes.runtime import router as runtime_router
 from backend.app.api.routes.status import router as status_router
 from backend.app.api.routes.tools import router as tools_router
@@ -26,6 +27,7 @@ def create_app() -> FastAPI:
     app.include_router(runtime_router, prefix=settings.api_v1_prefix)
     app.include_router(tools_router, prefix=settings.api_v1_prefix)
     app.include_router(knowledge_router, prefix=settings.api_v1_prefix)
+    app.include_router(research_router, prefix=settings.api_v1_prefix)
     return app
 
 
