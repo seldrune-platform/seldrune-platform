@@ -20,6 +20,9 @@ class Permission(StrEnum):
     TOOLS_APPROVE = "tools:approve"
     KNOWLEDGE_READ = "knowledge:read"
     KNOWLEDGE_WRITE = "knowledge:write"
+    RESEARCH_READ = "research:read"
+    RESEARCH_RUN = "research:run"
+    RESEARCH_MANAGE = "research:manage"
     AUDIT_READ = "audit:read"
     BILLING_READ = "billing:read"
     BILLING_MANAGE = "billing:manage"
@@ -40,6 +43,9 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             Permission.TOOLS_APPROVE,
             Permission.KNOWLEDGE_READ,
             Permission.KNOWLEDGE_WRITE,
+            Permission.RESEARCH_READ,
+            Permission.RESEARCH_RUN,
+            Permission.RESEARCH_MANAGE,
             Permission.AUDIT_READ,
             Permission.BILLING_READ,
         }
@@ -52,6 +58,8 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             Permission.TOOLS_RUN,
             Permission.KNOWLEDGE_READ,
             Permission.KNOWLEDGE_WRITE,
+            Permission.RESEARCH_READ,
+            Permission.RESEARCH_RUN,
         }
     ),
     Role.AUDITOR: frozenset(
@@ -59,6 +67,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             Permission.ORG_READ,
             Permission.MEMBERS_READ,
             Permission.KNOWLEDGE_READ,
+            Permission.RESEARCH_READ,
             Permission.AUDIT_READ,
             Permission.BILLING_READ,
         }
