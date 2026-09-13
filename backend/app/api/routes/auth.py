@@ -1,13 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
 
-from backend.app.api.dependencies import get_current_user
+from backend.app.api.dependencies import CurrentUserDep, SessionDep
 from backend.app.core.config import settings
 from backend.app.core.rbac import ROLE_PERMISSIONS, Role
 from backend.app.core.security import create_access_token, hash_password, verify_password
-from backend.app.db.session import get_db
 from backend.app.models.membership import Membership
 from backend.app.models.organization import Organization
 from backend.app.models.user import User
@@ -34,7 +32,7 @@ def _auth_response(user: User) -> AuthResponse:
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterRequest, session: Session = Depends(get_db)) -> AuthResponse:
+def register(payload: RegisterRequest, session: SessionDep) -> AuthResponse:
     email = str(payload.email).strip().lower()
     slug = payload.organization_slug.strip().lower()
 
@@ -82,7 +80,7 @@ def register(payload: RegisterRequest, session: Session = Depends(get_db)) -> Au
 
 
 @router.post("/login", response_model=AuthResponse)
-def login(payload: LoginRequest, session: Session = Depends(get_db)) -> AuthResponse:
+def login(payload: LoginRequest, session: SessionDep) -> AuthResponse:
     email = str(payload.email).strip().lower()
     user = session.scalar(select(User).where(User.email == email))
 
@@ -109,10 +107,7 @@ def login(payload: LoginRequest, session: Session = Depends(get_db)) -> AuthResp
 
 
 @router.get("/me", response_model=MeResponse)
-def me(
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_db),
-) -> MeResponse:
+def me(current_user: CurrentUserDep, session: SessionDep) -> MeResponse:
     rows = session.execute(
         select(Membership, Organization)
         .join(Organization, Organization.id == Membership.organization_id)

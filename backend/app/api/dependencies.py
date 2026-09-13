@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
@@ -14,12 +15,11 @@ from backend.app.models.membership import Membership
 from backend.app.models.user import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_v1_prefix}/auth/login")
+TokenDep = Annotated[str, Depends(oauth2_scheme)]
+SessionDep = Annotated[Session, Depends(get_db)]
 
 
-def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    session: Session = Depends(get_db),
-) -> User:
+def get_current_user(token: TokenDep, session: SessionDep) -> User:
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or expired credentials",
@@ -36,13 +36,16 @@ def get_current_user(
     return user
 
 
+CurrentUserDep = Annotated[User, Depends(get_current_user)]
+
+
 def require_org_permission(
     permission: Permission,
 ) -> Callable[..., Membership]:
     def dependency(
         organization_id: UUID,
-        current_user: User = Depends(get_current_user),
-        session: Session = Depends(get_db),
+        current_user: CurrentUserDep,
+        session: SessionDep,
     ) -> Membership:
         membership = session.scalar(
             select(Membership).where(
