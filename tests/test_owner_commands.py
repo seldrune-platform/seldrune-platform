@@ -1,4 +1,5 @@
-from tests.test_autonomous_execution import client, create_agent, register_owner
+from tests.test_autonomous_execution import client as _client  # noqa: F401
+from tests.test_autonomous_execution import create_agent, register_owner
 
 
 def test_owner_command_requires_approval_then_executes(client) -> None:

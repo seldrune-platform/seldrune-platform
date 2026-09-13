@@ -33,7 +33,11 @@ def _is_owner_command(run: OrchestrationRun) -> bool:
     return bool((run.context or {}).get("owner_command"))
 
 
-@router.post("/{organization_id}/owner-commands", response_model=OrchestrationRunPublic, status_code=201)
+@router.post(
+    "/{organization_id}/owner-commands",
+    response_model=OrchestrationRunPublic,
+    status_code=201,
+)
 def create_owner_command(
     organization_id: UUID,
     payload: OrchestrationCreate,
@@ -77,7 +81,10 @@ def list_owner_commands(
     return [_to_public(session, run) for run in commands]
 
 
-@router.post("/{organization_id}/owner-commands/{run_id}/approve", response_model=OrchestrationRunPublic)
+@router.post(
+    "/{organization_id}/owner-commands/{run_id}/approve",
+    response_model=OrchestrationRunPublic,
+)
 def approve_owner_command(
     organization_id: UUID, run_id: UUID, membership: OwnerDep,
     current_user: CurrentUserDep, session: SessionDep,
@@ -98,7 +105,10 @@ def approve_owner_command(
     return _to_public(session, run)
 
 
-@router.post("/{organization_id}/owner-commands/{run_id}/execute", response_model=AutonomousExecutionResponse)
+@router.post(
+    "/{organization_id}/owner-commands/{run_id}/execute",
+    response_model=AutonomousExecutionResponse,
+)
 def execute_owner_command(
     organization_id: UUID, run_id: UUID, payload: AutonomousExecutionRequest,
     membership: OwnerDep, current_user: CurrentUserDep, session: SessionDep,
