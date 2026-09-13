@@ -2,7 +2,8 @@ from tests.test_autonomous_execution import client as _client  # noqa: F401
 from tests.test_autonomous_execution import create_agent, register_owner
 
 
-def test_owner_command_requires_approval_then_executes(client) -> None:
+def test_owner_command_requires_approval_then_executes(_client) -> None:
+    client = _client
     token, organization_id = register_owner(client)
     headers = {"Authorization": f"Bearer {token}"}
     for capability in ["research", "analysis", "architecture"]:
@@ -37,7 +38,8 @@ def test_owner_command_requires_approval_then_executes(client) -> None:
     assert executed.json()["execution"]["executed_steps"] == 3
 
 
-def test_owner_command_list_excludes_regular_orchestrations(client) -> None:
+def test_owner_command_list_excludes_regular_orchestrations(_client) -> None:
+    client = _client
     token, organization_id = register_owner(client)
     headers = {"Authorization": f"Bearer {token}"}
     client.post(f"/api/v1/organizations/{organization_id}/orchestrations",
