@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from backend.app.core.tasking import (
     ALLOWED_TASK_TRANSITIONS,
@@ -33,7 +33,7 @@ def transition_task(
     if target is TaskStatus.FAILED and not error_message:
         raise TaskTransitionError("Failed tasks require an error message")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     task.status = target.value
 
     if target is TaskStatus.QUEUED:
