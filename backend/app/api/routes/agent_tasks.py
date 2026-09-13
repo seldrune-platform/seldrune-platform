@@ -73,7 +73,10 @@ def create_agent(
         )
     )
     if existing is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Agent slug already exists")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Agent slug already exists",
+        )
 
     agent = Agent(
         organization_id=organization_id,
