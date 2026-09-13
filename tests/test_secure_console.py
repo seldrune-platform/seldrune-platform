@@ -1,0 +1,21 @@
+from fastapi.testclient import TestClient
+
+from backend.app.main import app
+
+
+def test_console_uses_account_login_without_manual_tokens() -> None:
+    with TestClient(app) as client:
+        page = client.get("/console").text
+        assert 'id="email"' in page
+        assert 'id="password"' in page
+        assert "Organization ID" not in page
+        assert "Access token" not in page
+
+
+def test_console_script_resolves_owner_membership_and_logout() -> None:
+    with TestClient(app) as client:
+        script = client.get("/console-assets/console.js").text
+        assert "/auth/login" in script
+        assert "/auth/me" in script
+        assert "sessionStorage.removeItem" in script
+        assert "x.role==='owner'" in script
