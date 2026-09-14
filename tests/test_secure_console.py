@@ -22,5 +22,5 @@ def test_console_script_resolves_bootstrap_and_owner_membership() -> None:
         assert "/auth/login" in script
         assert "/auth/me" in script
         assert "sessionStorage.removeItem" in script
-        assert "x.role==='owner'" in script
+        assert "role === 'owner'" in script
         assert "Passwords do not match." in script
