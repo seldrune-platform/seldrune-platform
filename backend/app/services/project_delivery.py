@@ -134,7 +134,7 @@ def sync_project_delivery_outcome(
 ) -> dict[str, object] | None:
     delivery = (run.context or {}).get("project_delivery") or {}
     project_id = delivery.get("project_id")
-    if not project_id or run.status != "succeeded":
+    if not project_id:
         return None
     project = session.get(OrganizationProject, UUID(project_id))
     if project is None or project.organization_id != run.organization_id:
