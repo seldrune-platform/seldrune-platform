@@ -108,7 +108,10 @@ class ProjectCreate(BaseModel):
     department_id: UUID | None = None
     goal_id: UUID | None = None
     lead_agent_id: UUID | None = None
-    status: str = Field(default="planned", pattern=r"^(planned|active|paused|blocked|completed|cancelled)$")
+    status: str = Field(
+        default="planned",
+        pattern=r"^(planned|active|paused|blocked|completed|cancelled)$",
+    )
     priority: int = Field(default=50, ge=0, le=100)
     budget_limit_usd: float = Field(default=0.0, ge=0)
     budget_spent_usd: float = Field(default=0.0, ge=0)
