@@ -37,6 +37,20 @@ def test_owner_command_requires_approval_then_executes(_client) -> None:  # noqa
     assert executed.json()["run"]["status"] == "succeeded"
     assert executed.json()["execution"]["executed_steps"] == 5
 
+    brief = client.get(
+        f"/api/v1/organizations/{organization_id}/owner-commands/{command['id']}/brief",
+        headers=headers,
+    )
+    assert brief.status_code == 200
+    result = brief.json()
+    assert result["progress"] == {"completed": 5, "total": 5}
+    assert result["usage"]["execution_tokens"] > 0
+    assert result["usage"]["total_tokens"] >= result["usage"]["execution_tokens"]
+    assert all(step["output"] for step in result["steps"])
+    assert all(step["agent_name"] for step in result["steps"])
+    assert all(step["model"] == "mock-v1" for step in result["steps"])
+    assert all(step["duration_ms"] is not None for step in result["steps"])
+
 
 def test_owner_command_list_excludes_regular_orchestrations(_client) -> None:  # noqa: F811
     client = _client
