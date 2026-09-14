@@ -118,3 +118,42 @@ def test_owner_command_provisions_founding_agents_once(_client) -> None:  # noqa
     assert agents.status_code == 200
     founding = [agent for agent in agents.json() if agent["slug"].startswith("seldrune-")]
     assert len(founding) == 5
+
+
+
+def test_semantic_outcome_gate_blocks_false_success_promotion(_client) -> None:  # noqa: F811
+    client = _client
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    created = client.post(
+        f"/api/v1/organizations/{organization_id}/owner-commands",
+        headers=headers,
+        json={"objective": "Produce a result that is not ready and has not been verified"},
+    ).json()
+    command_id = created["id"]
+    client.post(
+        f"/api/v1/organizations/{organization_id}/owner-commands/{command_id}/approve",
+        headers=headers,
+    )
+    executed = client.post(
+        f"/api/v1/organizations/{organization_id}/owner-commands/{command_id}/execute",
+        headers=headers,
+        json={},
+    )
+    assert executed.status_code == 200
+    assert executed.json()["run"]["status"] == "succeeded"
+
+    brief = client.get(
+        f"/api/v1/organizations/{organization_id}/owner-commands/{command_id}/brief",
+        headers=headers,
+    ).json()
+    assert brief["outcome"]["verdict"] == "not_achieved"
+    assert brief["outcome"]["promotable"] is False
+    assert brief["readiness"] == "blocked"
+
+    promoted = client.post(
+        f"/api/v1/organizations/{organization_id}/owner-commands/{command_id}/promote",
+        headers=headers,
+    )
+    assert promoted.status_code == 409
+    assert "Outcome is not achieved" in promoted.json()["detail"]
