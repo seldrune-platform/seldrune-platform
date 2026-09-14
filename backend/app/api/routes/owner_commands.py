@@ -293,6 +293,7 @@ def execute_owner_command(
         max_retries_per_step=payload.max_retries_per_step,
         max_upstream_text_chars=payload.max_upstream_text_chars,
     )
+    refresh_orchestration_status(session, run)
     sync_project_delivery_outcome(
         session,
         run=run,
