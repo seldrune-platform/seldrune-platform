@@ -24,3 +24,6 @@ def test_owner_console_assets_are_served() -> None:
         assert "Recorded cost" in script.text
         assert "Execution time" in script.text
         assert "result-step" in script.text
+        assert "Promote to organization" in script.text
+        assert "/promote" in script.text
+        assert "Open Organization Board" in script.text
