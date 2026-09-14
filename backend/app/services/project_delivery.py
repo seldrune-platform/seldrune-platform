@@ -40,7 +40,7 @@ def launch_project_delivery(
         f'Deliver the organization project "{project.name}". '
         f"Project scope: {project.description or project.name}. "
         "Create and execute a concrete, evidence-based delivery plan within the recorded "
-        f"budget limit of $${project.budget_limit_usd:.2f} and resource limit of "
+        f"budget limit of USD {project.budget_limit_usd:.2f} and resource limit of "
         f"{project.resource_limit_units} units. Stop before any unapproved external action."
     )[:4000]
     ensure_founding_agents(
