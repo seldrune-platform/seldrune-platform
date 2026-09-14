@@ -192,6 +192,7 @@ def test_delivery_outcome_completes_project_and_goal(client) -> None:
     )
     assert executed.status_code == 200
     assert executed.json()["run"]["status"] == "succeeded"
+    assert executed.json()["run"]["summary"]["project_delivery_sync"]["verdict"] == "achieved"
 
     completed = client.get(f"{base}/projects", headers=headers).json()[0]
     assert completed["status"] == "completed"
