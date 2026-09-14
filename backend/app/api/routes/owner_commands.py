@@ -294,11 +294,17 @@ def execute_owner_command(
         max_upstream_text_chars=payload.max_upstream_text_chars,
     )
     refresh_orchestration_status(session, run)
-    sync_project_delivery_outcome(
+    delivery_outcome = sync_project_delivery_outcome(
         session,
         run=run,
         actor_user_id=current_user.id,
     )
+    if delivery_outcome is not None:
+        run.summary = {
+            **(run.summary or {}),
+            "project_delivery_sync": delivery_outcome,
+        }
+    session.flush()
     session.commit()
     session.refresh(run)
     return AutonomousExecutionResponse(run=_to_public(session, run), execution=report)
