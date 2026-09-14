@@ -1,4 +1,5 @@
 from time import perf_counter
+from typing import Any
 
 from openai import OpenAI
 
@@ -47,14 +48,24 @@ class ModelGateway:
         if not request.model or request.model.startswith("mock-"):
             raise ModelGatewayError("An OpenAI model must be configured")
 
+        response_args: dict[str, Any] = {
+            "model": request.model,
+            "input": request.input_text,
+            "instructions": request.instructions,
+            "max_output_tokens": request.max_output_tokens,
+        }
+        if request.response_schema is not None:
+            response_args["text"] = {
+                "format": {
+                    "type": "json_schema",
+                    "name": "seldrune_response",
+                    "strict": True,
+                    "schema": request.response_schema,
+                }
+            }
         try:
             client = OpenAI(timeout=self.settings.model_timeout_seconds)
-            response = client.responses.create(
-                model=request.model,
-                input=request.input_text,
-                instructions=request.instructions,
-                max_output_tokens=request.max_output_tokens,
-            )
+            response = client.responses.create(**response_args)
         except Exception as exc:
             raise ModelGatewayError(
                 f"OpenAI request failed: {type(exc).__name__}"
