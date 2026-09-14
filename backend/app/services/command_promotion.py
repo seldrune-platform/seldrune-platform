@@ -79,11 +79,21 @@ def promote_command_to_project(
             and project.organization_id == run.organization_id
             and goal.organization_id == run.organization_id
         ):
+            department = (
+                session.get(Department, project.department_id)
+                if project.department_id
+                else None
+            )
             return {
                 "created": False,
-                "goal": goal,
-                "project": project,
-                "department_id": project.department_id,
+                "goal_id": str(goal.id),
+                "goal_title": goal.title,
+                "project_id": str(project.id),
+                "project_name": project.name,
+                "department_id": str(project.department_id)
+                if project.department_id
+                else None,
+                "department_name": department.name if department else None,
             }
 
     ensure_founding_departments(
@@ -158,7 +168,10 @@ def promote_command_to_project(
     )
     return {
         "created": True,
-        "goal": goal,
-        "project": project,
-        "department_id": project.department_id,
+        "goal_id": str(goal.id),
+        "goal_title": goal.title,
+        "project_id": str(project.id),
+        "project_name": project.name,
+        "department_id": str(project.department_id) if project.department_id else None,
+        "department_name": department.name if department else None,
     }
