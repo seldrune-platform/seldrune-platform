@@ -47,10 +47,18 @@ def registration_payload() -> dict[str, str]:
 
 
 def test_register_login_and_protected_routes(client: TestClient) -> None:
+    status_before = client.get("/api/v1/auth/bootstrap-status")
+    assert status_before.status_code == 200
+    assert status_before.json() == {"required": True}
+
     register = client.post("/api/v1/auth/register", json=registration_payload())
     assert register.status_code == 201
     registration = register.json()
     assert registration["token_type"] == "bearer"
+
+    status_after = client.get("/api/v1/auth/bootstrap-status")
+    assert status_after.status_code == 200
+    assert status_after.json() == {"required": False}
 
     token = registration["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -83,12 +91,19 @@ def test_unauthenticated_me_is_rejected(client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_duplicate_registration_is_rejected(client: TestClient) -> None:
+def test_registration_is_locked_after_first_owner(client: TestClient) -> None:
     first = client.post("/api/v1/auth/register", json=registration_payload())
     assert first.status_code == 201
 
-    duplicate = client.post("/api/v1/auth/register", json=registration_payload())
-    assert duplicate.status_code == 409
+    second_payload = {
+        **registration_payload(),
+        "email": "attacker@example.com",
+        "organization_name": "Other",
+        "organization_slug": "other",
+    }
+    second = client.post("/api/v1/auth/register", json=second_payload)
+    assert second.status_code == 403
+    assert second.json()["detail"] == "Owner onboarding is already complete"
 
 
 def test_wrong_password_is_rejected(client: TestClient) -> None:
