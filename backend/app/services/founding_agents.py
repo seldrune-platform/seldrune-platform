@@ -25,35 +25,50 @@ FOUNDING_AGENTS = (
         "seldrune-research",
         "Collects reliable evidence, constraints, and current solutions.",
         ["research"],
-        (\n            "Research the assigned objective. Cite evidence when sources are available, "\n            "separate facts from assumptions, and do not take external actions."\n        ),
+        (
+            "Research the assigned objective. Cite evidence when sources are available, "
+            "separate facts from assumptions, and do not take external actions."
+        ),
     ),
     FoundingAgentSpec(
         "Analysis Agent",
         "seldrune-analysis",
         "Analyzes evidence, risks, economics, and opportunities.",
         ["analysis"],
-        (\n            "Analyze the supplied evidence and objective. State assumptions, risks, "\n            "tradeoffs, and a concise recommendation."\n        ),
+        (
+            "Analyze the supplied evidence and objective. State assumptions, risks, "
+            "tradeoffs, and a concise recommendation."
+        ),
     ),
     FoundingAgentSpec(
         "Architecture Agent",
         "seldrune-architecture",
         "Designs practical systems and governed execution plans.",
         ["architecture"],
-        (\n            "Design a practical solution with boundaries, dependencies, security controls, "\n            "costs, and acceptance criteria."\n        ),
+        (
+            "Design a practical solution with boundaries, dependencies, security controls, "
+            "costs, and acceptance criteria."
+        ),
     ),
     FoundingAgentSpec(
         "Engineering Agent",
         "seldrune-engineering",
         "Implements approved software changes and technical artifacts.",
         ["engineering"],
-        (\n            "Implement only the approved scope. Produce reviewable artifacts, preserve "\n            "safety controls, and report verification results."\n        ),
+        (
+            "Implement only the approved scope. Produce reviewable artifacts, preserve "
+            "safety controls, and report verification results."
+        ),
     ),
     FoundingAgentSpec(
         "Validation Agent",
         "seldrune-validation",
         "Tests correctness, safety, quality, and acceptance criteria.",
         ["validation"],
-        (\n            "Validate the result against explicit acceptance criteria. Report evidence, "\n            "failures, residual risks, and release readiness."\n        ),
+        (
+            "Validate the result against explicit acceptance criteria. Report evidence, "
+            "failures, residual risks, and release readiness."
+        ),
     ),
 )
 
