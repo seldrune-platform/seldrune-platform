@@ -279,6 +279,9 @@ def execute_owner_command(
         raise HTTPException(status_code=404, detail="Owner command not found")
     if command.get("approval_status") != "approved":
         raise HTTPException(status_code=409, detail="Owner command requires approval")
+    delivery_project_id = ((run.context or {}).get("project_delivery") or {}).get(
+        "project_id"
+    )
     prepare_orchestration_research(
         session,
         run=run,
@@ -298,6 +301,7 @@ def execute_owner_command(
         session,
         run=run,
         actor_user_id=current_user.id,
+        project_id=delivery_project_id,
     )
     if delivery_outcome is not None:
         run.summary = {
