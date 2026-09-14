@@ -323,9 +323,30 @@ function renderBrief(data) {
       promotion.append(note, promote);
     } else {
       const note = document.createElement('p');
-      note.textContent =
-        'Promotion blocked: resolve the outcome evidence and rerun validation first.';
+      note.textContent = data.recovery_command_id
+        ? 'A linked recovery plan is awaiting your review.'
+        : 'Promotion blocked: create a recovery plan to resolve the evidence gap.';
       promotion.append(note);
+      if (!data.recovery_command_id) {
+        const recover = document.createElement('button');
+        recover.textContent = 'Create recovery plan';
+        recover.onclick = async () => {
+          recover.disabled = true;
+          recover.textContent = 'Creating…';
+          try {
+            await api(`/owner-commands/${data.command_id}/recover`, {method: 'POST'});
+            const refreshed = await api(`/owner-commands/${data.command_id}/brief`);
+            renderBrief(refreshed);
+            load();
+            toast('Recovery plan created for approval');
+          } catch (error) {
+            recover.disabled = false;
+            recover.textContent = 'Create recovery plan';
+            toast(error.message);
+          }
+        };
+        promotion.append(recover);
+      }
     }
     box.append(promotion);
   }
@@ -356,6 +377,7 @@ function reportMarkdown(data) {
     `- Recorded cost: $${Number(data.usage?.estimated_cost_usd || 0).toFixed(8)}`,
     `- Execution time: ${formatDuration(data.usage?.execution_duration_ms)}`,
     `- Organization project: ${data.promotion?.project_id || 'Not promoted'}`,
+    `- Recovery command: ${data.recovery_command_id || 'Not created'}`,
     '',
   ];
   data.steps.forEach(step => {
