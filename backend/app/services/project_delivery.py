@@ -138,6 +138,22 @@ def sync_project_delivery_outcome(
     project_id = project_id or delivery.get("project_id")
     if project is None and project_id:
         project = session.get(OrganizationProject, UUID(project_id))
+    if project is None:
+        candidates = list(
+            session.scalars(
+                select(OrganizationProject).where(
+                    OrganizationProject.organization_id == run.organization_id
+                )
+            )
+        )
+        project = next(
+            (
+                item
+                for item in candidates
+                if (item.metadata_json or {}).get("delivery_command_id") == str(run.id)
+            ),
+            None,
+        )
     if project is None or project.organization_id != run.organization_id:
         return None
     if (project.metadata_json or {}).get("delivery_synced_command_id") == str(run.id):
