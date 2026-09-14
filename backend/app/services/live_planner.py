@@ -75,7 +75,7 @@ def build_live_plan(
             "step-count and no-external-action constraints. Return JSON only in this form: "
             '{"steps":[{"title":"short title","objective":"specific outcome",'
             '"capability":"research|analysis|architecture|engineering|validation",'
-            '"priority":30}]}. Use 1-8 steps. Do not claim work has already happened."
+            '"priority":30}]}. Use 1-8 steps. Do not claim work has already happened.'
         ),
         input_text=f"Owner objective:\n{objective}",
         max_output_tokens=min(settings.model_max_output_tokens, 1200),
