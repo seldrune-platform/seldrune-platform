@@ -100,7 +100,7 @@ def build_live_plan(
                 },
             },
         )
-    except (ModelGatewayError, ValueError, TypeError, json.JSONDecodeError) as exc:
+    except (ModelGatewayError, ValueError, TypeError) as exc:
         return PlanResult(
             build_default_plan(objective),
             "deterministic-v1",
