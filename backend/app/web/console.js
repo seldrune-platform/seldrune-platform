@@ -225,6 +225,17 @@ function renderBrief(data) {
     : `Planner: Safe fallback · ${data.planner.reason || 'provider unavailable'}`;
   box.append(planner);
 
+  const outcome = document.createElement('div');
+  outcome.className = `outcome-panel outcome-${data.outcome?.verdict || 'review'}`;
+  const outcomeTitle = document.createElement('strong');
+  outcomeTitle.textContent =
+    `Outcome: ${String(data.outcome?.verdict || 'review').replace('_', ' ').toUpperCase()}`;
+  const outcomeReason = document.createElement('span');
+  outcomeReason.textContent =
+    data.outcome?.reasons?.[0] || 'Outcome evidence requires review.';
+  outcome.append(outcomeTitle, outcomeReason);
+  box.append(outcome);
+
   const metrics = document.createElement('div');
   metrics.className = 'result-metrics';
   metrics.append(
@@ -289,10 +300,10 @@ function renderBrief(data) {
       link.href = '/console-assets/organization-board.html';
       link.textContent = 'Open Organization Board';
       promotion.append(note, link);
-    } else {
+    } else if (data.outcome?.promotable) {
       const note = document.createElement('p');
       note.textContent =
-        'Turn this successful outcome into a governed goal and delivery project.';
+        'Turn this verified outcome into a governed goal and delivery project.';
       const promote = document.createElement('button');
       promote.textContent = 'Promote to organization';
       promote.onclick = async () => {
@@ -310,6 +321,11 @@ function renderBrief(data) {
         }
       };
       promotion.append(note, promote);
+    } else {
+      const note = document.createElement('p');
+      note.textContent =
+        'Promotion blocked: resolve the outcome evidence and rerun validation first.';
+      promotion.append(note);
     }
     box.append(promotion);
   }
@@ -331,6 +347,8 @@ function reportMarkdown(data) {
     data.objective,
     '',
     `- Status: ${data.status}`,
+    `- Outcome: ${data.outcome?.verdict || 'review'}`,
+    `- Outcome reason: ${data.outcome?.reasons?.join('; ') || 'Not assessed'}`,
     `- Approval: ${data.approval_status}`,
     `- Planner: ${data.planner.mode || 'unknown'} · ${data.planner.model || 'fallback'}`,
     `- Progress: ${data.progress.completed}/${data.progress.total}`,
