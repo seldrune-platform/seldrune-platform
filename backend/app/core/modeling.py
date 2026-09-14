@@ -29,6 +29,7 @@ class ModelRequest:
     instructions: str | None = None
     max_output_tokens: int | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    response_schema: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
