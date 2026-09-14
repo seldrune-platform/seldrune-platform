@@ -34,4 +34,7 @@ def test_owner_dashboard_and_decision_brief(client) -> None:
     assert decision["approval_status"] == "awaiting_approval"
     assert decision["readiness"] == "ready"
     assert decision["risks"] == []
+    assert decision["usage"]["execution_tokens"] == 0
+    assert decision["usage"]["estimated_cost_usd"] == 0
+    assert all(step["output"] is None for step in decision["steps"])
     assert decision["recommended_next_action"] == "Review the plan and approve the command"
