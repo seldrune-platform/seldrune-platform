@@ -169,6 +169,10 @@ def build_decision_brief(session: Session, run: OrchestrationRun) -> dict[str, A
         if task_status in {"failed", "missing"}:
             risks.append(f"Step {step.sequence} is {task_status}: {step.title}")
 
+    outcome = assess_command_outcome(session, run=run).to_dict()
+    if run.status == "succeeded" and not outcome["promotable"]:
+        risks.extend(outcome["reasons"])
+
     approval = run.context["owner_command"].get("approval_status")
     if approval != "approved":
         next_action = "Review the plan and approve the command"
@@ -178,10 +182,6 @@ def build_decision_brief(session: Session, run: OrchestrationRun) -> dict[str, A
         next_action = "Resolve or rerun the unverified outcome before promotion"
     else:
         next_action = "Review outcomes and choose the next objective"
-    outcome = assess_command_outcome(session, run=run).to_dict()
-    if run.status == "succeeded" and not outcome["promotable"]:
-        risks.extend(outcome["reasons"])
-
     planner = (run.context or {}).get("planner", {})
     planner_tokens = int((planner.get("usage") or {}).get("total_tokens") or 0)
     return {
