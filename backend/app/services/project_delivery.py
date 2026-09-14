@@ -155,9 +155,13 @@ def sync_project_delivery_outcome(
             None,
         )
     if project is None or project.organization_id != run.organization_id:
-        return None
-    if (project.metadata_json or {}).get("delivery_synced_command_id") == str(run.id):
-        return (project.metadata_json or {}).get("delivery_outcome")
+        raise ProjectDeliveryError("Linked delivery project could not be resolved")
+    existing_outcome = (project.metadata_json or {}).get("delivery_outcome")
+    if (
+        (project.metadata_json or {}).get("delivery_synced_command_id") == str(run.id)
+        and isinstance(existing_outcome, dict)
+    ):
+        return existing_outcome
 
     assessment = assess_command_outcome(session, run=run)
     status_by_verdict = {
