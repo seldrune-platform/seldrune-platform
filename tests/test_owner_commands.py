@@ -51,3 +51,28 @@ def test_owner_command_list_excludes_regular_orchestrations(_client) -> None:  #
     )
     assert response.status_code == 200
     assert len(response.json()) == 1
+
+
+def test_owner_command_provisions_founding_agents_once(_client) -> None:  # noqa: F811
+    client = _client
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    url = f"/api/v1/organizations/{organization_id}/owner-commands"
+
+    first = client.post(url, headers=headers, json={"objective": "Analyze a clinic workflow"})
+    assert first.status_code == 201
+    command = first.json()
+    assert command["context"]["owner_command"]["approval_status"] == "awaiting_approval"
+    assert command["context"]["planner"]["mode"] == "fallback"
+    assert command["summary"]["unmatched_steps"] == 0
+    assert all(step["assigned_agent_id"] for step in command["steps"])
+
+    second = client.post(url, headers=headers, json={"objective": "Research another workflow"})
+    assert second.status_code == 201
+    agents = client.get(
+        f"/api/v1/organizations/{organization_id}/agents",
+        headers=headers,
+    )
+    assert agents.status_code == 200
+    founding = [agent for agent in agents.json() if agent["slug"].startswith("seldrune-")]
+    assert len(founding) == 5
