@@ -48,7 +48,7 @@ def test_organization_kernel_bootstrap_and_operating_cycle(client) -> None:
             "description": "Research, build, validate, and package one automation pilot.",
             "department_id": engineering["id"],
             "goal_id": goal_body["id"],
-            "status": "active",
+            "status": "planned",
             "priority": 95,
             "budget_limit_usd": 1000,
             "resource_limit_units": 100,
@@ -56,6 +56,29 @@ def test_organization_kernel_bootstrap_and_operating_cycle(client) -> None:
     )
     assert project.status_code == 201
     project_body = project.json()
+
+    launched = client.post(
+        f"{base}/projects/{project_body['id']}/launch",
+        headers=headers,
+    )
+    assert launched.status_code == 201
+    delivery_command = launched.json()
+    assert delivery_command["context"]["owner_command"]["approval_status"] == (
+        "awaiting_approval"
+    )
+    assert delivery_command["context"]["project_delivery"]["project_id"] == project_body["id"]
+    assert all(step["assigned_agent_id"] for step in delivery_command["steps"])
+
+    repeated_launch = client.post(
+        f"{base}/projects/{project_body['id']}/launch",
+        headers=headers,
+    )
+    assert repeated_launch.status_code == 201
+    assert repeated_launch.json()["id"] == delivery_command["id"]
+
+    launched_project = client.get(f"{base}/projects", headers=headers).json()[0]
+    assert launched_project["status"] == "active"
+    assert launched_project["metadata_json"]["delivery_command_id"] == delivery_command["id"]
 
     delegation = client.post(
         f"{base}/delegations",
