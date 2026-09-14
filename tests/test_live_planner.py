@@ -4,7 +4,7 @@ from backend.app.services import live_planner
 
 class SuccessfulPlannerGateway:
     def generate(self, request):
-        assert request.metadata["purpose"] == "owner_command_planning"
+        assert request.metadata["purpose"] == "owner_command_planning"\n        assert request.response_schema["properties"]["steps"]["minItems"] == 3\n        assert request.response_schema["properties"]["steps"]["maxItems"] == 3
         return (
             ModelResult(
                 provider=ModelProvider.OPENAI,
@@ -33,7 +33,7 @@ def test_live_planner_accepts_structured_model_plan(monkeypatch) -> None:
         "Create exactly three planning steps without external actions.",
         gateway=SuccessfulPlannerGateway(),
     )
-    assert result.planner_version == "live-model-v1"
+    assert result.planner_version == "live-model-v2"
     assert len(result.steps) == 3
     assert [step.required_capabilities for step in result.steps] == [
         ["research"],
