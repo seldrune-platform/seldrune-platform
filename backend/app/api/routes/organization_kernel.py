@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
 from backend.app.api.dependencies import CurrentUserDep, SessionDep, require_org_permission
+from backend.app.api.routes.orchestrations import _to_public
 from backend.app.core.rbac import Permission
 from backend.app.models.agent import Agent
 from backend.app.models.membership import Membership
@@ -14,6 +15,7 @@ from backend.app.models.organization_kernel import (
     OrganizationGoal,
     OrganizationProject,
 )
+from backend.app.schemas.orchestration import OrchestrationRunPublic
 from backend.app.schemas.organization_kernel import (
     DelegationCreate,
     DelegationPublic,
@@ -30,6 +32,7 @@ from backend.app.schemas.organization_kernel import (
 )
 from backend.app.services.audit import record_audit
 from backend.app.services.founding_agents import ensure_founding_agents
+from backend.app.services.project_delivery import ProjectDeliveryError, launch_project_delivery
 from backend.app.services.organization_kernel import (
     build_organization_snapshot,
     ensure_founding_departments,
@@ -394,6 +397,32 @@ def update_project(
     session.commit()
     session.refresh(project)
     return project
+
+
+@router.post(
+    "/{organization_id}/projects/{project_id}/launch",
+    response_model=OrchestrationRunPublic,
+    status_code=status.HTTP_201_CREATED,
+)
+def launch_project(
+    organization_id: UUID,
+    project_id: UUID,
+    _membership: ManageDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> OrchestrationRunPublic:
+    project = _project(session, organization_id, project_id)
+    try:
+        command = launch_project_delivery(
+            session,
+            project=project,
+            actor_user_id=current_user.id,
+        )
+    except ProjectDeliveryError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    session.commit()
+    session.refresh(command)
+    return _to_public(session, command)
 
 
 @router.post(
