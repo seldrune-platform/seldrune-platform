@@ -84,8 +84,10 @@ def build_decision_brief(session: Session, run: OrchestrationRun) -> dict[str, A
         next_action = "Execute or resume the approved command"
     else:
         next_action = "Review outcomes and choose the next objective"
+    planner = (run.context or {}).get("planner", {})
     return {"command_id": str(run.id), "objective": run.objective, "status": run.status,
-            "approval_status": approval, "readiness": "blocked" if risks else "ready",
+            "approval_status": approval, "planner": planner,
+            "readiness": "blocked" if risks else "ready",
             "progress": {"completed": sum(item["status"] == "succeeded" for item in details),
                          "total": len(details)}, "risks": risks,
             "recommended_next_action": next_action, "steps": details}
