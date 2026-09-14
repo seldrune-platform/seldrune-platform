@@ -6,7 +6,6 @@ from sqlalchemy import select
 
 from backend.app.api.dependencies import CurrentUserDep, SessionDep, require_org_permission
 from backend.app.api.routes.orchestrations import _get_run, _to_public
-from backend.app.core.orchestration import build_default_plan
 from backend.app.core.rbac import Permission, Role
 from backend.app.models.membership import Membership
 from backend.app.models.orchestration import OrchestrationRun
@@ -18,6 +17,8 @@ from backend.app.schemas.orchestration import (
 )
 from backend.app.services.audit import record_audit
 from backend.app.services.autonomous_execution import execute_orchestration_autonomously
+from backend.app.services.founding_agents import ensure_founding_agents
+from backend.app.services.live_planner import build_live_plan
 from backend.app.services.orchestrator import create_orchestration_run, refresh_orchestration_status
 from backend.app.services.owner_dashboard import build_decision_brief, build_owner_dashboard
 
@@ -47,9 +48,16 @@ def create_owner_command(
     session: SessionDep,
 ) -> OrchestrationRunPublic:
     _require_owner(membership)
+    ensure_founding_agents(
+        session,
+        organization_id=organization_id,
+        created_by_user_id=current_user.id,
+    )
+    planned = build_live_plan(payload.objective)
     context = {
         **payload.context,
         "owner_command": {"approval_status": "awaiting_approval", "approved_by": None},
+        "planner": planned.metadata,
     }
     run = create_orchestration_run(
         session,
@@ -57,11 +65,23 @@ def create_owner_command(
         created_by_user_id=current_user.id,
         objective=payload.objective,
         context=context,
-        plan=build_default_plan(payload.objective),
+        plan=planned.steps,
     )
-    record_audit(session, organization_id=organization_id, actor_user_id=current_user.id,
-                 action="owner_command.created", resource_type="orchestration",
-                 resource_id=str(run.id), details={"approval_status": "awaiting_approval"})
+    run.planner_version = planned.planner_version
+    record_audit(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+        action="owner_command.created",
+        resource_type="orchestration",
+        resource_id=str(run.id),
+        details={
+            "approval_status": "awaiting_approval",
+            "planner_version": planned.planner_version,
+            "planner": planned.metadata,
+            "step_count": len(planned.steps),
+        },
+    )
     session.commit()
     session.refresh(run)
     return _to_public(session, run)
