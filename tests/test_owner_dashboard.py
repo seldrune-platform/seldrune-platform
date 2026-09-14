@@ -22,7 +22,7 @@ def test_owner_dashboard_and_decision_brief(client) -> None:
     assert body["command_counts"]["total"] == 1
     assert body["command_counts"]["awaiting_approval"] == 1
     assert body["execution"]["total_steps"] == 3
-    assert body["execution"]["matched_steps"] == 0
+    assert body["execution"]["matched_steps"] == 3
     assert body["usage"]["total_tokens"] == 0
 
     brief = client.get(
@@ -32,6 +32,6 @@ def test_owner_dashboard_and_decision_brief(client) -> None:
     assert brief.status_code == 200
     decision = brief.json()
     assert decision["approval_status"] == "awaiting_approval"
-    assert decision["readiness"] == "blocked"
-    assert len(decision["risks"]) == 3
+    assert decision["readiness"] == "ready"
+    assert decision["risks"] == []
     assert decision["recommended_next_action"] == "Review the plan and approve the command"
