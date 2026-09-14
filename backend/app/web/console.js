@@ -278,6 +278,42 @@ function renderBrief(data) {
     box.append(details);
   });
 
+  if (data.status === 'succeeded') {
+    const promotion = document.createElement('div');
+    promotion.className = 'promotion-panel';
+    if (data.promotion) {
+      const note = document.createElement('p');
+      note.textContent =
+        `Organization project: ${data.promotion.department_name || 'Organization'} · ${data.objective}`;
+      const link = document.createElement('a');
+      link.href = '/console-assets/organization-board.html';
+      link.textContent = 'Open Organization Board';
+      promotion.append(note, link);
+    } else {
+      const note = document.createElement('p');
+      note.textContent =
+        'Turn this successful outcome into a governed goal and delivery project.';
+      const promote = document.createElement('button');
+      promote.textContent = 'Promote to organization';
+      promote.onclick = async () => {
+        promote.disabled = true;
+        promote.textContent = 'Promoting…';
+        try {
+          await api(`/owner-commands/${data.command_id}/promote`, {method: 'POST'});
+          const refreshed = await api(`/owner-commands/${data.command_id}/brief`);
+          renderBrief(refreshed);
+          toast('Goal and project created');
+        } catch (error) {
+          promote.disabled = false;
+          promote.textContent = 'Promote to organization';
+          toast(error.message);
+        }
+      };
+      promotion.append(note, promote);
+    }
+    box.append(promotion);
+  }
+
   const download = document.createElement('button');
   download.className = 'report-download';
   download.textContent = 'Download report';
@@ -301,6 +337,7 @@ function reportMarkdown(data) {
     `- Total tokens: ${data.usage?.total_tokens || 0}`,
     `- Recorded cost: $${Number(data.usage?.estimated_cost_usd || 0).toFixed(8)}`,
     `- Execution time: ${formatDuration(data.usage?.execution_duration_ms)}`,
+    `- Organization project: ${data.promotion?.project_id || 'Not promoted'}`,
     '',
   ];
   data.steps.forEach(step => {
