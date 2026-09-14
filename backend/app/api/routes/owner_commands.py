@@ -31,6 +31,7 @@ from backend.app.services.owner_dashboard import build_decision_brief, build_own
 from backend.app.services.playbook_engine import consolidate_playbooks
 from backend.app.services.playbook_guidance import build_playbook_guidance
 from backend.app.services.playbook_overlay import merge_playbook
+from backend.app.services.project_delivery import sync_project_delivery_outcome
 
 router = APIRouter(prefix="/organizations", tags=["owner-command-center"])
 OwnerDep = Annotated[Membership, Depends(require_org_permission(Permission.ORG_MANAGE))]
@@ -292,4 +293,11 @@ def execute_owner_command(
         max_retries_per_step=payload.max_retries_per_step,
         max_upstream_text_chars=payload.max_upstream_text_chars,
     )
+    sync_project_delivery_outcome(
+        session,
+        run=run,
+        actor_user_id=current_user.id,
+    )
+    session.commit()
+    session.refresh(run)
     return AutonomousExecutionResponse(run=_to_public(session, run), execution=report)
