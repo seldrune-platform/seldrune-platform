@@ -190,6 +190,7 @@ def build_decision_brief(session: Session, run: OrchestrationRun) -> dict[str, A
         "status": run.status,
         "approval_status": approval,
         "promotion": run.context["owner_command"].get("promotion"),
+        "recovery_command_id": run.context["owner_command"].get("recovery_command_id"),
         "outcome": outcome,
         "planner": planner,
         "readiness": "blocked" if risks else "ready",
