@@ -29,7 +29,7 @@ _FALLBACK_TEMPLATES = (
     ("Research the objective", "Collect reliable evidence and constraints for", "research", 80),
     ("Analyze findings", "Analyze evidence, risks, economics, and options for", "analysis", 70),
     ("Design the solution", "Design a practical governed approach for", "architecture", 60),
-    ("Review safety and controls", "Define security and governance controls for", "architecture", 50),
+    (\n        "Review safety and controls",\n        "Define security and governance controls for",\n        "architecture",\n        50,\n    ),
     ("Implement the solution", "Build the approved solution for", "engineering", 40),
     ("Validate the solution", "Test correctness and acceptance criteria for", "validation", 30),
     ("Plan rollout", "Prepare a controlled rollout and recovery plan for", "architecture", 20),
