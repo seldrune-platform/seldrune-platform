@@ -17,6 +17,7 @@ from backend.app.schemas.orchestration import (
 )
 from backend.app.services.adaptive_planning import build_adaptive_planning_guidance
 from backend.app.services.audit import record_audit
+from backend.app.services.command_recovery import CommandRecoveryError, create_recovery_command
 from backend.app.services.command_promotion import (
     CommandPromotionError,
     promote_command_to_project,
@@ -189,6 +190,36 @@ def promote_owner_command(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     session.commit()
     return result
+
+
+@router.post(
+    "/{organization_id}/owner-commands/{run_id}/recover",
+    response_model=OrchestrationRunPublic,
+    status_code=201,
+)
+def recover_owner_command(
+    organization_id: UUID,
+    run_id: UUID,
+    membership: OwnerDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> OrchestrationRunPublic:
+    _require_owner(membership)
+    run = _get_run(session, organization_id, run_id)
+    if not _is_owner_command(run):
+        raise HTTPException(status_code=404, detail="Owner command not found")
+    refresh_orchestration_status(session, run)
+    try:
+        recovery = create_recovery_command(
+            session,
+            source_run=run,
+            actor_user_id=current_user.id,
+        )
+    except CommandRecoveryError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    session.commit()
+    session.refresh(recovery)
+    return _to_public(session, recovery)
 
 
 @router.post(
