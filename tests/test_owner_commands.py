@@ -51,6 +51,34 @@ def test_owner_command_requires_approval_then_executes(_client) -> None:  # noqa
     assert all(step["model"] == "mock-v1" for step in result["steps"])
     assert all(step["duration_ms"] is not None for step in result["steps"])
 
+    promote_url = (
+        f"/api/v1/organizations/{organization_id}/owner-commands/{command['id']}/promote"
+    )
+    promoted = client.post(promote_url, headers=headers)
+    assert promoted.status_code == 200
+    assert promoted.json()["created"] is True
+    assert promoted.json()["department_name"]
+    assert client.post(promote_url, headers=headers).json()["created"] is False
+
+    promoted_brief = client.get(
+        f"/api/v1/organizations/{organization_id}/owner-commands/{command['id']}/brief",
+        headers=headers,
+    ).json()
+    assert promoted_brief["promotion"]["project_id"] == promoted.json()["project_id"]
+
+    goals = client.get(
+        f"/api/v1/organizations/{organization_id}/goals",
+        headers=headers,
+    ).json()
+    projects = client.get(
+        f"/api/v1/organizations/{organization_id}/projects",
+        headers=headers,
+    ).json()
+    assert len(goals) == 1
+    assert len(projects) == 1
+    assert projects[0]["goal_id"] == goals[0]["id"]
+    assert projects[0]["metadata_json"]["owner_command_id"] == command["id"]
+
 
 def test_owner_command_list_excludes_regular_orchestrations(_client) -> None:  # noqa: F811
     client = _client
