@@ -180,11 +180,13 @@ def test_delivery_outcome_completes_project_and_goal(client) -> None:
         headers=headers,
     ).json()
     command_id = command["id"]
+    assert command["context"]["project_delivery"]["project_id"] == project["id"]
     approved = client.post(
         f"{base}/owner-commands/{command_id}/approve",
         headers=headers,
     )
     assert approved.status_code == 200
+    assert approved.json()["context"]["project_delivery"]["project_id"] == project["id"]
     executed = client.post(
         f"{base}/owner-commands/{command_id}/execute",
         headers=headers,
