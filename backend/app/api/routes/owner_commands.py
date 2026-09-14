@@ -17,6 +17,10 @@ from backend.app.schemas.orchestration import (
 )
 from backend.app.services.adaptive_planning import build_adaptive_planning_guidance
 from backend.app.services.audit import record_audit
+from backend.app.services.command_promotion import (
+    CommandPromotionError,
+    promote_command_to_project,
+)
 from backend.app.services.autonomous_execution import execute_orchestration_autonomously
 from backend.app.services.evidence_execution import prepare_orchestration_research
 from backend.app.services.founding_agents import ensure_founding_agents
@@ -157,6 +161,34 @@ def get_owner_command_brief(
     refresh_orchestration_status(session, run)
     session.commit()
     return build_decision_brief(session, run)
+
+
+@router.post(
+    "/{organization_id}/owner-commands/{run_id}/promote",
+    response_model=dict[str, Any],
+)
+def promote_owner_command(
+    organization_id: UUID,
+    run_id: UUID,
+    membership: OwnerDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    _require_owner(membership)
+    run = _get_run(session, organization_id, run_id)
+    if not _is_owner_command(run):
+        raise HTTPException(status_code=404, detail="Owner command not found")
+    refresh_orchestration_status(session, run)
+    try:
+        result = promote_command_to_project(
+            session,
+            run=run,
+            actor_user_id=current_user.id,
+        )
+    except CommandPromotionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    session.commit()
+    return result
 
 
 @router.post(
