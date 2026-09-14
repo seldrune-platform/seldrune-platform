@@ -131,9 +131,10 @@ def sync_project_delivery_outcome(
     *,
     run: OrchestrationRun,
     actor_user_id: UUID,
+    project_id: UUID | str | None = None,
 ) -> dict[str, object] | None:
     delivery = (run.context or {}).get("project_delivery") or {}
-    project_id = delivery.get("project_id")
+    project_id = project_id or delivery.get("project_id")
     if not project_id:
         return None
     project = session.get(OrganizationProject, UUID(project_id))
