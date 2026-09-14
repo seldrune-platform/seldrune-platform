@@ -7,3 +7,17 @@ body{display:block}.app-shell{display:grid;grid-template-columns:240px 1fr;min-h
 dialog{max-height:calc(100vh - 30px);overflow:auto}.result-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0}.result-metric{background:#f4f6f1;border:1px solid var(--line);border-radius:9px;padding:10px}.result-metric small{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em}.result-metric strong{display:block;margin-top:6px;font-size:13px}.result-step{border-top:1px solid var(--line);padding:13px 0}.result-step summary{cursor:pointer;font-weight:750;line-height:1.45}.result-meta{color:var(--muted);font-size:11px;line-height:1.55}.result-step pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f7f9f5;border:1px solid #e7ece8;border-radius:9px;padding:13px;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;max-height:420px;overflow:auto}.report-download{margin-top:16px;background:var(--green)}@media(max-width:520px){.result-metrics{grid-template-columns:1fr}.result-step pre{max-height:none}}
 
 .promotion-panel{margin:18px 0 4px;padding:15px;background:#e8f3ea;border:1px solid #cfe2d3;border-radius:11px}.promotion-panel p{margin:0 0 10px;line-height:1.5}.promotion-panel a{display:inline-block;text-decoration:none;color:var(--green);font-weight:750;font-size:13px}.promotion-panel button{background:var(--green)}
+
+
+.outcome-panel {
+  display: grid;
+  gap: .35rem;
+  margin: 1rem 0;
+  padding: .9rem 1rem;
+  border-radius: .8rem;
+  background: #edf4ef;
+}
+.outcome-panel span { font-size: .9rem; }
+.outcome-not_achieved { background: #f8e9e7; color: #8c3933; }
+.outcome-review { background: #fff3d5; color: #745617; }
+.outcome-achieved { background: #e6f4ea; color: #176b50; }
