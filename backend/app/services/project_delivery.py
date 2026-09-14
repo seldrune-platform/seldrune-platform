@@ -97,7 +97,11 @@ def launch_project_delivery(
         "delivery_state": "awaiting_owner_approval",
     }
     goal = session.get(OrganizationGoal, project.goal_id) if project.goal_id else None
-    if goal is not None and goal.organization_id == project.organization_id and goal.status == "planned":
+    if (
+        goal is not None
+        and goal.organization_id == project.organization_id
+        and goal.status == "planned"
+    ):
         goal.status = "active"
 
     record_audit(
