@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from backend.app.api.dependencies import CurrentUserDep, SessionDep
@@ -11,6 +11,7 @@ from backend.app.models.organization import Organization
 from backend.app.models.user import User
 from backend.app.schemas.auth import (
     AuthResponse,
+    BootstrapStatus,
     LoginRequest,
     MeResponse,
     MembershipPublic,
@@ -21,6 +22,7 @@ from backend.app.schemas.auth import (
 from backend.app.services.audit import record_audit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+_BOOTSTRAP_LOCK_ID = 7_341_337_006_011
 
 
 def _auth_response(user: User) -> AuthResponse:
@@ -31,8 +33,30 @@ def _auth_response(user: User) -> AuthResponse:
     )
 
 
+def _bootstrap_required(session: SessionDep) -> bool:
+    return session.scalar(select(Organization.id).limit(1)) is None
+
+
+@router.get("/bootstrap-status", response_model=BootstrapStatus)
+def bootstrap_status(session: SessionDep) -> BootstrapStatus:
+    return BootstrapStatus(required=_bootstrap_required(session))
+
+
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, session: SessionDep) -> AuthResponse:
+    bind = session.get_bind()
+    if bind.dialect.name == "postgresql":
+        session.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_id)"),
+            {"lock_id": _BOOTSTRAP_LOCK_ID},
+        )
+
+    if not _bootstrap_required(session):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Owner onboarding is already complete",
+        )
+
     email = str(payload.email).strip().lower()
     slug = payload.organization_slug.strip().lower()
 
