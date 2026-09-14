@@ -122,6 +122,7 @@ def build_organization_snapshot(session: Session, organization_id: UUID) -> dict
     )
 
     active_projects = [project for project in projects if project.status == "active"]
+    blocked_projects = [project for project in projects if project.status == "blocked"]
     open_goals = [goal for goal in goals if goal.status in {"planned", "active", "blocked"}]
     blocked_goals = [goal for goal in goals if goal.status == "blocked"]
     open_delegations = [
@@ -155,6 +156,7 @@ def build_organization_snapshot(session: Session, organization_id: UUID) -> dict
             "blocked_goals": len(blocked_goals),
             "projects": len(projects),
             "active_projects": len(active_projects),
+            "blocked_projects": len(blocked_projects),
             "overdue_projects": len(overdue_projects),
             "over_budget_projects": len(over_budget_projects),
             "over_capacity_projects": len(over_capacity_projects),
@@ -185,6 +187,9 @@ def build_organization_snapshot(session: Session, organization_id: UUID) -> dict
             ],
         },
         "health": {
+            "blocked_project_ratio": round(len(blocked_projects) / len(projects), 3)
+            if projects
+            else 0.0,
             "blocked_goal_ratio": round(len(blocked_goals) / len(open_goals), 3)
             if open_goals
             else 0.0,
