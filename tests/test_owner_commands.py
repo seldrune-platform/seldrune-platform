@@ -157,3 +157,27 @@ def test_semantic_outcome_gate_blocks_false_success_promotion(_client) -> None: 
     )
     assert promoted.status_code == 409
     assert "Outcome is not achieved" in promoted.json()["detail"]
+
+    recovered = client.post(
+        f"/api/v1/organizations/{organization_id}/owner-commands/{command_id}/recover",
+        headers=headers,
+    )
+    assert recovered.status_code == 201
+    recovery = recovered.json()
+    assert recovery["context"]["owner_command"]["approval_status"] == "awaiting_approval"
+    assert recovery["context"]["owner_command"]["recovery_of"] == command_id
+    assert recovery["context"]["recovery"]["source_command_id"] == command_id
+    assert all(step["assigned_agent_id"] for step in recovery["steps"])
+
+    repeated = client.post(
+        f"/api/v1/organizations/{organization_id}/owner-commands/{command_id}/recover",
+        headers=headers,
+    )
+    assert repeated.status_code == 201
+    assert repeated.json()["id"] == recovery["id"]
+
+    source_brief = client.get(
+        f"/api/v1/organizations/{organization_id}/owner-commands/{command_id}/brief",
+        headers=headers,
+    ).json()
+    assert source_brief["recovery_command_id"] == recovery["id"]
