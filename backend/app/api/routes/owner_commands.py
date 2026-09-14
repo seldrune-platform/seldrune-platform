@@ -8,6 +8,7 @@ from backend.app.api.dependencies import CurrentUserDep, SessionDep, require_org
 from backend.app.api.routes.orchestrations import _get_run, _to_public
 from backend.app.core.rbac import Permission, Role
 from backend.app.models.membership import Membership
+from backend.app.models.organization_kernel import OrganizationProject
 from backend.app.models.orchestration import OrchestrationRun
 from backend.app.schemas.orchestration import (
     AutonomousExecutionRequest,
@@ -282,6 +283,11 @@ def execute_owner_command(
     delivery_project_id = ((run.context or {}).get("project_delivery") or {}).get(
         "project_id"
     )
+    delivery_project = (
+        session.get(OrganizationProject, UUID(delivery_project_id))
+        if delivery_project_id
+        else None
+    )
     prepare_orchestration_research(
         session,
         run=run,
@@ -302,6 +308,7 @@ def execute_owner_command(
         run=run,
         actor_user_id=current_user.id,
         project_id=delivery_project_id,
+        project=delivery_project,
     )
     if delivery_outcome is not None:
         run.summary = {
