@@ -15,6 +15,7 @@ from backend.app.models.organization_kernel import (
 from backend.app.models.orchestration import OrchestrationRun, OrchestrationStep
 from backend.app.services.audit import record_audit
 from backend.app.services.organization_kernel import ensure_founding_departments
+from backend.app.services.outcome_verification import assess_command_outcome
 
 _CAPABILITY_DEPARTMENT = {
     "research": "research-intelligence",
@@ -65,6 +66,12 @@ def promote_command_to_project(
 ) -> dict[str, Any]:
     if run.status != "succeeded":
         raise CommandPromotionError("Only a succeeded command can be promoted")
+    outcome = assess_command_outcome(session, run=run)
+    if not outcome.promotable:
+        reason = outcome.reasons[0] if outcome.reasons else "Outcome requires review"
+        raise CommandPromotionError(
+            f"Outcome is {outcome.verdict.replace('_', ' ')}: {reason}"
+        )
 
     owner_command = (run.context or {}).get("owner_command") or {}
     existing = owner_command.get("promotion") or {}
