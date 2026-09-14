@@ -40,10 +40,9 @@ def create_recovery_command(
         if existing is not None and existing.organization_id == source_run.organization_id:
             return existing
 
-    reasons = "; ".join(assessment.reasons) or "Outcome evidence requires review"
     objective = (
-        f'Recover and verify the outcome for: "{source_run.objective}". '
-        f"Resolve these blockers: {reasons} "
+        f'Recover and independently verify the prior objective: "{source_run.objective}". '
+        "The previous run had insufficient readiness or verification evidence. "
         "Repeat the required validation with direct evidence, clearly state whether the "
         "objective was achieved, and do not claim success unless the evidence supports it."
     )[:4000]
