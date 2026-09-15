@@ -33,7 +33,6 @@ from backend.app.services.playbook_engine import consolidate_playbooks
 from backend.app.services.playbook_guidance import build_playbook_guidance
 from backend.app.services.playbook_overlay import merge_playbook
 from backend.app.services.portfolio_governor import (
-    PortfolioGovernorError,
     evaluate_project_execution,
 )
 from backend.app.services.project_delivery import sync_project_delivery_outcome
@@ -243,12 +242,29 @@ def approve_owner_command(
     run = _get_run(session, organization_id, run_id)
     if not _is_owner_command(run):
         raise HTTPException(status_code=404, detail="Owner command not found")
+    delivery_context = (run.context or {}).get("project_delivery") or {}
+    delivery_project_id = delivery_context.get("project_id")
+    delivery_project = (
+        session.get(OrganizationProject, UUID(delivery_project_id))
+        if delivery_project_id
+        else None
+    )
+    governor = (
+        evaluate_project_execution(
+            project=delivery_project,
+            run=run,
+            delivery_context=delivery_context,
+        )
+        if delivery_project_id
+        else None
+    )
     run.context = {
         **run.context,
         "owner_command": {
             **run.context["owner_command"],
             "approval_status": "approved",
             "approved_by": str(current_user.id),
+            **({"portfolio_governor": governor} if governor is not None else {}),
         },
     }
     record_audit(
@@ -284,6 +300,12 @@ def execute_owner_command(
         raise HTTPException(status_code=404, detail="Owner command not found")
     if command.get("approval_status") != "approved":
         raise HTTPException(status_code=409, detail="Owner command requires approval")
+    approved_governor = command.get("portfolio_governor")
+    if isinstance(approved_governor, dict) and not approved_governor.get("allowed", False):
+        raise HTTPException(
+            status_code=409,
+            detail="; ".join(approved_governor.get("reasons") or ["Execution denied"]),
+        )
     delivery_context = (run.context or {}).get("project_delivery") or {}
     delivery_project_id = delivery_context.get("project_id")
     delivery_project = (
@@ -321,14 +343,13 @@ def execute_owner_command(
             "resource_used_units": delivery_project.resource_used_units,
         }
     if delivery_project_id:
-        try:
-            governor = evaluate_project_execution(
-                project=delivery_project,
-                run=run,
-                delivery_context=delivery_context,
-            )
-        except PortfolioGovernorError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        governor = evaluate_project_execution(
+            project=delivery_project,
+            run=run,
+            delivery_context=delivery_context,
+        )
+        if not governor["allowed"]:
+            raise HTTPException(status_code=409, detail="; ".join(governor["reasons"]))
         run.context = {
             **(run.context or {}),
             "portfolio_governor": governor,
