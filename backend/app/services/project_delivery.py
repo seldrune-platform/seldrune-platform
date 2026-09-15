@@ -12,6 +12,7 @@ from backend.app.models.orchestration import OrchestrationRun, OrchestrationStep
 from backend.app.models.task import Task
 from backend.app.services.adaptive_planning import build_adaptive_planning_guidance
 from backend.app.services.audit import record_audit
+from backend.app.services.command_recovery import CommandRecoveryError, create_recovery_command
 from backend.app.services.founding_agents import ensure_founding_agents
 from backend.app.services.live_planner import build_live_plan
 from backend.app.services.orchestrator import create_orchestration_run
@@ -124,6 +125,64 @@ def launch_project_delivery(
     )
     return command
 
+
+
+def create_project_recovery(
+    session: Session,
+    *,
+    project: OrganizationProject,
+    actor_user_id: UUID,
+) -> OrchestrationRun:
+    if project.status not in {"blocked", "paused"}:
+        raise ProjectDeliveryError("Only blocked or paused projects can enter recovery")
+
+    delivery_command_id = (project.metadata_json or {}).get("delivery_command_id")
+    if not delivery_command_id:
+        raise ProjectDeliveryError("Project has no delivery command to recover")
+    source_run = session.get(OrchestrationRun, UUID(delivery_command_id))
+    if source_run is None or source_run.organization_id != project.organization_id:
+        raise ProjectDeliveryError("Project delivery command could not be resolved")
+
+    try:
+        recovery = create_recovery_command(
+            session,
+            source_run=source_run,
+            actor_user_id=actor_user_id,
+        )
+    except CommandRecoveryError as exc:
+        raise ProjectDeliveryError(str(exc)) from exc
+
+    recovery.context = {
+        **(recovery.context or {}),
+        "project_delivery": {
+            **((recovery.context or {}).get("project_delivery") or {}),
+            "project_id": str(project.id),
+            "goal_id": str(project.goal_id) if project.goal_id else None,
+            "department_id": str(project.department_id) if project.department_id else None,
+            "budget_limit_usd": project.budget_limit_usd,
+            "resource_limit_units": project.resource_limit_units,
+            "recovery_of_command_id": str(source_run.id),
+        },
+    }
+    project.metadata_json = {
+        **(project.metadata_json or {}),
+        "recovery_command_id": str(recovery.id),
+        "delivery_state": "recovery_awaiting_owner_approval",
+    }
+    record_audit(
+        session,
+        organization_id=project.organization_id,
+        actor_user_id=actor_user_id,
+        action="organization_project.recovery_created",
+        resource_type="organization_project",
+        resource_id=str(project.id),
+        details={
+            "source_command_id": str(source_run.id),
+            "recovery_command_id": str(recovery.id),
+            "project_status": project.status,
+        },
+    )
+    return recovery
 
 
 def sync_project_delivery_outcome(
