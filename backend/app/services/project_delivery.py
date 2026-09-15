@@ -162,7 +162,9 @@ def create_project_recovery(
             "goal_id": str(project.goal_id) if project.goal_id else None,
             "department_id": str(project.department_id) if project.department_id else None,
             "budget_limit_usd": project.budget_limit_usd,
+            "budget_spent_usd": project.budget_spent_usd,
             "resource_limit_units": project.resource_limit_units,
+            "resource_used_units": project.resource_used_units,
             "recovery_of_command_id": str(source_run.id),
         },
     }
