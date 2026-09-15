@@ -325,6 +325,7 @@ def execute_owner_command(
             **(run.context or {}),
             "portfolio_governor": governor,
         }
+        session.flush()
     prepare_orchestration_research(
         session,
         run=run,
