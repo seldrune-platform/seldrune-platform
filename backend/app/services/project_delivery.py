@@ -136,6 +136,7 @@ def sync_project_delivery_outcome(
 ) -> dict[str, object] | None:
     delivery = (run.context or {}).get("project_delivery") or {}
     project_id = project_id or delivery.get("project_id")
+    expected_delivery = bool(project_id or project)
     if project is None and project_id:
         project = session.get(OrganizationProject, UUID(project_id))
     if project is None:
@@ -154,6 +155,8 @@ def sync_project_delivery_outcome(
             ),
             None,
         )
+    if project is None and not expected_delivery:
+        return None
     if project is None or project.organization_id != run.organization_id:
         raise ProjectDeliveryError("Linked delivery project could not be resolved")
     existing_outcome = (project.metadata_json or {}).get("delivery_outcome")
