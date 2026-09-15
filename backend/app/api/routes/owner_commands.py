@@ -306,6 +306,12 @@ def execute_owner_command(
             status_code=409,
             detail="; ".join(approved_governor.get("reasons") or ["Execution denied"]),
         )
+    if isinstance(approved_governor, dict):
+        run.summary = {
+            **(run.summary or {}),
+            "portfolio_governor": approved_governor,
+        }
+        session.flush()
     delivery_context = (run.context or {}).get("project_delivery") or {}
     delivery_project_id = delivery_context.get("project_id")
     delivery_project = (
