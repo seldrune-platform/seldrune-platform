@@ -181,3 +181,51 @@ def test_semantic_outcome_gate_blocks_false_success_promotion(_client) -> None: 
         headers=headers,
     ).json()
     assert source_brief["recovery_command_id"] == recovery["id"]
+
+
+
+def test_governance_audit_log_is_scoped_filterable_and_redacted(_client) -> None:  # noqa: F811
+    client = _client
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    created = client.post(
+        f"/api/v1/organizations/{organization_id}/owner-commands",
+        headers=headers,
+        json={
+            "objective": "Audit a governed workflow",
+            "context": {"api_key": "must-not-leak"},
+        },
+    )
+    assert created.status_code == 201
+    command_id = created.json()["id"]
+    approved = client.post(
+        f"/api/v1/organizations/{organization_id}/owner-commands/{command_id}/approve",
+        headers=headers,
+    )
+    assert approved.status_code == 200
+
+    response = client.get(
+        f"/api/v1/organizations/{organization_id}/audit-log?limit=30",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_returned"] >= 2
+    actions = [event["action"] for event in body["events"]]
+    assert "owner_command.created" in actions
+    assert "owner_command.approved" in actions
+    assert all(event["resource_id"] == command_id for event in body["events"] if event["action"].startswith("owner_command."))
+
+    filtered = client.get(
+        f"/api/v1/organizations/{organization_id}/audit-log?action=owner_command.approved",
+        headers=headers,
+    )
+    assert filtered.status_code == 200
+    assert filtered.json()["events"]
+    assert {event["action"] for event in filtered.json()["events"]} == {"owner_command.approved"}
+
+    invalid = client.get(
+        f"/api/v1/organizations/{organization_id}/audit-log?limit=0",
+        headers=headers,
+    )
+    assert invalid.status_code == 422
