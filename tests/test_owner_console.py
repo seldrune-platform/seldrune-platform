@@ -20,6 +20,9 @@ def test_owner_console_is_served() -> None:
         assert "runtime-version" in response.text
         assert "OPERATIONAL INCIDENT CENTER" in response.text
         assert "incident-list" in response.text
+        assert "GOVERNANCE AUDIT CENTER" in response.text
+        assert "audit-list" in response.text
+        assert "audit-filter" in response.text
 
 
 def test_owner_console_assets_are_served() -> None:
@@ -52,3 +55,6 @@ def test_owner_console_assets_are_served() -> None:
         assert "renderOperationalIncidents" in script.text
         assert "No active incidents" in script.text
         assert "incident-critical" in script.text
+        assert "renderAuditLog" in script.text
+        assert "/audit-log?limit=30" in script.text
+        assert "No governance events yet." in script.text
