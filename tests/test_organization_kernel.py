@@ -334,3 +334,77 @@ def test_portfolio_governor_blocks_exhausted_project_resources(client) -> None:
     projects = client.get(f"{base}/projects", headers=headers).json()
     assert all(project["status"] == "active" for project in projects)
     assert all(project["resource_used_units"] == 0 for project in projects)
+
+
+
+def test_owner_can_reallocate_resources_and_unblock_approval(client) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    base = f"/api/v1/organizations/{organization_id}"
+    client.post(f"{base}/organization-kernel/bootstrap", headers=headers)
+    department = client.get(f"{base}/departments", headers=headers).json()[0]
+    project = client.post(
+        f"{base}/projects",
+        headers=headers,
+        json={
+            "name": "Governed reallocation",
+            "slug": "governed-reallocation",
+            "department_id": department["id"],
+            "status": "planned",
+            "budget_limit_usd": 5,
+            "budget_spent_usd": 5,
+            "resource_limit_units": 20,
+            "resource_used_units": 2,
+        },
+    ).json()
+    command = client.post(
+        f"{base}/projects/{project['id']}/launch",
+        headers=headers,
+    ).json()
+    command_id = command["id"]
+
+    denied = client.post(
+        f"{base}/owner-commands/{command_id}/approve",
+        headers=headers,
+    )
+    assert denied.status_code == 409
+    assert "budget is exhausted" in denied.json()["detail"]
+
+    allocated = client.post(
+        f"{base}/projects/{project['id']}/resources",
+        headers=headers,
+        json={
+            "budget_limit_usd": 20,
+            "resource_limit_units": 30,
+            "reason": "Approve enough resources for the verified delivery plan",
+        },
+    )
+    assert allocated.status_code == 200
+    body = allocated.json()
+    assert body["budget_limit_usd"] == 20
+    assert body["resource_limit_units"] == 30
+    allocation = body["metadata_json"]["resource_allocations"][-1]
+    assert allocation["before"]["budget_limit_usd"] == 5
+    assert allocation["after"]["budget_limit_usd"] == 20
+    assert allocation["reason"].startswith("Approve enough resources")
+
+    approved = client.post(
+        f"{base}/owner-commands/{command_id}/approve",
+        headers=headers,
+    )
+    assert approved.status_code == 200
+    governor = approved.json()["context"]["portfolio_governor"]
+    assert governor["allowed"] is True
+    assert governor["remaining_budget_usd"] == 15
+    assert governor["remaining_resource_units"] == 28
+
+    invalid = client.post(
+        f"{base}/projects/{project['id']}/resources",
+        headers=headers,
+        json={
+            "resource_limit_units": 1,
+            "reason": "Invalid reduction below recorded use",
+        },
+    )
+    assert invalid.status_code == 409
+    assert "below recorded usage" in invalid.json()["detail"]
