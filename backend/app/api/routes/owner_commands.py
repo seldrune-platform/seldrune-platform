@@ -259,6 +259,8 @@ def approve_owner_command(
         if delivery_project_id
         else None
     )
+    if governor is not None and not governor["allowed"]:
+        raise HTTPException(status_code=409, detail="; ".join(governor["reasons"]))
     run.context = {
         **run.context,
         **({"portfolio_governor": governor} if governor is not None else {}),
