@@ -64,6 +64,4 @@ def evaluate_project_execution(
         "remaining_budget_usd": remaining_budget,
         "reasons": reasons,
     }
-    if reasons:
-        raise PortfolioGovernorError("; ".join(reasons))
     return decision
