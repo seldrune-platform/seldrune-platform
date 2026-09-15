@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -28,6 +29,7 @@ from backend.app.schemas.organization_kernel import (
     GoalUpdate,
     ProjectCreate,
     ProjectPublic,
+    ProjectResourceAllocation,
     ProjectUpdate,
 )
 from backend.app.services.audit import record_audit
@@ -397,6 +399,73 @@ def update_project(
         action="organization_project.updated",
         resource_type="organization_project",
         resource_id=project.id,
+    )
+    session.commit()
+    session.refresh(project)
+    return project
+
+
+@router.post(
+    "/{organization_id}/projects/{project_id}/resources",
+    response_model=ProjectPublic,
+)
+def allocate_project_resources(
+    organization_id: UUID,
+    project_id: UUID,
+    payload: ProjectResourceAllocation,
+    _membership: ManageDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> OrganizationProject:
+    project = _project(session, organization_id, project_id)
+    if project.status in {"completed", "cancelled"}:
+        raise HTTPException(status_code=409, detail="Closed projects cannot be reallocated")
+    if payload.budget_limit_usd is None and payload.resource_limit_units is None:
+        raise HTTPException(status_code=422, detail="Provide a budget or capacity limit")
+    next_budget = (
+        payload.budget_limit_usd
+        if payload.budget_limit_usd is not None
+        else project.budget_limit_usd
+    )
+    next_resources = (
+        payload.resource_limit_units
+        if payload.resource_limit_units is not None
+        else project.resource_limit_units
+    )
+    if next_budget > 0 and next_budget < project.budget_spent_usd:
+        raise HTTPException(status_code=409, detail="Budget limit cannot be below recorded spend")
+    if next_resources < project.resource_used_units:
+        raise HTTPException(status_code=409, detail="Capacity limit cannot be below recorded usage")
+
+    before = {
+        "budget_limit_usd": project.budget_limit_usd,
+        "resource_limit_units": project.resource_limit_units,
+    }
+    project.budget_limit_usd = next_budget
+    project.resource_limit_units = next_resources
+    allocation = {
+        "changed_at": datetime.now(UTC).isoformat(),
+        "changed_by": str(current_user.id),
+        "reason": payload.reason,
+        "before": before,
+        "after": {
+            "budget_limit_usd": next_budget,
+            "resource_limit_units": next_resources,
+        },
+    }
+    history = list((project.metadata_json or {}).get("resource_allocations") or [])
+    project.metadata_json = {
+        **(project.metadata_json or {}),
+        "resource_allocations": [*history[-19:], allocation],
+    }
+    _audit(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+        action="organization_project.resources_allocated",
+        resource_type="organization_project",
+        resource_id=project.id,
+        details=allocation,
     )
     session.commit()
     session.refresh(project)
