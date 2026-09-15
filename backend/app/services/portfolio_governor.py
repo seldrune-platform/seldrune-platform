@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.organization_kernel import OrganizationProject
 from backend.app.models.orchestration import OrchestrationRun, OrchestrationStep
+from backend.app.models.task import Task
 
 
 class PortfolioGovernorError(RuntimeError):
@@ -21,9 +22,11 @@ def evaluate_project_execution(
 ) -> dict[str, Any]:
     pending_steps = list(
         session.scalars(
-            select(OrchestrationStep).where(
+            select(OrchestrationStep)
+            .join(Task, Task.id == OrchestrationStep.task_id)
+            .where(
                 OrchestrationStep.orchestration_run_id == run.id,
-                OrchestrationStep.status.in_({"queued", "assigned", "failed"}),
+                Task.status.notin_({"succeeded", "cancelled"}),
             )
         )
     )
