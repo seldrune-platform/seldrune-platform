@@ -23,6 +23,8 @@ def test_owner_console_is_served() -> None:
         assert "GOVERNANCE AUDIT CENTER" in response.text
         assert "audit-list" in response.text
         assert "audit-filter" in response.text
+        assert "download-audit" in response.text
+        assert "Download evidence" in response.text
 
 
 def test_owner_console_assets_are_served() -> None:
@@ -58,3 +60,6 @@ def test_owner_console_assets_are_served() -> None:
         assert "renderAuditLog" in script.text
         assert "/audit-log?limit=30" in script.text
         assert "No governance events yet." in script.text
+        assert "downloadAuditEvidence" in script.text
+        assert "/audit-export" in script.text
+        assert "seldrune-governance-evidence-" in script.text
