@@ -32,7 +32,11 @@ from backend.app.schemas.organization_kernel import (
 )
 from backend.app.services.audit import record_audit
 from backend.app.services.founding_agents import ensure_founding_agents
-from backend.app.services.project_delivery import ProjectDeliveryError, launch_project_delivery
+from backend.app.services.project_delivery import (
+    ProjectDeliveryError,
+    create_project_recovery,
+    launch_project_delivery,
+)
 from backend.app.services.organization_kernel import (
     build_organization_snapshot,
     ensure_founding_departments,
@@ -414,6 +418,32 @@ def launch_project(
     project = _project(session, organization_id, project_id)
     try:
         command = launch_project_delivery(
+            session,
+            project=project,
+            actor_user_id=current_user.id,
+        )
+    except ProjectDeliveryError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    session.commit()
+    session.refresh(command)
+    return _to_public(session, command)
+
+
+@router.post(
+    "/{organization_id}/projects/{project_id}/recover",
+    response_model=OrchestrationRunPublic,
+    status_code=status.HTTP_201_CREATED,
+)
+def recover_project(
+    organization_id: UUID,
+    project_id: UUID,
+    _membership: ManageDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> OrchestrationRunPublic:
+    project = _project(session, organization_id, project_id)
+    try:
+        command = create_project_recovery(
             session,
             project=project,
             actor_user_id=current_user.id,
