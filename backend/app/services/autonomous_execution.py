@@ -13,6 +13,7 @@ from backend.app.models.orchestration import OrchestrationRun, OrchestrationStep
 from backend.app.models.task import Task, TaskEvent
 from backend.app.services.agent_runtime import AgentRuntimeError, execute_agent_task
 from backend.app.services.audit import record_audit
+from backend.app.services.project_delivery import sync_project_delivery_outcome
 from backend.app.services.model_gateway import ModelGateway
 from backend.app.services.orchestrator import refresh_orchestration_status
 
@@ -295,4 +296,16 @@ def execute_orchestration_autonomously(
     )
     session.commit()
     session.refresh(run)
+    delivery_outcome = sync_project_delivery_outcome(
+        session,
+        run=run,
+        actor_user_id=actor_user_id,
+    )
+    if delivery_outcome is not None:
+        run.summary = {
+            **(run.summary or {}),
+            "project_delivery_sync": delivery_outcome,
+        }
+        session.commit()
+        session.refresh(run)
     return report
