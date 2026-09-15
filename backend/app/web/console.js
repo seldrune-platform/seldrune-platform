@@ -4,6 +4,7 @@ const state = {
   org: '',
   user: null,
   brief: null,
+  auditEvents: [],
 };
 
 const toast = message => {
@@ -280,6 +281,46 @@ function renderOperationalIncidents(data) {
   });
 }
 
+
+function renderAuditLog(data) {
+  if (data) state.auditEvents = data.events || [];
+  const filter = $('#audit-filter').value;
+  const events = state.auditEvents.filter(event =>
+    !filter || event.action.startsWith(filter)
+      || event.resource_type === filter
+  );
+  $('#audit-count').textContent = `${events.length} events`;
+  const root = $('#audit-list');
+  root.replaceChildren();
+  if (!events.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = filter
+      ? 'No events match this filter.'
+      : 'No governance events yet.';
+    root.append(empty);
+    return;
+  }
+  events.forEach(event => {
+    const item = document.createElement('article');
+    item.className = `audit-event audit-${event.severity || "info"}`;
+    const marker = document.createElement('span');
+    marker.className = 'audit-marker';
+    const content = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = event.action.replaceAll('_', ' ').replaceAll('.', ' · ');
+    const resource = document.createElement('p');
+    resource.textContent = event.resource_id
+      ? `${event.resource_type} · ${event.resource_id}`
+      : event.resource_type;
+    const time = document.createElement('small');
+    time.textContent = new Date(event.occurred_at).toLocaleString();
+    content.append(title, resource, time);
+    item.append(marker, content);
+    root.append(item);
+  });
+}
+
 function renderRuntimeStatus(status) {
   const badge = $('#runtime-status');
   const database = status.checks?.database?.status || 'unknown';
@@ -298,9 +339,10 @@ function renderRuntimeStatus(status) {
 async function load() {
   if (!state.org) return;
   try {
-    const [dashboard, runtimeStatus] = await Promise.all([
+    const [dashboard, runtimeStatus, auditLog] = await Promise.all([
       api('/owner-dashboard'),
       request('/status'),
+      api('/audit-log?limit=30'),
     ]);
     renderRuntimeStatus(runtimeStatus);
     $('#total').textContent = dashboard.command_counts.total;
@@ -326,6 +368,7 @@ async function load() {
       `${Math.min(Number(treasury.utilization || 0) * 100, 100)}%`;
     $('#treasury-alert').classList.toggle('hidden', !treasury.overcommitted);
     renderOperationalIncidents(dashboard.operational_incidents);
+    renderAuditLog(auditLog);
     renderAgentPerformance(dashboard.agent_performance);
     renderCommands(dashboard.recent_commands);
   } catch (error) {
@@ -336,6 +379,8 @@ async function load() {
     toast(error.message);
   }
 }
+
+$('#audit-filter').onchange = () => renderAuditLog();
 
 $('#command-form').onsubmit = async event => {
   event.preventDefault();
