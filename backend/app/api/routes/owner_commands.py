@@ -284,9 +284,8 @@ def execute_owner_command(
         raise HTTPException(status_code=404, detail="Owner command not found")
     if command.get("approval_status") != "approved":
         raise HTTPException(status_code=409, detail="Owner command requires approval")
-    delivery_project_id = ((run.context or {}).get("project_delivery") or {}).get(
-        "project_id"
-    )
+    delivery_context = (run.context or {}).get("project_delivery") or {}
+    delivery_project_id = delivery_context.get("project_id")
     delivery_project = (
         session.get(OrganizationProject, UUID(delivery_project_id))
         if delivery_project_id
@@ -310,14 +309,12 @@ def execute_owner_command(
             ),
             None,
         )
-    if delivery_project_id and delivery_project is None:
-        raise HTTPException(status_code=409, detail="Delivery project could not be resolved")
-    if delivery_project is not None:
+    if delivery_project_id:
         try:
             governor = evaluate_project_execution(
-                session,
                 project=delivery_project,
                 run=run,
+                delivery_context=delivery_context,
             )
         except PortfolioGovernorError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
