@@ -69,6 +69,7 @@ def create_recovery_command(
     )
     guidance = merge_playbook(adaptive_guidance, playbook_guidance)
     planned = build_live_plan(objective, adaptive_guidance=guidance)
+    source_delivery = (source_run.context or {}).get("project_delivery")
     context = {
         "owner_command": {
             "approval_status": "awaiting_approval",
@@ -81,6 +82,7 @@ def create_recovery_command(
             "source_command_id": str(source_run.id),
             "source_outcome": assessment.to_dict(),
         },
+        **({"project_delivery": source_delivery} if source_delivery else {}),
     }
     recovery = create_orchestration_run(
         session,
