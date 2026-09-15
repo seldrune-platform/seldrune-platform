@@ -187,6 +187,7 @@ def test_delivery_outcome_completes_project_and_goal(client) -> None:
     )
     assert approved.status_code == 200
     assert approved.json()["context"]["project_delivery"]["project_id"] == project["id"]
+    assert "portfolio_governor" in approved.json()["context"], approved.json()["context"]
     executed = client.post(
         f"{base}/owner-commands/{command_id}/execute",
         headers=headers,
@@ -327,10 +328,11 @@ def test_portfolio_governor_blocks_exhausted_project_resources(client) -> None:
         )
         assert command.status_code == 201
         command_id = command.json()["id"]
-        client.post(
+        approval = client.post(
             f"{base}/owner-commands/{command_id}/approve",
             headers=headers,
         )
+        assert "portfolio_governor" in approval.json()["context"], approval.json()["context"]
         blocked = client.post(
             f"{base}/owner-commands/{command_id}/execute",
             headers=headers,
