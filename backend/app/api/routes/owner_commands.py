@@ -260,6 +260,7 @@ def approve_owner_command(
     )
     run.context = {
         **run.context,
+        **({"portfolio_governor": governor} if governor is not None else {}),
         "owner_command": {
             **run.context["owner_command"],
             "approval_status": "approved",
@@ -300,7 +301,9 @@ def execute_owner_command(
         raise HTTPException(status_code=404, detail="Owner command not found")
     if command.get("approval_status") != "approved":
         raise HTTPException(status_code=409, detail="Owner command requires approval")
-    approved_governor = command.get("portfolio_governor")
+    approved_governor = (run.context or {}).get("portfolio_governor") or command.get(
+        "portfolio_governor"
+    )
     if isinstance(approved_governor, dict) and not approved_governor.get("allowed", False):
         raise HTTPException(
             status_code=409,
