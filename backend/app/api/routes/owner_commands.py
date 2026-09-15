@@ -291,7 +291,7 @@ def execute_owner_command(
         if delivery_project_id
         else None
     )
-    if delivery_project is None and delivery_project_id:
+    if delivery_project is None:
         candidates = list(
             session.scalars(
                 select(OrganizationProject).where(
@@ -309,6 +309,16 @@ def execute_owner_command(
             ),
             None,
         )
+    if delivery_project is not None:
+        delivery_project_id = str(delivery_project.id)
+        delivery_context = {
+            **delivery_context,
+            "project_id": delivery_project_id,
+            "budget_limit_usd": delivery_project.budget_limit_usd,
+            "budget_spent_usd": delivery_project.budget_spent_usd,
+            "resource_limit_units": delivery_project.resource_limit_units,
+            "resource_used_units": delivery_project.resource_used_units,
+        }
     if delivery_project_id:
         try:
             governor = evaluate_project_execution(
