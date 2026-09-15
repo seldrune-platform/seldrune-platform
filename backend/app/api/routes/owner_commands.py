@@ -32,6 +32,10 @@ from backend.app.services.owner_dashboard import build_decision_brief, build_own
 from backend.app.services.playbook_engine import consolidate_playbooks
 from backend.app.services.playbook_guidance import build_playbook_guidance
 from backend.app.services.playbook_overlay import merge_playbook
+from backend.app.services.portfolio_governor import (
+    PortfolioGovernorError,
+    evaluate_project_execution,
+)
 from backend.app.services.project_delivery import sync_project_delivery_outcome
 
 router = APIRouter(prefix="/organizations", tags=["owner-command-center"])
@@ -288,6 +292,19 @@ def execute_owner_command(
         if delivery_project_id
         else None
     )
+    if delivery_project is not None:
+        try:
+            governor = evaluate_project_execution(
+                session,
+                project=delivery_project,
+                run=run,
+            )
+        except PortfolioGovernorError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        run.context = {
+            **(run.context or {}),
+            "portfolio_governor": governor,
+        }
     prepare_orchestration_research(
         session,
         run=run,
