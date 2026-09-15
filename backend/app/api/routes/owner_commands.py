@@ -306,6 +306,7 @@ def execute_owner_command(
                 if str(item.id) == delivery_project_id
                 or (item.metadata_json or {}).get("delivery_command_id") == str(run.id)
                 or (item.metadata_json or {}).get("recovery_command_id") == str(run.id)
+                or f\'Deliver the organization project "{item.name}"\' in run.objective
             ),
             None,
         )
@@ -330,6 +331,10 @@ def execute_owner_command(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         run.context = {
             **(run.context or {}),
+            "portfolio_governor": governor,
+        }
+        run.summary = {
+            **(run.summary or {}),
             "portfolio_governor": governor,
         }
         session.flush()
