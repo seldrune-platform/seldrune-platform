@@ -321,6 +321,32 @@ function renderAuditLog(data) {
   });
 }
 
+
+async function downloadAuditEvidence() {
+  const control = $('#download-audit');
+  control.disabled = true;
+  try {
+    const evidence = await api('/audit-export', {method: 'POST'});
+    const blob = new Blob([JSON.stringify(evidence, null, 2)], {
+      type: 'application/json',
+    });
+    const link = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    link.href = URL.createObjectURL(blob);
+    link.download = `seldrune-governance-evidence-${date}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+    toast('Governance evidence downloaded');
+    await load();
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    control.disabled = false;
+  }
+}
+
 function renderRuntimeStatus(status) {
   const badge = $('#runtime-status');
   const database = status.checks?.database?.status || 'unknown';
@@ -381,6 +407,7 @@ async function load() {
 }
 
 $('#audit-filter').onchange = () => renderAuditLog();
+$('#download-audit').onclick = downloadAuditEvidence;
 
 $('#command-form').onsubmit = async event => {
   event.preventDefault();
