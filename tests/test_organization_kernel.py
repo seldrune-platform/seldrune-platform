@@ -194,7 +194,7 @@ def test_delivery_outcome_completes_project_and_goal(client) -> None:
     )
     assert executed.status_code == 200
     assert executed.json()["run"]["status"] == "succeeded"
-    governor = executed.json()["run"]["context"]["portfolio_governor"]
+    governor = executed.json()["run"]["summary"]["portfolio_governor"]
     assert governor["allowed"] is True
     assert governor["remaining_resource_units"] == 20
     assert executed.json()["run"]["summary"]["project_delivery_sync"]["verdict"] == "achieved"
