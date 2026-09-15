@@ -142,6 +142,12 @@ class ProjectUpdate(BaseModel):
     metadata_json: dict[str, Any] | None = None
 
 
+class ProjectResourceAllocation(BaseModel):
+    budget_limit_usd: float | None = Field(default=None, ge=0)
+    resource_limit_units: int | None = Field(default=None, ge=0, le=1_000_000)
+    reason: str = Field(min_length=3, max_length=1000)
+
+
 class ProjectPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
