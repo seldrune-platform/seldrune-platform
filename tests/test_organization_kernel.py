@@ -209,3 +209,69 @@ def test_delivery_outcome_completes_project_and_goal(client) -> None:
     snapshot = client.get(f"{base}/organization-kernel", headers=headers).json()
     assert snapshot["counts"]["active_projects"] == 0
     assert snapshot["counts"]["blocked_projects"] == 0
+
+
+
+def test_blocked_project_creates_idempotent_governed_recovery(client) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    base = f"/api/v1/organizations/{organization_id}"
+    client.post(f"{base}/organization-kernel/bootstrap", headers=headers)
+    department = client.get(f"{base}/departments", headers=headers).json()[0]
+    project = client.post(
+        f"{base}/projects",
+        headers=headers,
+        json={
+            "name": "Recovery verification",
+            "slug": "recovery-verification",
+            "description": "Produce a result that is not ready and has not been verified.",
+            "department_id": department["id"],
+            "status": "planned",
+            "budget_limit_usd": 10,
+            "resource_limit_units": 20,
+        },
+    ).json()
+    command = client.post(
+        f"{base}/projects/{project['id']}/launch",
+        headers=headers,
+    ).json()
+    client.post(
+        f"{base}/owner-commands/{command['id']}/approve",
+        headers=headers,
+    )
+    executed = client.post(
+        f"{base}/owner-commands/{command['id']}/execute",
+        headers=headers,
+        json={},
+    )
+    assert executed.status_code == 200
+    assert executed.json()["run"]["summary"]["project_delivery_sync"]["verdict"] == (
+        "not_achieved"
+    )
+
+    blocked = client.get(f"{base}/projects", headers=headers).json()[0]
+    assert blocked["status"] == "blocked"
+
+    recovered = client.post(
+        f"{base}/projects/{project['id']}/recover",
+        headers=headers,
+    )
+    assert recovered.status_code == 201
+    recovery = recovered.json()
+    assert recovery["context"]["owner_command"]["approval_status"] == "awaiting_approval"
+    assert recovery["context"]["owner_command"]["recovery_of"] == command["id"]
+    assert recovery["context"]["project_delivery"]["project_id"] == project["id"]
+    assert recovery["context"]["project_delivery"]["recovery_of_command_id"] == command["id"]
+
+    repeated = client.post(
+        f"{base}/projects/{project['id']}/recover",
+        headers=headers,
+    )
+    assert repeated.status_code == 201
+    assert repeated.json()["id"] == recovery["id"]
+
+    updated = client.get(f"{base}/projects", headers=headers).json()[0]
+    assert updated["metadata_json"]["recovery_command_id"] == recovery["id"]
+    assert updated["metadata_json"]["delivery_state"] == (
+        "recovery_awaiting_owner_approval"
+    )
