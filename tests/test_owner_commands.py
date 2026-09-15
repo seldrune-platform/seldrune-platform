@@ -233,3 +233,41 @@ def test_governance_audit_log_is_scoped_filterable_and_redacted(_client) -> None
         headers=headers,
     )
     assert invalid.status_code == 422
+
+
+
+def test_governance_evidence_export_has_integrity_digest(_client) -> None:  # noqa: F811
+    client = _client
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    created = client.post(
+        f"/api/v1/organizations/{organization_id}/owner-commands",
+        headers=headers,
+        json={"objective": "Create auditable evidence"},
+    )
+    assert created.status_code == 201
+
+    exported = client.post(
+        f"/api/v1/organizations/{organization_id}/audit-export?limit=100",
+        headers=headers,
+    )
+    assert exported.status_code == 200
+    evidence = exported.json()
+    assert evidence["schema_version"] == "1.0"
+    assert evidence["organization_id"] == organization_id
+    assert evidence["event_count"] == len(evidence["events"])
+    assert evidence["event_count"] >= 1
+    assert evidence["integrity"]["algorithm"] == "SHA-256"
+    digest = evidence["integrity"]["digest"]
+    assert len(digest) == 64
+    assert all(character in "0123456789abcdef" for character in digest)
+
+    audit_log = client.get(
+        f"/api/v1/organizations/{organization_id}/audit-log?action=audit.evidence_exported",
+        headers=headers,
+    )
+    assert audit_log.status_code == 200
+    export_events = audit_log.json()["events"]
+    assert len(export_events) == 1
+    assert export_events[0]["resource_id"] == digest
+    assert export_events[0]["details"]["event_count"] == evidence["event_count"]
