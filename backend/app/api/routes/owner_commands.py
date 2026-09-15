@@ -306,7 +306,7 @@ def execute_owner_command(
                 if str(item.id) == delivery_project_id
                 or (item.metadata_json or {}).get("delivery_command_id") == str(run.id)
                 or (item.metadata_json or {}).get("recovery_command_id") == str(run.id)
-                or f\'Deliver the organization project "{item.name}"\' in run.objective
+                or f'Deliver the organization project "{item.name}"' in run.objective
             ),
             None,
         )
