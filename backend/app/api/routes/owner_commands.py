@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.orm.attributes import flag_modified
 
 from backend.app.api.dependencies import CurrentUserDep, SessionDep, require_org_permission
 from backend.app.api.routes.orchestrations import _get_run, _to_public
@@ -268,6 +269,7 @@ def approve_owner_command(
             **({"portfolio_governor": governor} if governor is not None else {}),
         },
     }
+    flag_modified(run, "context")
     record_audit(
         session,
         organization_id=organization_id,
@@ -314,6 +316,7 @@ def execute_owner_command(
             **(run.summary or {}),
             "portfolio_governor": approved_governor,
         }
+        flag_modified(run, "summary")
         session.flush()
     delivery_context = (run.context or {}).get("project_delivery") or {}
     delivery_project_id = delivery_context.get("project_id")
@@ -363,10 +366,12 @@ def execute_owner_command(
             **(run.context or {}),
             "portfolio_governor": governor,
         }
+        flag_modified(run, "context")
         run.summary = {
             **(run.summary or {}),
             "portfolio_governor": governor,
         }
+        flag_modified(run, "summary")
         session.flush()
     prepare_orchestration_research(
         session,
