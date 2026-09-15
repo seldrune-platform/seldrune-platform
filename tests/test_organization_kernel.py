@@ -194,6 +194,7 @@ def test_delivery_outcome_completes_project_and_goal(client) -> None:
     )
     assert executed.status_code == 200
     assert executed.json()["run"]["status"] == "succeeded"
+    assert "portfolio_governor" in executed.json()["run"]["summary"], executed.json()
     governor = executed.json()["run"]["summary"]["portfolio_governor"]
     assert governor["allowed"] is True
     assert governor["remaining_resource_units"] == 20
@@ -335,7 +336,7 @@ def test_portfolio_governor_blocks_exhausted_project_resources(client) -> None:
             headers=headers,
             json={},
         )
-        assert blocked.status_code == 409
+        assert blocked.status_code == 409, blocked.json()
         assert case["expected"] in blocked.json()["detail"]
 
     projects = client.get(f"{base}/projects", headers=headers).json()
