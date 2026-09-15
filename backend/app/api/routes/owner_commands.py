@@ -1,13 +1,14 @@
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.app.api.dependencies import CurrentUserDep, SessionDep, require_org_permission
 from backend.app.api.routes.orchestrations import _get_run, _to_public
 from backend.app.core.rbac import Permission, Role
+from backend.app.models.audit import AuditLog
 from backend.app.models.membership import Membership
 from backend.app.models.organization_kernel import OrganizationProject
 from backend.app.models.orchestration import OrchestrationRun
@@ -143,6 +144,68 @@ def list_owner_commands(
         refresh_orchestration_status(session, run)
     session.commit()
     return [_to_public(session, run) for run in commands]
+
+
+_SENSITIVE_AUDIT_KEYS = ("secret", "token", "password", "api_key", "authorization")
+
+
+def _sanitize_audit_details(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: (
+                "[redacted]"
+                if any(marker in key.lower() for marker in _SENSITIVE_AUDIT_KEYS)
+                else _sanitize_audit_details(item)
+            )
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_sanitize_audit_details(item) for item in value]
+    return value
+
+
+def _audit_severity(action: str) -> str:
+    if any(marker in action for marker in ("failed", "blocked", "triggered")):
+        return "warning"
+    if any(marker in action for marker in ("approved", "revoked", "budget", "resource")):
+        return "governance"
+    return "info"
+
+
+@router.get("/{organization_id}/audit-log", response_model=dict[str, Any])
+def get_governance_audit_log(
+    organization_id: UUID,
+    membership: OwnerDep,
+    session: SessionDep,
+    limit: int = Query(default=50, ge=1, le=200),
+    action: str | None = Query(default=None, max_length=120),
+) -> dict[str, Any]:
+    _require_owner(membership)
+    statement = select(AuditLog).where(AuditLog.organization_id == organization_id)
+    if action:
+        statement = statement.where(AuditLog.action == action)
+    events = list(
+        session.scalars(statement.order_by(AuditLog.occurred_at.desc()).limit(limit))
+    )
+    return {
+        "total_returned": len(events),
+        "filters": {"action": action, "limit": limit},
+        "events": [
+            {
+                "id": str(event.id),
+                "action": event.action,
+                "severity": _audit_severity(event.action),
+                "resource_type": event.resource_type,
+                "resource_id": event.resource_id,
+                "actor_user_id": (
+                    str(event.actor_user_id) if event.actor_user_id else None
+                ),
+                "details": _sanitize_audit_details(event.details or {}),
+                "occurred_at": event.occurred_at,
+            }
+            for event in events
+        ],
+    }
 
 
 @router.get("/{organization_id}/owner-dashboard", response_model=dict[str, Any])
