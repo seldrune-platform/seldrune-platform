@@ -1,3 +1,6 @@
+from datetime import UTC, datetime
+import hashlib
+import json
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -172,6 +175,19 @@ def _audit_severity(action: str) -> str:
     return "info"
 
 
+def _audit_event_payload(event: AuditLog) -> dict[str, Any]:
+    return {
+        "id": str(event.id),
+        "action": event.action,
+        "severity": _audit_severity(event.action),
+        "resource_type": event.resource_type,
+        "resource_id": event.resource_id,
+        "actor_user_id": str(event.actor_user_id) if event.actor_user_id else None,
+        "details": _sanitize_audit_details(event.details or {}),
+        "occurred_at": event.occurred_at,
+    }
+
+
 @router.get("/{organization_id}/audit-log", response_model=dict[str, Any])
 def get_governance_audit_log(
     organization_id: UUID,
@@ -190,22 +206,61 @@ def get_governance_audit_log(
     return {
         "total_returned": len(events),
         "filters": {"action": action, "limit": limit},
-        "events": [
-            {
-                "id": str(event.id),
-                "action": event.action,
-                "severity": _audit_severity(event.action),
-                "resource_type": event.resource_type,
-                "resource_id": event.resource_id,
-                "actor_user_id": (
-                    str(event.actor_user_id) if event.actor_user_id else None
-                ),
-                "details": _sanitize_audit_details(event.details or {}),
-                "occurred_at": event.occurred_at,
-            }
-            for event in events
-        ],
+        "events": [_audit_event_payload(event) for event in events],
     }
+
+
+@router.post("/{organization_id}/audit-export", response_model=dict[str, Any])
+def export_governance_evidence(
+    organization_id: UUID,
+    membership: OwnerDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+    limit: int = Query(default=1000, ge=1, le=5000),
+) -> dict[str, Any]:
+    _require_owner(membership)
+    records = list(
+        session.scalars(
+            select(AuditLog)
+            .where(AuditLog.organization_id == organization_id)
+            .order_by(AuditLog.occurred_at.asc())
+            .limit(limit)
+        )
+    )
+    events = [_audit_event_payload(event) for event in records]
+    evidence = {
+        "schema_version": "1.0",
+        "organization_id": str(organization_id),
+        "generated_at": datetime.now(UTC),
+        "event_count": len(events),
+        "events": events,
+    }
+    canonical = json.dumps(
+        evidence,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    ).encode("utf-8")
+    digest = hashlib.sha256(canonical).hexdigest()
+    package = {
+        **evidence,
+        "integrity": {
+            "algorithm": "SHA-256",
+            "digest": digest,
+            "scope": "canonical JSON of all top-level fields except integrity",
+        },
+    }
+    record_audit(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+        action="audit.evidence_exported",
+        resource_type="audit_log",
+        resource_id=digest,
+        details={"event_count": len(events), "limit": limit, "digest": digest},
+    )
+    session.commit()
+    return package
 
 
 @router.get("/{organization_id}/owner-dashboard", response_model=dict[str, Any])
