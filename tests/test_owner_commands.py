@@ -214,7 +214,11 @@ def test_governance_audit_log_is_scoped_filterable_and_redacted(_client) -> None
     actions = [event["action"] for event in body["events"]]
     assert "owner_command.created" in actions
     assert "owner_command.approved" in actions
-    assert all(event["resource_id"] == command_id for event in body["events"] if event["action"].startswith("owner_command."))
+    command_events = [
+        event for event in body["events"]
+        if event["action"].startswith("owner_command.")
+    ]
+    assert all(event["resource_id"] == command_id for event in command_events)
 
     filtered = client.get(
         f"/api/v1/organizations/{organization_id}/audit-log?action=owner_command.approved",
