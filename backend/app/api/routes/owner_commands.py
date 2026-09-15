@@ -292,6 +292,26 @@ def execute_owner_command(
         if delivery_project_id
         else None
     )
+    if delivery_project is None and delivery_project_id:
+        candidates = list(
+            session.scalars(
+                select(OrganizationProject).where(
+                    OrganizationProject.organization_id == organization_id
+                )
+            )
+        )
+        delivery_project = next(
+            (
+                item
+                for item in candidates
+                if str(item.id) == delivery_project_id
+                or (item.metadata_json or {}).get("delivery_command_id") == str(run.id)
+                or (item.metadata_json or {}).get("recovery_command_id") == str(run.id)
+            ),
+            None,
+        )
+    if delivery_project_id and delivery_project is None:
+        raise HTTPException(status_code=409, detail="Delivery project could not be resolved")
     if delivery_project is not None:
         try:
             governor = evaluate_project_execution(
