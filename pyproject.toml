@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "seldrune-platform"
-version = "0.45.0"
+version = "0.46.0"
 description = "Core platform for the Seldrune AI-native virtual organization."
 readme = "README.md"
 requires-python = ">=3.12"
