@@ -347,6 +347,36 @@ async function downloadAuditEvidence() {
   }
 }
 
+
+function showAuditVerification(result) {
+  const status = $('#audit-verification');
+  status.className = `audit-verification ${result.valid ? "verification-valid" : "verification-invalid"}`;
+  status.textContent = result.valid
+    ? `Verified · ${result.event_count} events · SHA-256 ${result.expected_digest.slice(0, 12)}…`
+    : `Verification failed · ${result.reason}`;
+}
+
+async function verifyAuditEvidence(file) {
+  const control = $('#verify-audit');
+  control.disabled = true;
+  try {
+    const packageData = JSON.parse(await file.text());
+    const result = await api('/audit-export/verify', {
+      method: 'POST',
+      body: JSON.stringify(packageData),
+    });
+    showAuditVerification(result);
+    toast(result.valid ? 'Evidence integrity verified' : 'Evidence verification failed');
+    await load();
+  } catch (error) {
+    showAuditVerification({valid: false, reason: error.message});
+    toast('Could not verify evidence file');
+  } finally {
+    control.disabled = false;
+    $('#verify-audit-file').value = '';
+  }
+}
+
 function renderRuntimeStatus(status) {
   const badge = $('#runtime-status');
   const database = status.checks?.database?.status || 'unknown';
@@ -408,6 +438,11 @@ async function load() {
 
 $('#audit-filter').onchange = () => renderAuditLog();
 $('#download-audit').onclick = downloadAuditEvidence;
+$('#verify-audit').onclick = () => $('#verify-audit-file').click();
+$('#verify-audit-file').onchange = event => {
+  const file = event.target.files[0];
+  if (file) verifyAuditEvidence(file);
+};
 
 $('#command-form').onsubmit = async event => {
   event.preventDefault();
