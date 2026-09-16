@@ -282,6 +282,16 @@ function renderOperationalIncidents(data) {
 }
 
 
+
+function renderGovernancePolicy(policy) {
+  $('#policy-max-steps').value = policy.max_steps_per_command;
+  $('#policy-max-budget').value = Number(policy.max_project_budget_usd).toFixed(2);
+  $('#policy-autonomous').checked = policy.allow_autonomous_execution;
+  $('#policy-status').textContent = policy.allow_autonomous_execution
+    ? 'Autonomous execution allowed within these limits.'
+    : 'Autonomous execution is currently blocked.';
+}
+
 function renderAuditLog(data) {
   if (data) state.auditEvents = data.events || [];
   const filter = $('#audit-filter').value;
@@ -395,12 +405,14 @@ function renderRuntimeStatus(status) {
 async function load() {
   if (!state.org) return;
   try {
-    const [dashboard, runtimeStatus, auditLog] = await Promise.all([
+    const [dashboard, runtimeStatus, auditLog, governancePolicy] = await Promise.all([
       api('/owner-dashboard'),
       request('/status'),
       api('/audit-log?limit=30'),
+      api('/governance-policy'),
     ]);
     renderRuntimeStatus(runtimeStatus);
+    renderGovernancePolicy(governancePolicy);
     $('#total').textContent = dashboard.command_counts.total;
     $('#pending').textContent = dashboard.command_counts.awaiting_approval;
     $('#progress').textContent =
@@ -442,6 +454,30 @@ $('#verify-audit').onclick = () => $('#verify-audit-file').click();
 $('#verify-audit-file').onchange = event => {
   const file = event.target.files[0];
   if (file) verifyAuditEvidence(file);
+};
+
+
+$('#policy-form').onsubmit = async event => {
+  event.preventDefault();
+  const control = event.submitter;
+  control.disabled = true;
+  try {
+    const policy = await api('/governance-policy', {
+      method: 'PUT',
+      body: JSON.stringify({
+        max_steps_per_command: Number($('#policy-max-steps').value),
+        max_project_budget_usd: Number($('#policy-max-budget').value),
+        allow_autonomous_execution: $('#policy-autonomous').checked,
+      }),
+    });
+    renderGovernancePolicy(policy);
+    toast('Governance policy saved');
+    await load();
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    control.disabled = false;
+  }
 };
 
 $('#command-form').onsubmit = async event => {
