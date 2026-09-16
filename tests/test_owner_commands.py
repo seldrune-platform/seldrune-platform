@@ -296,3 +296,51 @@ def test_governance_evidence_export_has_integrity_digest(_client) -> None:  # no
     assert len(export_events) == 1
     assert export_events[0]["resource_id"] == digest
     assert export_events[0]["details"]["event_count"] == evidence["event_count"]
+
+
+
+def test_governance_policy_is_persisted_audited_and_enforced(_client) -> None:  # noqa: F811
+    client = _client
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    policy_url = f"/api/v1/organizations/{organization_id}/governance-policy"
+
+    default_policy = client.get(policy_url, headers=headers)
+    assert default_policy.status_code == 200
+    assert default_policy.json()["max_steps_per_command"] == 25
+    assert default_policy.json()["allow_autonomous_execution"] is True
+
+    updated = client.put(
+        policy_url,
+        headers=headers,
+        json={
+            "max_steps_per_command": 1,
+            "max_project_budget_usd": 25.0,
+            "allow_autonomous_execution": False,
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["max_steps_per_command"] == 1
+    assert updated.json()["max_project_budget_usd"] == 25.0
+    assert updated.json()["allow_autonomous_execution"] is False
+
+    command = client.post(
+        f"/api/v1/organizations/{organization_id}/owner-commands",
+        headers=headers,
+        json={"objective": "Research and design a governed workflow"},
+    )
+    assert command.status_code == 201
+    blocked = client.post(
+        f"/api/v1/organizations/{organization_id}/owner-commands/{command.json()['id']}/approve",
+        headers=headers,
+    )
+    assert blocked.status_code == 409
+    assert "at most 1 command steps" in blocked.json()["detail"]
+
+    audit = client.get(
+        f"/api/v1/organizations/{organization_id}/audit-log?limit=50",
+        headers=headers,
+    )
+    actions = {event["action"] for event in audit.json()["events"]}
+    assert "governance.policy_updated" in actions
+    assert "governance.approval_blocked" in actions
