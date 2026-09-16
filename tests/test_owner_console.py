@@ -32,6 +32,9 @@ def test_owner_console_is_served() -> None:
         assert "policy-form" in response.text
         assert "policy-max-steps" in response.text
         assert "policy-autonomous" in response.text
+        assert "policy-preview-button" in response.text
+        assert "Preview impact" in response.text
+        assert "policy-preview" in response.text
 
 
 def test_owner_console_assets_are_served() -> None:
@@ -76,3 +79,6 @@ def test_owner_console_assets_are_served() -> None:
         assert "renderGovernancePolicy" in script.text
         assert "/governance-policy" in script.text
         assert "Governance policy saved" in script.text
+        assert "previewGovernancePolicy" in script.text
+        assert "/governance-policy/preview" in script.text
+        assert "Impact detected" in script.text
