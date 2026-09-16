@@ -6,6 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.encoders import jsonable_encoder
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -13,6 +14,7 @@ from backend.app.api.dependencies import CurrentUserDep, SessionDep, require_org
 from backend.app.api.routes.orchestrations import _get_run, _to_public
 from backend.app.core.rbac import Permission, Role
 from backend.app.models.audit import AuditLog
+from backend.app.models.governance_policy import GovernancePolicy
 from backend.app.models.membership import Membership
 from backend.app.models.organization_kernel import OrganizationProject
 from backend.app.models.orchestration import OrchestrationRun
@@ -49,6 +51,34 @@ router = APIRouter(prefix="/organizations", tags=["owner-command-center"])
 OwnerDep = Annotated[Membership, Depends(require_org_permission(Permission.ORG_MANAGE))]
 
 
+class GovernancePolicyUpdate(BaseModel):
+    max_steps_per_command: int = Field(ge=1, le=100)
+    max_project_budget_usd: float = Field(ge=0, le=1_000_000)
+    allow_autonomous_execution: bool
+
+
+def _get_governance_policy(
+    session: SessionDep,
+    organization_id: UUID,
+) -> GovernancePolicy:
+    policy = session.get(GovernancePolicy, organization_id)
+    if policy is None:
+        policy = GovernancePolicy(organization_id=organization_id)
+        session.add(policy)
+        session.flush()
+    return policy
+
+
+def _governance_policy_public(policy: GovernancePolicy) -> dict[str, Any]:
+    return {
+        "organization_id": str(policy.organization_id),
+        "max_steps_per_command": policy.max_steps_per_command,
+        "max_project_budget_usd": policy.max_project_budget_usd,
+        "allow_autonomous_execution": policy.allow_autonomous_execution,
+        "updated_at": policy.updated_at,
+    }
+
+
 def _require_owner(membership: Membership) -> None:
     if membership.role != Role.OWNER.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner role required")
@@ -56,6 +86,49 @@ def _require_owner(membership: Membership) -> None:
 
 def _is_owner_command(run: OrchestrationRun) -> bool:
     return bool((run.context or {}).get("owner_command"))
+
+
+@router.get("/{organization_id}/governance-policy", response_model=dict[str, Any])
+def get_governance_policy(
+    organization_id: UUID,
+    membership: OwnerDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    _require_owner(membership)
+    policy = _get_governance_policy(session, organization_id)
+    session.commit()
+    return _governance_policy_public(policy)
+
+
+@router.put("/{organization_id}/governance-policy", response_model=dict[str, Any])
+def update_governance_policy(
+    organization_id: UUID,
+    payload: GovernancePolicyUpdate,
+    membership: OwnerDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    _require_owner(membership)
+    policy = _get_governance_policy(session, organization_id)
+    previous = _governance_policy_public(policy)
+    policy.max_steps_per_command = payload.max_steps_per_command
+    policy.max_project_budget_usd = payload.max_project_budget_usd
+    policy.allow_autonomous_execution = payload.allow_autonomous_execution
+    record_audit(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+        action="governance.policy_updated",
+        resource_type="governance_policy",
+        resource_id=str(organization_id),
+        details={
+            "previous": previous,
+            "current": _governance_policy_public(policy),
+        },
+    )
+    session.commit()
+    session.refresh(policy)
+    return _governance_policy_public(policy)
 
 
 @router.post(
@@ -428,6 +501,30 @@ def approve_owner_command(
     run = _get_run(session, organization_id, run_id)
     if not _is_owner_command(run):
         raise HTTPException(status_code=404, detail="Owner command not found")
+    policy = _get_governance_policy(session, organization_id)
+    step_count = len(run.steps)
+    if step_count > policy.max_steps_per_command:
+        record_audit(
+            session,
+            organization_id=organization_id,
+            actor_user_id=current_user.id,
+            action="governance.approval_blocked",
+            resource_type="orchestration",
+            resource_id=str(run.id),
+            details={
+                "reason": "command_step_limit",
+                "step_count": step_count,
+                "max_steps_per_command": policy.max_steps_per_command,
+            },
+        )
+        session.commit()
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Governance policy allows at most "
+                f"{policy.max_steps_per_command} command steps"
+            ),
+        )
     delivery_context = (run.context or {}).get("project_delivery") or {}
     delivery_project_id = delivery_context.get("project_id")
     delivery_project = (
@@ -435,6 +532,28 @@ def approve_owner_command(
         if delivery_project_id
         else None
     )
+    if (
+        delivery_project is not None
+        and delivery_project.budget_limit_usd > policy.max_project_budget_usd
+    ):
+        record_audit(
+            session,
+            organization_id=organization_id,
+            actor_user_id=current_user.id,
+            action="governance.approval_blocked",
+            resource_type="organization_project",
+            resource_id=str(delivery_project.id),
+            details={
+                "reason": "project_budget_limit",
+                "project_budget_usd": delivery_project.budget_limit_usd,
+                "max_project_budget_usd": policy.max_project_budget_usd,
+            },
+        )
+        session.commit()
+        raise HTTPException(
+            status_code=409,
+            detail="Project budget exceeds the organization governance policy",
+        )
     governor = (
         evaluate_project_execution(
             project=delivery_project,
@@ -577,6 +696,22 @@ def execute_owner_command(
         raise HTTPException(status_code=404, detail="Owner command not found")
     if command.get("approval_status") != "approved":
         raise HTTPException(status_code=409, detail="Owner command requires approval")
+    policy = _get_governance_policy(session, organization_id)
+    if not policy.allow_autonomous_execution:
+        record_audit(
+            session,
+            organization_id=organization_id,
+            actor_user_id=current_user.id,
+            action="governance.execution_blocked",
+            resource_type="orchestration",
+            resource_id=str(run.id),
+            details={"reason": "autonomous_execution_disabled"},
+        )
+        session.commit()
+        raise HTTPException(
+            status_code=409,
+            detail="Autonomous execution is disabled by governance policy",
+        )
     approved_governor = (run.context or {}).get("portfolio_governor") or command.get(
         "portfolio_governor"
     )
