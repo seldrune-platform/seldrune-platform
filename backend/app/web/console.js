@@ -283,6 +283,42 @@ function renderOperationalIncidents(data) {
 
 
 
+
+function policyFormPayload() {
+  return {
+    max_steps_per_command: Number($('#policy-max-steps').value),
+    max_project_budget_usd: Number($('#policy-max-budget').value),
+    allow_autonomous_execution: $('#policy-autonomous').checked,
+  };
+}
+
+function renderPolicyPreview(preview) {
+  const panel = $('#policy-preview');
+  panel.className = `policy-preview ${preview.safe_to_apply ? "preview-safe" : "preview-impact"}`;
+  const autonomous = preview.autonomous_execution.changes
+    ? ` Autonomous execution changes to ${preview.autonomous_execution.proposed ? "allowed" : "blocked"}.`
+    : '';
+  panel.textContent = preview.safe_to_apply
+    ? `Safe to apply · ${preview.commands_evaluated} commands and ${preview.projects_evaluated} projects evaluated.${autonomous}`
+    : `Impact detected · ${preview.commands_blocked} commands and ${preview.projects_blocked} projects would be blocked.${autonomous}`;
+}
+
+async function previewGovernancePolicy() {
+  const control = $('#policy-preview-button');
+  control.disabled = true;
+  try {
+    const preview = await api('/governance-policy/preview', {
+      method: 'POST',
+      body: JSON.stringify(policyFormPayload()),
+    });
+    renderPolicyPreview(preview);
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    control.disabled = false;
+  }
+}
+
 function renderGovernancePolicy(policy) {
   $('#policy-max-steps').value = policy.max_steps_per_command;
   $('#policy-max-budget').value = Number(policy.max_project_budget_usd).toFixed(2);
@@ -457,6 +493,8 @@ $('#verify-audit-file').onchange = event => {
 };
 
 
+$('#policy-preview-button').onclick = previewGovernancePolicy;
+
 $('#policy-form').onsubmit = async event => {
   event.preventDefault();
   const control = event.submitter;
@@ -464,11 +502,7 @@ $('#policy-form').onsubmit = async event => {
   try {
     const policy = await api('/governance-policy', {
       method: 'PUT',
-      body: JSON.stringify({
-        max_steps_per_command: Number($('#policy-max-steps').value),
-        max_project_budget_usd: Number($('#policy-max-budget').value),
-        allow_autonomous_execution: $('#policy-autonomous').checked,
-      }),
+      body: JSON.stringify(policyFormPayload()),
     });
     renderGovernancePolicy(policy);
     toast('Governance policy saved');
