@@ -238,13 +238,15 @@ def export_governance_evidence(
         )
     )
     events = [_audit_event_payload(event) for event in records]
-    evidence = {
-        "schema_version": "1.0",
-        "organization_id": str(organization_id),
-        "generated_at": datetime.now(UTC),
-        "event_count": len(events),
-        "events": events,
-    }
+    evidence = jsonable_encoder(
+        {
+            "schema_version": "1.0",
+            "organization_id": str(organization_id),
+            "generated_at": datetime.now(UTC),
+            "event_count": len(events),
+            "events": events,
+        }
+    )
     digest = hashlib.sha256(_canonical_evidence_bytes(evidence)).hexdigest()
     package = {
         **evidence,
