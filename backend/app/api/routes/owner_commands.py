@@ -17,7 +17,7 @@ from backend.app.models.audit import AuditLog
 from backend.app.models.governance_policy import GovernancePolicy
 from backend.app.models.membership import Membership
 from backend.app.models.organization_kernel import OrganizationProject
-from backend.app.models.orchestration import OrchestrationRun
+from backend.app.models.orchestration import OrchestrationRun, OrchestrationStep
 from backend.app.schemas.orchestration import (
     AutonomousExecutionRequest,
     AutonomousExecutionResponse,
@@ -122,8 +122,8 @@ def update_governance_policy(
         resource_type="governance_policy",
         resource_id=str(organization_id),
         details={
-            "previous": previous,
-            "current": _governance_policy_public(policy),
+            "previous": jsonable_encoder(previous),
+            "current": jsonable_encoder(_governance_policy_public(policy)),
         },
     )
     session.commit()
@@ -502,7 +502,13 @@ def approve_owner_command(
     if not _is_owner_command(run):
         raise HTTPException(status_code=404, detail="Owner command not found")
     policy = _get_governance_policy(session, organization_id)
-    step_count = len(run.steps)
+    step_count = len(
+        list(
+            session.scalars(
+                select(OrchestrationStep).where(OrchestrationStep.run_id == run.id)
+            )
+        )
+    )
     if step_count > policy.max_steps_per_command:
         record_audit(
             session,
