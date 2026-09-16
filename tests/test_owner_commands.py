@@ -344,3 +344,41 @@ def test_governance_policy_is_persisted_audited_and_enforced(_client) -> None:  
     actions = {event["action"] for event in audit.json()["events"]}
     assert "governance.policy_updated" in actions
     assert "governance.approval_blocked" in actions
+
+
+
+def test_governance_policy_preview_reports_impact_without_mutation(_client) -> None:  # noqa: F811
+    client = _client
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    command = client.post(
+        f"/api/v1/organizations/{organization_id}/owner-commands",
+        headers=headers,
+        json={"objective": "Research, analyze, and design a governed workflow"},
+    )
+    assert command.status_code == 201
+
+    policy_url = f"/api/v1/organizations/{organization_id}/governance-policy"
+    before = client.get(policy_url, headers=headers).json()
+    preview = client.post(
+        f"{policy_url}/preview",
+        headers=headers,
+        json={
+            "max_steps_per_command": 1,
+            "max_project_budget_usd": 1.0,
+            "allow_autonomous_execution": False,
+        },
+    )
+    assert preview.status_code == 200
+    impact = preview.json()
+    assert impact["safe_to_apply"] is False
+    assert impact["commands_evaluated"] == 1
+    assert impact["commands_blocked"] == 1
+    assert impact["blocked_commands"][0]["id"] == command.json()["id"]
+    assert impact["blocked_commands"][0]["reason"] == "command_step_limit"
+    assert impact["autonomous_execution"]["changes"] is True
+    assert impact["autonomous_execution"]["proposed"] is False
+
+    after = client.get(policy_url, headers=headers).json()
+    assert after["max_steps_per_command"] == before["max_steps_per_command"]
+    assert after["allow_autonomous_execution"] == before["allow_autonomous_execution"]
