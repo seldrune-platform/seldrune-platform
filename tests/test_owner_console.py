@@ -28,6 +28,10 @@ def test_owner_console_is_served() -> None:
         assert "verify-audit-file" in response.text
         assert "Verify evidence" in response.text
         assert "audit-verification" in response.text
+        assert "GOVERNANCE POLICY CENTER" in response.text
+        assert "policy-form" in response.text
+        assert "policy-max-steps" in response.text
+        assert "policy-autonomous" in response.text
 
 
 def test_owner_console_assets_are_served() -> None:
@@ -69,3 +73,6 @@ def test_owner_console_assets_are_served() -> None:
         assert "verifyAuditEvidence" in script.text
         assert "/audit-export/verify" in script.text
         assert "Evidence integrity verified" in script.text
+        assert "renderGovernancePolicy" in script.text
+        assert "/governance-policy" in script.text
+        assert "Governance policy saved" in script.text
