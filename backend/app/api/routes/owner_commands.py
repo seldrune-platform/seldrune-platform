@@ -505,7 +505,7 @@ def approve_owner_command(
     step_count = len(
         list(
             session.scalars(
-                select(OrchestrationStep).where(OrchestrationStep.run_id == run.id)
+                select(OrchestrationStep).where(OrchestrationStep.orchestration_run_id == run.id)
             )
         )
     )
