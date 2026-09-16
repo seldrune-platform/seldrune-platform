@@ -1,3 +1,6 @@
+import hashlib
+import json
+
 from tests.test_autonomous_execution import client as _client  # noqa: F401
 from tests.test_autonomous_execution import create_agent, register_owner
 
@@ -261,6 +264,28 @@ def test_governance_evidence_export_has_integrity_digest(_client) -> None:  # no
     digest = evidence["integrity"]["digest"]
     assert len(digest) == 64
     assert all(character in "0123456789abcdef" for character in digest)
+    unsigned = {key: value for key, value in evidence.items() if key != "integrity"}
+    canonical = json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode()
+    assert hashlib.sha256(canonical).hexdigest() == digest
+
+    verified = client.post(
+        f"/api/v1/organizations/{organization_id}/audit-export/verify",
+        headers=headers,
+        json=evidence,
+    )
+    assert verified.status_code == 200
+    assert verified.json()["valid"] is True
+    assert verified.json()["expected_digest"] == digest
+
+    evidence["events"][0]["action"] = "tampered.action"
+    rejected = client.post(
+        f"/api/v1/organizations/{organization_id}/audit-export/verify",
+        headers=headers,
+        json=evidence,
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["valid"] is False
+    assert "altered" in rejected.json()["reason"]
 
     audit_log = client.get(
         f"/api/v1/organizations/{organization_id}/audit-log?action=audit.evidence_exported",
