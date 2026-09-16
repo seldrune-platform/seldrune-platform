@@ -25,6 +25,9 @@ def test_owner_console_is_served() -> None:
         assert "audit-filter" in response.text
         assert "download-audit" in response.text
         assert "Download evidence" in response.text
+        assert "verify-audit-file" in response.text
+        assert "Verify evidence" in response.text
+        assert "audit-verification" in response.text
 
 
 def test_owner_console_assets_are_served() -> None:
@@ -63,3 +66,6 @@ def test_owner_console_assets_are_served() -> None:
         assert "downloadAuditEvidence" in script.text
         assert "/audit-export" in script.text
         assert "seldrune-governance-evidence-" in script.text
+        assert "verifyAuditEvidence" in script.text
+        assert "/audit-export/verify" in script.text
+        assert "Evidence integrity verified" in script.text
