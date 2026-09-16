@@ -100,6 +100,84 @@ def get_governance_policy(
     return _governance_policy_public(policy)
 
 
+@router.post(
+    "/{organization_id}/governance-policy/preview",
+    response_model=dict[str, Any],
+)
+def preview_governance_policy(
+    organization_id: UUID,
+    payload: GovernancePolicyUpdate,
+    membership: OwnerDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    _require_owner(membership)
+    current = _get_governance_policy(session, organization_id)
+    runs = [
+        run
+        for run in session.scalars(
+            select(OrchestrationRun).where(
+                OrchestrationRun.organization_id == organization_id
+            )
+        )
+        if _is_owner_command(run)
+    ]
+    run_ids = {run.id for run in runs}
+    step_counts = {run_id: 0 for run_id in run_ids}
+    if run_ids:
+        for step in session.scalars(
+            select(OrchestrationStep).where(
+                OrchestrationStep.orchestration_run_id.in_(run_ids)
+            )
+        ):
+            step_counts[step.orchestration_run_id] += 1
+    blocked_commands = [
+        {
+            "id": str(run.id),
+            "objective": run.objective,
+            "step_count": step_counts[run.id],
+            "limit": payload.max_steps_per_command,
+            "reason": "command_step_limit",
+        }
+        for run in runs
+        if step_counts[run.id] > payload.max_steps_per_command
+    ]
+    projects = list(
+        session.scalars(
+            select(OrganizationProject).where(
+                OrganizationProject.organization_id == organization_id
+            )
+        )
+    )
+    blocked_projects = [
+        {
+            "id": str(project.id),
+            "name": project.name,
+            "budget_limit_usd": project.budget_limit_usd,
+            "limit_usd": payload.max_project_budget_usd,
+            "reason": "project_budget_limit",
+        }
+        for project in projects
+        if project.budget_limit_usd > payload.max_project_budget_usd
+    ]
+    autonomous_change = (
+        current.allow_autonomous_execution != payload.allow_autonomous_execution
+    )
+    return {
+        "safe_to_apply": not blocked_commands and not blocked_projects,
+        "commands_evaluated": len(runs),
+        "commands_blocked": len(blocked_commands),
+        "projects_evaluated": len(projects),
+        "projects_blocked": len(blocked_projects),
+        "autonomous_execution": {
+            "current": current.allow_autonomous_execution,
+            "proposed": payload.allow_autonomous_execution,
+            "changes": autonomous_change,
+        },
+        "blocked_commands": blocked_commands,
+        "blocked_projects": blocked_projects,
+    }
+
+
 @router.put("/{organization_id}/governance-policy", response_model=dict[str, Any])
 def update_governance_policy(
     organization_id: UUID,
