@@ -5,6 +5,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -210,6 +211,15 @@ def get_governance_audit_log(
     }
 
 
+def _canonical_evidence_bytes(evidence: dict[str, Any]) -> bytes:
+    encoded = jsonable_encoder(evidence)
+    return json.dumps(
+        encoded,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
 @router.post("/{organization_id}/audit-export", response_model=dict[str, Any])
 def export_governance_evidence(
     organization_id: UUID,
@@ -235,13 +245,7 @@ def export_governance_evidence(
         "event_count": len(events),
         "events": events,
     }
-    canonical = json.dumps(
-        evidence,
-        sort_keys=True,
-        separators=(",", ":"),
-        default=str,
-    ).encode("utf-8")
-    digest = hashlib.sha256(canonical).hexdigest()
+    digest = hashlib.sha256(_canonical_evidence_bytes(evidence)).hexdigest()
     package = {
         **evidence,
         "integrity": {
@@ -261,6 +265,65 @@ def export_governance_evidence(
     )
     session.commit()
     return package
+
+
+@router.post("/{organization_id}/audit-export/verify", response_model=dict[str, Any])
+def verify_governance_evidence(
+    organization_id: UUID,
+    package: dict[str, Any],
+    membership: OwnerDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    _require_owner(membership)
+    integrity = package.get("integrity")
+    evidence = {key: value for key, value in package.items() if key != "integrity"}
+    provided_digest = integrity.get("digest") if isinstance(integrity, dict) else None
+    algorithm = integrity.get("algorithm") if isinstance(integrity, dict) else None
+    event_count = len(evidence.get("events", [])) if isinstance(evidence.get("events"), list) else 0
+    expected_digest = hashlib.sha256(_canonical_evidence_bytes(evidence)).hexdigest()
+    reason = "Evidence package is authentic and unchanged."
+    valid = True
+    if evidence.get("organization_id") != str(organization_id):
+        valid = False
+        reason = "Evidence belongs to a different organization."
+    elif evidence.get("schema_version") != "1.0":
+        valid = False
+        reason = "Evidence schema is unsupported."
+    elif algorithm != "SHA-256" or not provided_digest:
+        valid = False
+        reason = "Integrity metadata is missing or unsupported."
+    elif provided_digest != expected_digest:
+        valid = False
+        reason = "Integrity digest does not match; evidence may have been altered."
+    elif evidence.get("event_count") != event_count:
+        valid = False
+        reason = "Event count does not match the evidence contents."
+
+    record_audit(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+        action="audit.evidence_verified" if valid else "audit.evidence_rejected",
+        resource_type="audit_log",
+        resource_id=provided_digest,
+        details={
+            "valid": valid,
+            "reason": reason,
+            "event_count": event_count,
+            "provided_digest": provided_digest,
+            "expected_digest": expected_digest,
+        },
+    )
+    session.commit()
+    return {
+        "valid": valid,
+        "reason": reason,
+        "event_count": event_count,
+        "provided_digest": provided_digest,
+        "expected_digest": expected_digest,
+        "algorithm": "SHA-256",
+    }
 
 
 @router.get("/{organization_id}/owner-dashboard", response_model=dict[str, Any])
