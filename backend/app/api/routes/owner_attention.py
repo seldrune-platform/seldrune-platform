@@ -1,7 +1,7 @@
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import select
 
 from backend.app.api.dependencies import SessionDep, require_org_permission
@@ -47,6 +47,31 @@ def _owner_attention_state(session: SessionDep, organization_id: UUID) -> dict[s
     )
 
 
+def _etag_matches(if_none_match: str | None, fingerprint: str) -> bool:
+    if not if_none_match:
+        return False
+    expected = fingerprint.lower()
+    for candidate in if_none_match.split(","):
+        value = candidate.strip()
+        if value == "*":
+            return True
+        if value.startswith("W/"):
+            value = value[2:].strip()
+        if len(value) >= 2 and value.startswith('"') and value.endswith('"'):
+            value = value[1:-1]
+        if value.lower() == expected:
+            return True
+    return False
+
+
+def _snapshot_headers(fingerprint: str) -> dict[str, str]:
+    return {
+        "ETag": f'"{fingerprint}"',
+        "Cache-Control": "private, no-cache",
+        "Vary": "Authorization",
+    }
+
+
 @router.get("/{organization_id}/owner-attention", response_model=dict[str, Any])
 def get_owner_attention(
     organization_id: UUID,
@@ -57,9 +82,15 @@ def get_owner_attention(
     return _owner_attention_state(session, organization_id)
 
 
-@router.get("/{organization_id}/owner-attention/snapshot", response_model=dict[str, Any])
+@router.get(
+    "/{organization_id}/owner-attention/snapshot",
+    response_model=dict[str, Any],
+    responses={304: {"description": "Owner attention has not meaningfully changed"}},
+)
 def get_owner_attention_snapshot(
     organization_id: UUID,
+    request: Request,
+    response: Response,
     membership: OwnerDep,
     session: SessionDep,
     limit: int = Query(default=5, ge=1, le=20),
@@ -69,11 +100,18 @@ def get_owner_attention_snapshot(
         max_length=64,
         pattern="^[0-9a-fA-F]{64}$",
     ),
-) -> dict[str, Any]:
+) -> Any:
     _require_owner(membership)
     attention = _owner_attention_state(session, organization_id)
-    return build_owner_attention_snapshot(
+    snapshot = build_owner_attention_snapshot(
         attention,
         limit=limit,
         previous_fingerprint=previous_fingerprint,
     )
+    fingerprint = str(snapshot["fingerprint"])
+    headers = _snapshot_headers(fingerprint)
+    if _etag_matches(request.headers.get("if-none-match"), fingerprint):
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+    for name, value in headers.items():
+        response.headers[name] = value
+    return snapshot
