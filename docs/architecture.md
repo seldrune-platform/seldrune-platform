@@ -22,7 +22,7 @@ Identity is database-backed and organization-scoped. Seldrune currently provides
 - member administration with role ceilings,
 - organization-scoped security events and audit trails.
 
-The remaining broad-customer identity work includes email verification and account recovery beyond MFA recovery codes.
+Email verification and password/account recovery are implemented with one-time hashed tokens, expiry, replay protection, and refresh-session revocation after password reset.
 
 ### Organization kernel
 
@@ -42,7 +42,7 @@ The knowledge layer stores reusable organizational context and retrieval materia
 
 ### Ingress, secrets, and external actions
 
-Signed inbound webhooks provide authenticated ingress. Secret references identify externally supplied credentials without storing secret values in normal application tables. Runtime secret resolution currently supports environment-backed references; production cloud secret-manager integration remains future hardening work.
+Signed inbound webhooks provide authenticated ingress. Secret references identify externally supplied credentials without storing secret values in normal application tables. Runtime secret resolution uses a provider abstraction. Environment-backed references remain supported, and AWS Secrets Manager is available for production managed-secret resolution without persisting secret values in application tables.
 
 ### Audit, security, and observability
 
