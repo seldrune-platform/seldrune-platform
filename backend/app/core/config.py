@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Seldrune Platform"
-    app_version: str = "0.79.0"
+    app_version: str = "0.80.0"
     environment: str = "development"
     api_v1_prefix: str = "/api/v1"
     enable_docs: bool = True
@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     knowledge_retrieval_limit: int = 6
     knowledge_context_max_chars: int = 6000
     owner_push_vapid_public_key: str | None = None
+    owner_push_vapid_private_key: str | None = None
+    owner_push_vapid_subject: str | None = None
 
     @model_validator(mode="after")
     def validate_settings(self) -> "Settings":
@@ -47,6 +49,13 @@ class Settings(BaseSettings):
             raise ValueError("SELDRUNE_KNOWLEDGE_RETRIEVAL_LIMIT must be between 1 and 25")
         if self.knowledge_context_max_chars < 500:
             raise ValueError("SELDRUNE_KNOWLEDGE_CONTEXT_MAX_CHARS must be at least 500")
+        configured = [
+            bool(self.owner_push_vapid_public_key),
+            bool(self.owner_push_vapid_private_key),
+            bool(self.owner_push_vapid_subject),
+        ]
+        if any(configured) and not all(configured):
+            raise ValueError("Owner Web Push VAPID public key, private key, and subject must be configured together")
         return self
 
 
