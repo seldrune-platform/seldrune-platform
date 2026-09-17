@@ -69,8 +69,12 @@ def _first_match(text: str, patterns: tuple[tuple[str, str], ...]) -> str | None
 
 def _objective_is_diagnostic(objective: str) -> bool:
     normalized = " ".join((objective or "").lower().split())
-    diagnostic = any(re.search(pattern, normalized) for pattern in _DIAGNOSTIC_OBJECTIVE_PATTERNS)
-    verification = any(re.search(pattern, normalized) for pattern in _VERIFICATION_OBJECTIVE_PATTERNS)
+    diagnostic = any(
+        re.search(pattern, normalized) for pattern in _DIAGNOSTIC_OBJECTIVE_PATTERNS
+    )
+    verification = any(
+        re.search(pattern, normalized) for pattern in _VERIFICATION_OBJECTIVE_PATTERNS
+    )
     return diagnostic and not verification
 
 
