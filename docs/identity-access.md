@@ -65,7 +65,7 @@ Initial producers include refresh-token reuse detection, inbound webhook authent
 - database-backed RBAC,
 - audit trails for security-relevant authenticated actions,
 - organization-scoped security-event monitoring and owner alerts,
-- secret-reference management without secret-value persistence.
+- email verification and one-time password/account recovery,\n- secret-reference management without secret-value persistence,\n- provider-based runtime secret resolution with environment and AWS Secrets Manager providers.
 
 ## Production controls still required
 
