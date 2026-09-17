@@ -12,16 +12,15 @@ class EmailDeliveryError(RuntimeError):
 
 
 def verification_url(token: str) -> str:
-    base = settings.email_verification_public_url.rstrip("?")
-    separator = "&" if "?" in base else "?"
-    return f"{base}{separator}{urlencode({'token': token})}"
+    base = f"{settings.public_app_url.rstrip('/')}/verify-email"
+    return f"{base}?{urlencode({'token': token})}"
 
 
 def send_verification_email(email: str, token: str) -> bool:
-    """Deliver a verification email.
+    """Deliver a verification email without logging or persisting the raw token.
 
-    Returns False when outbound email is intentionally unconfigured (useful for
-    local/bootstrap deployments). Tokens are never logged or persisted here.
+    False means outbound delivery is intentionally unconfigured, which preserves
+    bootstrap/local operation until a provider is configured.
     """
     if not settings.smtp_host or not settings.email_from_address:
         return False
@@ -37,11 +36,15 @@ def send_verification_email(email: str, token: str) -> bool:
     )
 
     try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as smtp:
+        with smtplib.SMTP(
+            settings.smtp_host,
+            settings.smtp_port,
+            timeout=settings.smtp_timeout_seconds,
+        ) as smtp:
             if settings.smtp_starttls:
                 smtp.starttls()
-            if settings.smtp_username:
-                smtp.login(settings.smtp_username, settings.smtp_password or "")
+            if settings.smtp_username and settings.smtp_password:
+                smtp.login(settings.smtp_username, settings.smtp_password)
             smtp.send_message(message)
     except (OSError, smtplib.SMTPException) as exc:
         raise EmailDeliveryError("Verification email delivery failed") from exc
