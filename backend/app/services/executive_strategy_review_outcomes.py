@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.models.orchestration import OrchestrationRun
+from backend.app.services.executive_decision_advisory import decision_advisory
 
 _TERMINAL_STATUSES = {"succeeded", "partial", "failed", "cancelled"}
 _UNSUCCESSFUL_STATUSES = {"partial", "failed", "cancelled"}
@@ -188,6 +189,8 @@ def build_executive_strategy_review_outcomes(
     )
 
     enriched: list[dict[str, Any]] = []
+    active_advisories = 0
+    directional_advisories = 0
     for priority in priorities:
         family = _family(priority)
         strategy = priority.get("strategy") or {}
@@ -209,27 +212,27 @@ def build_executive_strategy_review_outcomes(
                 effective_mode=(str(recommended_mode) if recommended_mode else None),
             ),
         }
-        enriched.append(
-            {
-                **priority,
-                "strategy_review_outcomes": {
-                    "family": family,
-                    "total_reviewed_attempts": sum(
-                        int(card["attempts"]) for card in family_cards
-                    ),
-                    "resolution_associations": sum(
-                        int(card["resolution_associations"]) for card in family_cards
-                    ),
-                    "decision_evidence": decision_evidence,
-                    "causal_claim": False,
-                    "interpretation": (
-                        "Owner strategy-decision scorecards describe recorded associations "
-                        "between review choices and later priority state; they do not prove that "
-                        "the review choice caused the outcome."
-                    ),
-                },
-            }
-        )
+        review_outcomes = {
+            "family": family,
+            "total_reviewed_attempts": sum(int(card["attempts"]) for card in family_cards),
+            "resolution_associations": sum(
+                int(card["resolution_associations"]) for card in family_cards
+            ),
+            "decision_evidence": decision_evidence,
+            "causal_claim": False,
+            "interpretation": (
+                "Owner strategy-decision scorecards describe recorded associations between "
+                "review choices and later priority state; they do not prove that the review "
+                "choice caused the outcome."
+            ),
+        }
+        with_outcomes = {**priority, "strategy_review_outcomes": review_outcomes}
+        advisory = decision_advisory(with_outcomes)
+        if advisory["active"]:
+            active_advisories += 1
+        if advisory["signal"] in {"keep_selected", "use_recommended"}:
+            directional_advisories += 1
+        enriched.append({**with_outcomes, "strategy_decision_advisory": advisory})
 
     return {
         "priorities": enriched,
@@ -245,6 +248,8 @@ def build_executive_strategy_review_outcomes(
                 int(card["unsuccessful_attempts"]) for card in scorecards.values()
             ),
             "scored_families": len({card["family"] for card in scorecards.values()}),
+            "active_advisories": active_advisories,
+            "directional_advisories": directional_advisories,
         },
         "scorecards": ordered_scorecards[:12],
         "recent": recent[:12],
