@@ -20,6 +20,8 @@ services:
         value: gpt-5.6-sol
       - key: OPENAI_API_KEY
         sync: false
+      - key: SELDRUNE_OWNER_PUSH_VAPID_PUBLIC_KEY
+        sync: false
 databases:
   - name: seldrune-db
     databaseName: seldrune
