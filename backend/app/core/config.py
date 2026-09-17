@@ -55,7 +55,10 @@ class Settings(BaseSettings):
             bool(self.owner_push_vapid_subject),
         ]
         if any(configured) and not all(configured):
-            raise ValueError("Owner Web Push VAPID public key, private key, and subject must be configured together")
+            raise ValueError(
+                "Owner Web Push VAPID public key, private key, and subject "
+                "must be configured together"
+            )
         return self
 
 
