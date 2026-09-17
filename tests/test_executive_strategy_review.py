@@ -178,3 +178,7 @@ def test_strategy_review_controls_are_served(client) -> None:
     assert "Keep ${strategyLabel(strategy.mode)}" in script.text
     assert "Use ${strategyLabel(recommendation.recommended_mode)}" in script.text
     assert "Pending reviews" in script.text
+    assert "Review evidence changes" in script.text
+    assert "Reviewed snapshot" in script.text
+    assert "Stale review drift" in script.text
+    assert "review_drift" in script.text
