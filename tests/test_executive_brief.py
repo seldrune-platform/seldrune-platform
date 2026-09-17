@@ -73,6 +73,7 @@ def test_executive_brief_reports_owner_priorities(client) -> None:
     assert body["executive_strategy"] == {
         "actionable_priorities": 0,
         "history_informed_priorities": 0,
+        "comparative_recommendations": 0,
         "modes": {"observe": 1},
     }
 
@@ -317,6 +318,7 @@ def test_executive_brief_assets_are_served(client) -> None:
     assert "resolution-associated pattern" in script.text
     assert "Learned families" in script.text
     assert "Strategy-informed" in script.text
+    assert "Strategy recommendations" in script.text
     assert "strategyLabel" in script.text
 
     board = client.get("/console-assets/organization-board.html")
