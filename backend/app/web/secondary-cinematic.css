@@ -1,0 +1,174 @@
+@import url("/console-assets/console-cinematic.css");
+
+.brief-shell,
+.monitor-shell,
+.org-shell{
+  position:relative;
+  z-index:1;
+}
+
+.brief-shell::before,
+.monitor-shell::before,
+.org-shell::before{
+  content:"";
+  position:absolute;
+  left:5%;
+  right:5%;
+  top:16px;
+  height:1px;
+  pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(214,245,111,.26),transparent);
+  box-shadow:0 0 26px rgba(214,245,111,.16);
+}
+
+.card,
+.monitor-summary article,
+.monitor-card,
+.summary article,
+.panel,
+.item{
+  background:linear-gradient(145deg,rgba(12,33,26,.84),rgba(6,21,16,.76))!important;
+  border-color:rgba(125,223,181,.18)!important;
+  box-shadow:0 22px 70px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.025);
+  backdrop-filter:blur(18px) saturate(120%);
+  -webkit-backdrop-filter:blur(18px) saturate(120%);
+  transition:transform .28s ease,border-color .28s ease,box-shadow .28s ease;
+}
+
+.card:hover,
+.monitor-summary article:hover,
+.monitor-card:hover,
+.summary article:hover,
+.panel:hover,
+.item:hover{
+  transform:translateY(-2px);
+  border-color:rgba(127,240,190,.3)!important;
+  box-shadow:0 26px 80px rgba(0,0,0,.3),0 0 36px rgba(85,224,162,.07);
+}
+
+.brief-actions a,
+.brief-actions button,
+.monitor-actions a,
+.actions a,
+.actions button,
+.priority-actions a,
+.priority-actions button,
+.panel button{
+  background:linear-gradient(135deg,#10694f,#16885f 58%,#70c866 130%)!important;
+  color:#f7fff9!important;
+  border:1px solid rgba(133,239,190,.18)!important;
+  box-shadow:0 10px 26px rgba(3,25,18,.28),inset 0 1px 0 rgba(255,255,255,.08);
+  transition:transform .2s ease,box-shadow .2s ease,filter .2s ease;
+}
+
+.brief-actions a:hover,
+.brief-actions button:hover,
+.monitor-actions a:hover,
+.actions a:hover,
+.actions button:hover,
+.priority-actions a:hover,
+.priority-actions button:hover,
+.panel button:hover{
+  transform:translateY(-2px);
+  filter:brightness(1.07);
+  box-shadow:0 15px 34px rgba(2,25,17,.38),0 0 22px rgba(85,224,162,.09);
+}
+
+.brief-actions .secondary,
+.monitor-actions a.secondary,
+.actions .secondary{
+  background:rgba(255,255,255,.025)!important;
+  color:var(--ink)!important;
+  border-color:rgba(125,223,181,.2)!important;
+}
+
+.panel input,
+.panel select,
+.panel textarea{
+  color:var(--ink)!important;
+  background:rgba(3,14,10,.58)!important;
+  border-color:rgba(125,223,181,.2)!important;
+  box-shadow:inset 0 1px 10px rgba(0,0,0,.18);
+}
+
+.panel input::placeholder,
+.panel textarea::placeholder{color:#6f8880}
+
+.panel input:focus,
+.panel select:focus,
+.panel textarea:focus{
+  outline:1px solid rgba(214,245,111,.65);
+  border-color:rgba(214,245,111,.45)!important;
+}
+
+.monitor-stat,
+.tag,
+.posture{
+  background:rgba(85,224,162,.08)!important;
+  border-color:rgba(125,223,181,.14)!important;
+  color:var(--ink)!important;
+}
+
+.message,
+.monitor-error,
+.error{
+  background:rgba(255,129,116,.10)!important;
+  border:1px solid rgba(255,129,116,.22);
+  color:#ffd8d3!important;
+}
+
+.success,
+.outcome-memory{
+  background:rgba(85,224,162,.09)!important;
+  border-color:rgba(85,224,162,.28)!important;
+  color:#b8f5d4!important;
+}
+
+.escalation{
+  background:rgba(255,178,92,.08)!important;
+  border-color:#d7984c!important;
+  color:#ffd6a2!important;
+}
+
+.governance div,
+.priority,
+.resolved-action,
+.playbook,
+.incident,
+.agent{
+  border-color:rgba(125,223,181,.14)!important;
+}
+
+.resource-line,
+.empty,
+.muted,
+.brief-head p,
+.monitor-head p,
+.org-head p,
+.item p,
+.priority p,
+.resolved-action p,
+.playbook p,
+.incident p,
+.agent p{
+  color:var(--muted)!important;
+}
+
+@media(prefers-reduced-motion:reduce){
+  .card,
+  .monitor-summary article,
+  .monitor-card,
+  .summary article,
+  .panel,
+  .item,
+  .brief-actions a,
+  .brief-actions button,
+  .monitor-actions a,
+  .actions a,
+  .actions button,
+  .priority-actions a,
+  .priority-actions button,
+  .panel button{
+    transition:none!important;
+  }
+}
