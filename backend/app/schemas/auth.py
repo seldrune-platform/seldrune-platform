@@ -58,6 +58,15 @@ class EmailVerificationResponse(BaseModel):
     verified: bool
 
 
+class PasswordRecoveryRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=512)
+    new_password: str = Field(min_length=12, max_length=128)
+
+
 class UserPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
