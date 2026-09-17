@@ -1,17 +1,30 @@
 (()=>{
 const API='/api/v1';
+const POLL_INTERVAL_MS=30000;
 const $=selector=>document.querySelector(selector);
 let organizationId='';
 let loading=false;
+let polling=false;
 let reloadTimer=null;
+let pollTimer=null;
 let commandObserver=null;
+let attentionEtag='';
+let hasLoaded=false;
+
+function token(){
+  return sessionStorage.seldruneToken||'';
+}
+
+async function apiFetch(path,{headers={}}={}){
+  const ownerToken=token();
+  if(!ownerToken)throw new Error('Owner session required');
+  return fetch(`${API}${path}`,{
+    headers:{Accept:'application/json',Authorization:`Bearer ${ownerToken}`,...headers},
+  });
+}
 
 async function request(path){
-  const token=sessionStorage.seldruneToken||'';
-  if(!token)throw new Error('Owner session required');
-  const response=await fetch(`${API}${path}`,{
-    headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
-  });
+  const response=await apiFetch(path);
   if(!response.ok){
     const body=await response.json().catch(()=>({}));
     throw new Error(body.detail||`Request failed (${response.status})`);
@@ -25,6 +38,21 @@ async function resolveOrganization(){
   if(!membership)throw new Error('Owner organization not available');
   organizationId=membership.organization.id;
   return organizationId;
+}
+
+function setSyncStatus(state,label,detail){
+  const root=$('#attention-sync');
+  if(!root)return;
+  root.className=`attention-sync attention-sync-${state}`;
+  const strong=root.querySelector('strong');
+  const small=root.querySelector('small');
+  if(strong)strong.textContent=label;
+  if(small)small.textContent=detail;
+}
+
+function lastCheckedLabel(){
+  const time=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  return `Checked ${time} · 30s conditional polling`;
 }
 
 function approvalStatus(command){
@@ -210,7 +238,7 @@ function showInboxError(message){
 async function loadActionSurface(){
   const view=$('#console-view');
   if(loading||!view||view.classList.contains('hidden'))return;
-  if(!sessionStorage.seldruneToken)return;
+  if(!token())return;
   loading=true;
   try{
     if(!organizationId)await resolveOrganization();
@@ -220,16 +248,64 @@ async function loadActionSurface(){
     ]);
     renderInbox(attention);
     renderAllCommands(commands);
+    hasLoaded=true;
   }catch(error){
-    showInboxError(error.message);
+    if(!hasLoaded)showInboxError(error.message);
+    throw error;
   }finally{
     loading=false;
   }
 }
 
-function scheduleReload(){
+function clearPoll(){
+  clearTimeout(pollTimer);
+  pollTimer=null;
+}
+
+function schedulePoll(delay=POLL_INTERVAL_MS){
+  clearPoll();
+  const view=$('#console-view');
+  if(document.hidden||!view||view.classList.contains('hidden')||!token())return;
+  pollTimer=setTimeout(()=>pollAttention(),delay);
+}
+
+async function pollAttention({force=false}={}){
+  const view=$('#console-view');
+  if(polling||document.hidden||!view||view.classList.contains('hidden')||!token())return;
+  polling=true;
+  setSyncStatus('checking','Checking attention','Using conditional owner snapshot');
+  try{
+    if(!organizationId)await resolveOrganization();
+    const headers={};
+    if(attentionEtag&&!force)headers['If-None-Match']=attentionEtag;
+    const response=await apiFetch(
+      `/organizations/${organizationId}/owner-attention/snapshot?limit=1`,
+      {headers},
+    );
+    if(response.status===304){
+      setSyncStatus('live','Live',lastCheckedLabel());
+      return;
+    }
+    if(!response.ok){
+      const body=await response.json().catch(()=>({}));
+      throw new Error(body.detail||`Snapshot failed (${response.status})`);
+    }
+    attentionEtag=response.headers.get('ETag')||'';
+    await response.json();
+    await loadActionSurface();
+    setSyncStatus('live','Live · updated',lastCheckedLabel());
+  }catch(error){
+    if(!hasLoaded)showInboxError(error.message);
+    setSyncStatus('error','Sync unavailable','Keeping the last good owner-attention view');
+  }finally{
+    polling=false;
+    schedulePoll();
+  }
+}
+
+function scheduleReload({force=false}={}){
   clearTimeout(reloadTimer);
-  reloadTimer=setTimeout(loadActionSurface,160);
+  reloadTimer=setTimeout(()=>pollAttention({force}),160);
 }
 
 function observeCommandList(){
@@ -252,18 +328,34 @@ $('#owner-action-list')?.addEventListener('click',event=>{
   setTimeout(()=>card.querySelector('button[data-action="brief"]')?.click(),180);
 });
 
-$('#refresh')?.addEventListener('click',scheduleReload);
+$('#refresh')?.addEventListener('click',()=>scheduleReload({force:true}));
+
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){
+    clearPoll();
+    setSyncStatus('paused','Paused','Live attention resumes when this tab is visible');
+  }else{
+    scheduleReload();
+  }
+});
+window.addEventListener('focus',()=>{
+  if(!document.hidden)scheduleReload();
+});
 
 const consoleView=$('#console-view');
 if(consoleView){
   new MutationObserver(()=>{
     if(consoleView.classList.contains('hidden')){
+      clearPoll();
       organizationId='';
+      attentionEtag='';
+      hasLoaded=false;
+      setSyncStatus('paused','Paused','Sign in to resume live owner attention');
     }else{
-      scheduleReload();
+      scheduleReload({force:true});
     }
   }).observe(consoleView,{attributes:true,attributeFilter:['class']});
 }
 observeCommandList();
-if(consoleView&&!consoleView.classList.contains('hidden'))scheduleReload();
+if(consoleView&&!consoleView.classList.contains('hidden'))scheduleReload({force:true});
 })();
