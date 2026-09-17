@@ -12,7 +12,7 @@ from backend.app.models.orchestration import OrchestrationRun, OrchestrationStep
 from backend.app.models.task import Task
 
 
-OUTCOME_GATE_VERSION = "outcome-gate-v1"
+OUTCOME_GATE_VERSION = "outcome-gate-v2"
 _BLOCKER_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bnot ready\b", "The result explicitly declares that it is not ready."),
     (r"\b(?:has|have|was|were)?\s*not been verified\b", "Required verification is incomplete."),
@@ -28,6 +28,22 @@ _REVIEW_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\brequires? (?:owner |human )?review\b", "The result requires owner review."),
     (r"\binsufficient evidence\b", "The result reports insufficient evidence."),
     (r"\bneeds? (?:owner |human )?approval\b", "The result needs an explicit review."),
+)
+_DIAGNOSTIC_OBJECTIVE_PATTERNS = (
+    r"\banaly[sz]e\b",
+    r"\bassess(?:ment)?\b",
+    r"\breview\b",
+    r"\bidentify (?:gaps|risks|issues|priorities)\b",
+    r"\breadiness assessment\b",
+    r"\bproduce (?:a |an )?(?:report|brief|plan|assessment)\b",
+)
+_VERIFICATION_OBJECTIVE_PATTERNS = (
+    r"\bverify\b",
+    r"\bvalidate\b",
+    r"\bconfirm\b",
+    r"\bprove\b",
+    r"\btest whether\b",
+    r"\bensure .{0,80}\b(?:ready|working|passed|complete)\b",
 )
 
 
@@ -49,6 +65,13 @@ def _first_match(text: str, patterns: tuple[tuple[str, str], ...]) -> str | None
         if re.search(pattern, normalized):
             return reason
     return None
+
+
+def _objective_is_diagnostic(objective: str) -> bool:
+    normalized = " ".join((objective or "").lower().split())
+    diagnostic = any(re.search(pattern, normalized) for pattern in _DIAGNOSTIC_OBJECTIVE_PATTERNS)
+    verification = any(re.search(pattern, normalized) for pattern in _VERIFICATION_OBJECTIVE_PATTERNS)
+    return diagnostic and not verification
 
 
 def assess_command_outcome(
@@ -76,13 +99,14 @@ def assess_command_outcome(
             evidence_step=None,
         )
 
+    diagnostic_objective = _objective_is_diagnostic(run.objective)
     for step in reversed(steps):
         task = tasks_by_id.get(step.task_id)
         text = (task.output_data or {}).get("text") if task else None
         if not isinstance(text, str) or not text.strip():
             continue
         blocker = _first_match(text, _BLOCKER_PATTERNS)
-        if blocker:
+        if blocker and not diagnostic_objective:
             return OutcomeAssessment(
                 verdict="not_achieved",
                 promotable=False,
@@ -111,6 +135,6 @@ def assess_command_outcome(
     return OutcomeAssessment(
         verdict="achieved",
         promotable=True,
-        reasons=["Execution completed and no explicit outcome blocker was detected."],
+        reasons=["Execution completed and no objective-level outcome blocker was detected."],
         evidence_step=final_step.sequence,
     )
