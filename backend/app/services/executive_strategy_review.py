@@ -31,10 +31,33 @@ def _evidence_snapshot(value: Any) -> dict[str, Any]:
     }
 
 
+def _confidence_calibration_snapshot(value: Any) -> dict[str, Any]:
+    calibration = value if isinstance(value, dict) else {}
+    return {
+        "status": calibration.get("status"),
+        "basis": calibration.get("basis"),
+        "signal": calibration.get("signal"),
+        "base_confidence": str(calibration.get("base_confidence") or "none"),
+        "calibrated_confidence": str(calibration.get("calibrated_confidence") or "none"),
+        "confidence_changed": bool(calibration.get("confidence_changed")),
+        "calibrated_attempts": int(calibration.get("calibrated_attempts") or 0),
+        "aligned_attempts": int(calibration.get("aligned_attempts") or 0),
+        "diverged_attempts": int(calibration.get("diverged_attempts") or 0),
+        "aligned_resolution_rate": float(calibration.get("aligned_resolution_rate") or 0.0),
+        "diverged_resolution_rate": float(calibration.get("diverged_resolution_rate") or 0.0),
+        "resolution_rate_delta": float(calibration.get("resolution_rate_delta") or 0.0),
+        "sample_strength": str(calibration.get("sample_strength") or "none"),
+        "owner_decision_required": bool(calibration.get("owner_decision_required")),
+        "auto_applied": False,
+        "causal_claim": False,
+    }
+
+
 def decision_advisory_snapshot(priority: dict[str, Any]) -> dict[str, Any]:
     advisory = priority.get("strategy_decision_advisory") or {}
     keep = advisory.get("keep_selected_evidence") or {}
     use = advisory.get("use_recommended_evidence") or {}
+    confidence_calibration = advisory.get("confidence_calibration") or {}
     return {
         "active": bool(advisory.get("active")),
         "signal": advisory.get("signal"),
@@ -45,6 +68,7 @@ def decision_advisory_snapshot(priority: dict[str, Any]) -> dict[str, Any]:
         "recommended_mode": advisory.get("recommended_mode"),
         "keep_selected_evidence": _evidence_snapshot(keep),
         "use_recommended_evidence": _evidence_snapshot(use),
+        "confidence_calibration": _confidence_calibration_snapshot(confidence_calibration),
         "owner_decision_required": bool(advisory.get("owner_decision_required")),
         "auto_applied": False,
         "causal_claim": False,
