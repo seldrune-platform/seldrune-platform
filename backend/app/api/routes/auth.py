@@ -25,6 +25,8 @@ from backend.app.schemas.auth import (
     BootstrapStatus,
     LoginRequest,
     MeResponse,
+    PasswordRecoveryRequest,
+    PasswordResetRequest,
     MembershipPublic,
     OrganizationPublic,
     RefreshRequest,
@@ -32,7 +34,11 @@ from backend.app.schemas.auth import (
     UserPublic,
 )
 from backend.app.services.audit import record_audit
-from backend.app.services.email_delivery import EmailDeliveryError, send_verification_email
+from backend.app.services.email_delivery import (
+    EmailDeliveryError,
+    send_password_reset_email,
+    send_verification_email,
+)
 from backend.app.services.email_verification import issue_email_verification_token
 from backend.app.services.login_throttle import (
     LoginThrottleError,
@@ -42,6 +48,11 @@ from backend.app.services.login_throttle import (
     record_login_failure,
 )
 from backend.app.services.mfa_recovery import consume_recovery_code
+from backend.app.services.password_recovery import (
+    PasswordResetTokenError,
+    issue_password_reset_token,
+    reset_password_with_token,
+)
 from backend.app.services.refresh_sessions import (
     RefreshIssue,
     RefreshTokenError,
@@ -185,6 +196,74 @@ def register(payload: RegisterRequest, session: SessionDep) -> AuthResponse:
         # request a fresh verification message once delivery is restored.
         pass
     return response
+
+
+@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+def forgot_password(
+    payload: PasswordRecoveryRequest,
+    session: SessionDep,
+) -> dict[str, str]:
+    email = str(payload.email).strip().lower()
+    user = session.scalar(select(User).where(User.email == email))
+    if user is None or not user.is_active:
+        return {"status": "accepted"}
+
+    issue = issue_password_reset_token(session, user.id)
+    record_audit(
+        session,
+        action="auth.password_reset_requested",
+        resource_type="user",
+        actor_user_id=user.id,
+        resource_id=str(user.id),
+    )
+    record_user_security_event(
+        session,
+        user_id=user.id,
+        event_type="password_reset_requested",
+        severity="low",
+        resource_type="user",
+        resource_id=str(user.id),
+    )
+    session.commit()
+
+    try:
+        send_password_reset_email(user.email, issue.token)
+    except EmailDeliveryError:
+        pass
+    return {"status": "accepted"}
+
+
+@router.post("/reset-password")
+def reset_password(
+    payload: PasswordResetRequest,
+    session: SessionDep,
+) -> dict[str, str]:
+    try:
+        user = reset_password_with_token(session, payload.token, payload.new_password)
+    except PasswordResetTokenError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired password reset token",
+        ) from exc
+
+    record_audit(
+        session,
+        action="auth.password_reset",
+        resource_type="user",
+        actor_user_id=user.id,
+        resource_id=str(user.id),
+    )
+    record_user_security_event(
+        session,
+        user_id=user.id,
+        event_type="password_reset",
+        severity="medium",
+        resource_type="user",
+        resource_id=str(user.id),
+    )
+    session.commit()
+    return {"status": "reset"}
 
 
 @router.post("/login", response_model=AuthResponse)
