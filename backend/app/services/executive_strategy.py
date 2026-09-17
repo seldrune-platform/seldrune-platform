@@ -89,6 +89,14 @@ def _rationale(mode: str) -> str:
     }[mode]
 
 
+def strategy_mode_guidance(mode: str) -> dict[str, Any]:
+    return {
+        "mode": mode,
+        "rationale": _rationale(mode),
+        "required_evidence": _required_evidence(mode),
+    }
+
+
 def _outcome_score(priority: dict[str, Any], mode: str) -> dict[str, Any]:
     outcomes = priority.get("strategy_outcomes") or {}
     modes = outcomes.get("modes") or {}
@@ -196,14 +204,15 @@ def _strategy(priority: dict[str, Any]) -> dict[str, Any]:
         or mode == "recover"
         or outcome_score["family_attempts"]
     )
+    guidance = strategy_mode_guidance(mode)
     return {
         "mode": mode,
-        "rationale": _rationale(mode),
+        "rationale": guidance["rationale"],
         "confidence": memory.get("confidence", "none"),
         "history_informed": history_informed,
         "preferred_reference_command_id": preferred_id,
         "avoid_reference_command_ids": avoid_ids,
-        "required_evidence": _required_evidence(mode),
+        "required_evidence": guidance["required_evidence"],
         "outcome_score": outcome_score,
         "recommendation": recommendation,
         "owner_approval_required": (priority.get("action") or {}).get("kind") == "owner_command",
