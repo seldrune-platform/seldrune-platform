@@ -13,6 +13,7 @@ from backend.app.models.organization_kernel import (
     OrganizationGoal,
     OrganizationProject,
 )
+from backend.app.models.owner_push_subscription import OwnerPushSubscription
 from backend.app.models.research_connector import ResearchConnector
 from backend.app.models.research_session import ResearchSession
 from backend.app.models.research_source import ResearchSource
@@ -37,6 +38,7 @@ __all__ = [
     "Organization",
     "OrganizationGoal",
     "OrganizationProject",
+    "OwnerPushSubscription",
     "ResearchConnector",
     "ResearchSession",
     "ResearchSource",
