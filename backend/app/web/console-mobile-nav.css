@@ -1,16 +1,30 @@
 @media(max-width:900px){
   aside nav{
-    display:flex;
-    gap:6px;
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:8px;
     margin-top:16px;
-    overflow-x:auto;
-    padding-bottom:4px;
-    scrollbar-width:thin;
-    -webkit-overflow-scrolling:touch;
+    overflow:visible;
+    padding-bottom:0;
   }
   aside nav a{
-    flex:0 0 auto;
-    white-space:nowrap;
+    min-width:0;
+    white-space:normal;
+    text-align:center;
+    border:1px solid #385047;
+    background:#1b302a;
+  }
+  aside nav a[href="/console-assets/executive-brief.html"]{
+    grid-column:1/-1;
+    background:#d6f56f;
+    border-color:#d6f56f;
+    color:#13231f;
+    font-weight:850;
   }
   aside .secure{display:none;}
+}
+
+@media(max-width:520px){
+  aside nav{grid-template-columns:1fr;}
+  aside nav a[href="/console-assets/executive-brief.html"]{grid-column:auto;}
 }
