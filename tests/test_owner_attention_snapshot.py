@@ -1,6 +1,7 @@
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 
+from backend.app.api.routes.owner_attention import _etag_matches, _snapshot_headers
 from backend.app.services.owner_attention_snapshot import (
     build_owner_attention_snapshot,
     owner_attention_fingerprint,
@@ -113,9 +114,31 @@ def test_snapshot_without_previous_fingerprint_is_neutral() -> None:
     assert snapshot["fingerprint_semantics"]["excluded_fields"] == ["occurred_at"]
 
 
+def test_etag_matching_accepts_standard_validator_forms() -> None:
+    fingerprint = "a" * 64
+    assert _etag_matches(f'"{fingerprint}"', fingerprint) is True
+    assert _etag_matches(f'W/"{fingerprint}"', fingerprint) is True
+    assert _etag_matches(f'"{"b" * 64}", W/"{fingerprint.upper()}"', fingerprint) is True
+    assert _etag_matches("*", fingerprint) is True
+    assert _etag_matches(f'"{"b" * 64}"', fingerprint) is False
+    assert _etag_matches(None, fingerprint) is False
+
+
+def test_snapshot_headers_are_private_and_authorization_varying() -> None:
+    fingerprint = "c" * 64
+    headers = _snapshot_headers(fingerprint)
+    assert headers == {
+        "ETag": f'"{fingerprint}"',
+        "Cache-Control": "private, no-cache",
+        "Vary": "Authorization",
+    }
+
+
 def test_owner_attention_snapshot_route_is_get_only(client) -> None:
     schema = client.get("/openapi.json")
     assert schema.status_code == 200
     path = "/api/v1/organizations/{organization_id}/owner-attention/snapshot"
     assert path in schema.json()["paths"]
-    assert set(schema.json()["paths"][path]) == {"get"}
+    operation = schema.json()["paths"][path]
+    assert set(operation) == {"get"}
+    assert "304" in operation["get"]["responses"]
