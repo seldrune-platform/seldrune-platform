@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from backend.app.services.owner_attention_notification import (
 )
 from backend.app.services.owner_attention_snapshot import build_owner_attention_snapshot
 from backend.app.services.owner_dashboard import build_owner_dashboard
+from backend.app.services.owner_push_orchestration import deliver_owner_attention_pushes
 
 router = APIRouter(prefix="/organizations", tags=["owner-attention"])
 OwnerDep = Annotated[Membership, Depends(require_org_permission(Permission.ORG_MANAGE))]
@@ -151,3 +153,33 @@ def get_owner_attention_notification_envelope(
     for name, value in headers.items():
         response.headers[name] = value
     return envelope
+
+
+@router.post(
+    "/{organization_id}/owner-attention/push-delivery",
+    response_model=dict[str, Any],
+)
+def deliver_owner_attention_notification(
+    organization_id: UUID,
+    membership: OwnerDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    _require_owner(membership)
+    attention = _owner_attention_state(session, organization_id)
+    envelope = build_owner_attention_notification_envelope(attention)
+    summary = deliver_owner_attention_pushes(
+        session,
+        organization_id,
+        membership.user_id,
+        envelope,
+    )
+    return {
+        "fingerprint": envelope["fingerprint"],
+        "delivery": asdict(summary),
+        "notification_contract": "owner-attention-counts-v1",
+        "contains_sensitive_payload": False,
+        "governance": {
+            "approval_gate_bypassed": False,
+            "execution_triggered": False,
+        },
+    }
