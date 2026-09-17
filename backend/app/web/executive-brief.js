@@ -167,6 +167,21 @@ function renderPriority(item){
       ),
     );
   }
+  const recommendation=strategy.recommendation||{};
+  if(recommendation.recommended_mode){
+    root.append(
+      text(
+        'p',
+        `Advisory strategy recommendation · consider `+
+        `${strategyLabel(recommendation.recommended_mode)} · `+
+        `${recommendation.evidence_strength||'none'} evidence · `+
+        `${recommendation.attempts||0} attempts · `+
+        `${Math.round(Number(recommendation.resolution_rate||0)*100)}% `+
+        'resolution association. Not auto-applied; owner review required.',
+        'strategy',
+      ),
+    );
+  }
 
   const action=item.action||null;
   if(action){
@@ -272,6 +287,7 @@ function render(data){
     ['Resolution patterns',memory.resolution_patterns||0],
     ['Unsuccessful patterns',memory.unsuccessful_patterns||0],
     ['Strategy-informed',strategy.history_informed_priorities||0],
+    ['Strategy recommendations',strategy.comparative_recommendations||0],
     ['Strategy attempts',outcomes.scored_attempts||0],
     ['Verified resolutions',outcomes.verified_resolution_associations||0],
   ].forEach(item=>metrics.append(metric(item[0],item[1])));
