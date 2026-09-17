@@ -160,7 +160,9 @@ def test_countervailing_history_is_frozen_into_future_owner_review(client) -> No
         headers=headers,
         json={
             "decision": "use_recommended",
-            "reason": "Owner chooses the recommendation despite countervailing calibration history.",
+            "reason": (
+                "Owner chooses the recommendation despite countervailing calibration history."
+            ),
         },
     )
     assert reviewed.status_code == 200
