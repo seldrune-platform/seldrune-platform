@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     auth_refresh_token_days: int = 30
     auth_login_failure_limit: int = 5
     auth_login_failure_window_minutes: int = 15
+    public_app_url: str = "http://localhost:8000"
+    email_from_address: str | None = None
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_starttls: bool = True
+    smtp_timeout_seconds: float = 10.0
     model_provider: str = "mock"
     model_default: str = "mock-v1"
     model_timeout_seconds: float = 60.0
@@ -47,6 +55,13 @@ class Settings(BaseSettings):
             raise ValueError("SELDRUNE_AUTH_LOGIN_FAILURE_LIMIT must be positive")
         if self.auth_login_failure_window_minutes <= 0:
             raise ValueError("SELDRUNE_AUTH_LOGIN_FAILURE_WINDOW_MINUTES must be positive")
+        if self.smtp_port <= 0:
+            raise ValueError("SELDRUNE_SMTP_PORT must be positive")
+        if self.smtp_timeout_seconds <= 0:
+            raise ValueError("SELDRUNE_SMTP_TIMEOUT_SECONDS must be positive")
+        smtp_credentials = [bool(self.smtp_username), bool(self.smtp_password)]
+        if any(smtp_credentials) and not all(smtp_credentials):
+            raise ValueError("SMTP username and password must be configured together")
         if self.model_provider not in {"mock", "openai"}:
             raise ValueError("SELDRUNE_MODEL_PROVIDER must be mock or openai")
         if self.model_timeout_seconds <= 0:
