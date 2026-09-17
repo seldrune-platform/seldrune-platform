@@ -169,3 +169,12 @@ def test_strategy_review_fingerprint_changes_with_evidence() -> None:
     priority["strategy"]["recommendation"]["attempts"] = 3
     after = strategy_review_fingerprint(priority)
     assert before != after
+
+
+def test_strategy_review_controls_are_served(client) -> None:
+    script = client.get("/console-assets/executive-brief.js")
+    assert script.status_code == 200
+    assert "/executive-brief/strategy-reviews/" in script.text
+    assert "Keep ${strategyLabel(strategy.mode)}" in script.text
+    assert "Use ${strategyLabel(recommendation.recommended_mode)}" in script.text
+    assert "Pending reviews" in script.text
