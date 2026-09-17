@@ -13,6 +13,42 @@ from backend.app.services.audit import record_audit
 
 _REVIEW_ACTION = "executive.strategy_reviewed"
 _REVIEW_RESOURCE = "executive_strategy_review"
+_DIRECTIONAL_SIGNALS = {"keep_selected", "use_recommended"}
+
+
+def _evidence_snapshot(value: Any) -> dict[str, Any]:
+    score = value if isinstance(value, dict) else {}
+    return {
+        "decision": score.get("decision"),
+        "effective_mode": score.get("effective_mode"),
+        "attempts": int(score.get("attempts") or 0),
+        "resolution_associations": int(score.get("resolution_associations") or 0),
+        "persisted_after_success": int(score.get("persisted_after_success") or 0),
+        "unsuccessful_attempts": int(score.get("unsuccessful_attempts") or 0),
+        "resolution_rate": float(score.get("resolution_rate") or 0.0),
+        "evidence_strength": str(score.get("evidence_strength") or "none"),
+        "causal_claim": False,
+    }
+
+
+def decision_advisory_snapshot(priority: dict[str, Any]) -> dict[str, Any]:
+    advisory = priority.get("strategy_decision_advisory") or {}
+    keep = advisory.get("keep_selected_evidence") or {}
+    use = advisory.get("use_recommended_evidence") or {}
+    return {
+        "active": bool(advisory.get("active")),
+        "signal": advisory.get("signal"),
+        "basis": advisory.get("basis"),
+        "confidence": str(advisory.get("confidence") or "none"),
+        "resolution_rate_delta": float(advisory.get("resolution_rate_delta") or 0.0),
+        "selected_mode": advisory.get("selected_mode"),
+        "recommended_mode": advisory.get("recommended_mode"),
+        "keep_selected_evidence": _evidence_snapshot(keep),
+        "use_recommended_evidence": _evidence_snapshot(use),
+        "owner_decision_required": bool(advisory.get("owner_decision_required")),
+        "auto_applied": False,
+        "causal_claim": False,
+    }
 
 
 def strategy_review_fingerprint(priority: dict[str, Any]) -> str:
@@ -95,6 +131,8 @@ def _review_state(
         "reviewed_at": None,
         "actor_user_id": None,
         "evidence_fingerprint": fingerprint,
+        "decision_advisory_snapshot": None,
+        "decision_matched_directional_signal": None,
         "causal_claim": False,
     }
     if not required or event is None:
@@ -112,29 +150,32 @@ def _review_state(
             or (decision == "use_recommended" and chosen_mode == recommended_mode)
         )
     )
-    if not current:
-        return {
-            **base,
-            "status": "stale",
-            "decision": decision,
-            "reason": details.get("reason"),
-            "event_id": str(event.id),
-            "reviewed_at": event.occurred_at,
-            "actor_user_id": str(event.actor_user_id) if event.actor_user_id else None,
-        }
-
-    return {
-        **base,
-        "current": True,
-        "status": (
-            "accepted_recommended" if decision == "use_recommended" else "accepted_selected"
-        ),
-        "effective_mode": str(chosen_mode),
+    event_fields = {
         "decision": decision,
         "reason": details.get("reason"),
         "event_id": str(event.id),
         "reviewed_at": event.occurred_at,
         "actor_user_id": str(event.actor_user_id) if event.actor_user_id else None,
+        "decision_advisory_snapshot": details.get("decision_advisory_snapshot"),
+        "decision_matched_directional_signal": details.get(
+            "decision_matched_directional_signal"
+        ),
+    }
+    if not current:
+        return {
+            **base,
+            **event_fields,
+            "status": "stale",
+        }
+
+    return {
+        **base,
+        **event_fields,
+        "current": True,
+        "status": (
+            "accepted_recommended" if decision == "use_recommended" else "accepted_selected"
+        ),
+        "effective_mode": str(chosen_mode),
     }
 
 
@@ -204,6 +245,12 @@ def record_executive_strategy_review(
     else:
         raise ValueError("Unsupported strategy review decision")
 
+    advisory_snapshot = decision_advisory_snapshot(priority)
+    advisory_signal = advisory_snapshot.get("signal")
+    decision_matched_directional_signal = (
+        decision == advisory_signal if advisory_signal in _DIRECTIONAL_SIGNALS else None
+    )
+
     return record_audit(
         session,
         organization_id=organization_id,
@@ -230,6 +277,8 @@ def record_executive_strategy_review(
             "recommendation_resolution_rate": recommendation.get(
                 "resolution_rate", 0.0
             ),
+            "decision_advisory_snapshot": advisory_snapshot,
+            "decision_matched_directional_signal": decision_matched_directional_signal,
             "causal_claim": False,
         },
     )
