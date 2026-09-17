@@ -22,5 +22,6 @@ body{background:var(--paper)}.org-shell{max-width:1240px;margin:0 auto;padding:2
 <article class="panel"><h2>Cross-department Delegations</h2><form id="delegation-form" class="form-grid"><select name="source_department_id" required><option value="">Source department</option></select><select name="target_department_id" required><option value="">Target department</option></select><input class="wide" name="title" placeholder="Delegated outcome" required><select name="project_id"><option value="">No linked project</option></select><input name="requested_resource_units" type="number" min="0" value="0" placeholder="Requested capacity"><input name="priority" type="number" min="0" max="100" value="70" placeholder="Priority"><button class="wide">Delegate</button></form><div id="delegations" class="list"></div></article>
 </section>
 </main>
+<script src="/console-assets/secondary-runtime.js" defer></script>
 <script src="/console-assets/organization-board.js" defer></script>
 </body></html>
