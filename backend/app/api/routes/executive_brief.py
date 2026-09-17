@@ -1,7 +1,8 @@
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from backend.app.api.dependencies import (
@@ -18,13 +19,25 @@ from backend.app.schemas.orchestration import OrchestrationCreate, Orchestration
 from backend.app.services.executive_action_lifecycle import reconcile_executive_actions
 from backend.app.services.executive_briefing import build_executive_brief
 from backend.app.services.executive_outcome_memory import build_executive_outcome_memory
-from backend.app.services.executive_strategy import evaluate_executive_strategies
+from backend.app.services.executive_strategy import (
+    evaluate_executive_strategies,
+    strategy_mode_guidance,
+)
 from backend.app.services.executive_strategy_outcomes import (
     build_executive_strategy_outcomes,
+)
+from backend.app.services.executive_strategy_review import (
+    build_executive_strategy_reviews,
+    record_executive_strategy_review,
 )
 
 router = APIRouter(prefix="/organizations", tags=["executive-brief"])
 OwnerDep = Annotated[Membership, Depends(require_org_permission(Permission.ORG_MANAGE))]
+
+
+class ExecutiveStrategyReviewRequest(BaseModel):
+    decision: Literal["keep_selected", "use_recommended"]
+    reason: str = Field(min_length=3, max_length=1000)
 
 
 def _require_owner(membership: Membership) -> None:
@@ -73,12 +86,18 @@ def _brief_with_lifecycle(
         memory["priorities"],
     )
     strategy = evaluate_executive_strategies(outcomes["priorities"])
-    brief["priorities"] = strategy["priorities"]
+    reviews = build_executive_strategy_reviews(
+        session,
+        organization_id,
+        strategy["priorities"],
+    )
+    brief["priorities"] = reviews["priorities"]
     brief["executive_actions"] = lifecycle["summary"]
     brief["resolved_actions"] = lifecycle["resolved_recent"]
     brief["outcome_memory"] = memory["summary"]
     brief["outcome_playbooks"] = memory["playbooks"]
     brief["executive_strategy"] = strategy["summary"]
+    brief["executive_strategy_review"] = reviews["summary"]
     brief["strategy_outcomes"] = outcomes["summary"]
     brief["strategy_scorecards"] = outcomes["scorecards"]
     brief["strategy_outcome_history"] = outcomes["recent"]
@@ -101,12 +120,22 @@ def _action_objective(priority: dict[str, Any]) -> str:
         )
 
     strategy = priority.get("strategy") or {}
-    mode = strategy.get("mode")
-    if mode and mode != "observe":
-        evidence = " ".join(str(item) for item in strategy.get("required_evidence") or [])
+    review = priority.get("strategy_review") or {}
+    effective_mode = review.get("effective_mode") or strategy.get("mode")
+    if effective_mode and effective_mode != "observe":
+        guidance = strategy_mode_guidance(str(effective_mode))
+        evidence = " ".join(str(item) for item in guidance["required_evidence"])
         objective += (
-            f" Executive strategy mode {mode}: {strategy.get('rationale', '')} "
+            f" Executive strategy mode {effective_mode}: {guidance['rationale']} "
             f"Required evidence: {evidence}"
+        )
+
+    if review.get("current"):
+        objective += (
+            " Owner strategy review is current for this evidence snapshot: "
+            f"selected mode {review.get('selected_mode')}, effective mode "
+            f"{review.get('effective_mode')}, decision {review.get('decision')}. "
+            f"Review rationale: {review.get('reason')}."
         )
 
     recommendation = strategy.get("recommendation") or {}
@@ -117,8 +146,7 @@ def _action_objective(priority: dict[str, Any]) -> str:
             " Comparative historical scorecards suggest considering strategy mode "
             f"{recommended_mode} ({recommendation.get('evidence_strength', 'none')} evidence; "
             f"{recommendation.get('attempts', 0)} attempts; {rate}% resolution association). "
-            "This recommendation is advisory, is not automatically applied, and does not prove "
-            "causation. The owner must review current evidence before changing strategy."
+            "This recommendation is not automatically applied and does not prove causation."
         )
 
     memory = priority.get("outcome_memory") or {}
@@ -164,14 +192,22 @@ def _strategy_context(priority: dict[str, Any]) -> dict[str, Any]:
     strategy = priority.get("strategy") or {}
     outcome_score = strategy.get("outcome_score") or {}
     recommendation = strategy.get("recommendation") or {}
+    review = priority.get("strategy_review") or {}
+    selected_mode = strategy.get("mode", "baseline")
+    effective_mode = review.get("effective_mode") or selected_mode
+    guidance = strategy_mode_guidance(str(effective_mode))
+    reviewed_at = review.get("reviewed_at")
+    if reviewed_at is not None and hasattr(reviewed_at, "isoformat"):
+        reviewed_at = reviewed_at.isoformat()
     return {
-        "mode": strategy.get("mode", "baseline"),
-        "rationale": strategy.get("rationale"),
+        "mode": effective_mode,
+        "selected_mode": selected_mode,
+        "rationale": guidance["rationale"],
         "confidence": strategy.get("confidence", "none"),
         "history_informed": bool(strategy.get("history_informed")),
         "preferred_reference_command_id": strategy.get("preferred_reference_command_id"),
         "avoid_reference_command_ids": strategy.get("avoid_reference_command_ids") or [],
-        "required_evidence": strategy.get("required_evidence") or [],
+        "required_evidence": guidance["required_evidence"],
         "outcome_score": {
             "family": outcome_score.get("family"),
             "family_attempts": outcome_score.get("family_attempts", 0),
@@ -195,6 +231,21 @@ def _strategy_context(priority: dict[str, Any]) -> dict[str, Any]:
             "owner_review_required": True,
             "causal_claim": False,
         },
+        "review": {
+            "required": bool(review.get("required")),
+            "current": bool(review.get("current")),
+            "status": review.get("status"),
+            "decision": review.get("decision"),
+            "reason": review.get("reason"),
+            "event_id": review.get("event_id"),
+            "selected_mode": review.get("selected_mode"),
+            "recommended_mode": review.get("recommended_mode"),
+            "effective_mode": effective_mode,
+            "reviewed_at": reviewed_at,
+            "actor_user_id": review.get("actor_user_id"),
+            "evidence_fingerprint": review.get("evidence_fingerprint"),
+            "causal_claim": False,
+        },
         "owner_approval_required": True,
         "causal_claim": False,
     }
@@ -208,6 +259,62 @@ def get_executive_brief(
 ) -> dict[str, Any]:
     _require_owner(membership)
     return _brief_with_lifecycle(session, organization_id)
+
+
+@router.post(
+    "/{organization_id}/executive-brief/strategy-reviews/{priority_key}",
+    response_model=dict[str, Any],
+)
+def review_executive_strategy(
+    organization_id: UUID,
+    priority_key: str,
+    payload: ExecutiveStrategyReviewRequest,
+    membership: OwnerDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    _require_owner(membership)
+    brief = _brief_with_lifecycle(session, organization_id)
+    priority = next(
+        (item for item in brief["priorities"] if item.get("key") == priority_key),
+        None,
+    )
+    if priority is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Executive priority is no longer active; refresh the brief",
+        )
+    review = priority.get("strategy_review") or {}
+    if not review.get("required"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No comparative strategy recommendation requires owner review",
+        )
+    try:
+        event = record_executive_strategy_review(
+            session,
+            organization_id=organization_id,
+            actor_user_id=current_user.id,
+            priority=priority,
+            decision=payload.decision,
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    session.commit()
+    session.refresh(event)
+
+    refreshed = _brief_with_lifecycle(session, organization_id)
+    current = next(
+        (item for item in refreshed["priorities"] if item.get("key") == priority_key),
+        None,
+    )
+    if current is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Executive priority changed during review; refresh the brief",
+        )
+    return current["strategy_review"]
 
 
 @router.post(
@@ -246,6 +353,16 @@ def create_executive_priority_action(
     existing = _existing_priority_command(session, organization_id, priority_key)
     if existing is not None:
         return _to_public(session, existing)
+
+    review = priority.get("strategy_review") or {}
+    if review.get("required") and not review.get("current"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Executive strategy recommendation requires a current owner review "
+                "before command creation"
+            ),
+        )
 
     escalation = priority.get("escalation") or {}
     payload = OrchestrationCreate(
