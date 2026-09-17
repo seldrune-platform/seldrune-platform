@@ -98,6 +98,39 @@ async function runPriorityAction(item,button){
   }
 }
 
+async function reviewStrategy(item,decision,button){
+  const recommendation=(item.strategy||{}).recommendation||{};
+  const target=decision==='use_recommended'
+    ?strategyLabel(recommendation.recommended_mode)
+    :strategyLabel((item.strategy||{}).mode);
+  const reason=window.prompt(`Why should Seldrune use ${target}?`);
+  if(reason===null)return;
+  const trimmed=reason.trim();
+  if(trimmed.length<3){
+    showMessage('Strategy review rationale must contain at least 3 characters.');
+    return;
+  }
+  button.disabled=true;
+  const original=button.textContent;
+  button.textContent='Recording owner review…';
+  try{
+    const key=encodeURIComponent(item.key);
+    await request(
+      `/organizations/${organizationId}/executive-brief/strategy-reviews/${key}`,
+      {
+        method:'POST',
+        body:JSON.stringify({decision,reason:trimmed}),
+      },
+    );
+    showMessage('Owner strategy review recorded against the current evidence snapshot.','success');
+    await load();
+  }catch(error){
+    button.disabled=false;
+    button.textContent=original;
+    showMessage(error.message,'message');
+  }
+}
+
 function renderPriority(item){
   const root=document.createElement('div');
   root.className='priority';
@@ -168,6 +201,7 @@ function renderPriority(item){
     );
   }
   const recommendation=strategy.recommendation||{};
+  const review=item.strategy_review||{};
   if(recommendation.recommended_mode){
     root.append(
       text(
@@ -181,6 +215,33 @@ function renderPriority(item){
         'strategy',
       ),
     );
+    if(review.current){
+      root.append(
+        text(
+          'p',
+          `Owner strategy review recorded · ${review.status} · effective mode `+
+          `${strategyLabel(review.effective_mode)}.`,
+          'outcome-memory',
+        ),
+      );
+    }else if(review.status==='stale'){
+      root.append(
+        text(
+          'p',
+          'Previous owner strategy review is stale because the evidence changed. Review again '+
+          'before creating a new governed command.',
+          'escalation',
+        ),
+      );
+    }else{
+      root.append(
+        text(
+          'p',
+          'Owner strategy review is required before creating a new governed command.',
+          'escalation',
+        ),
+      );
+    }
   }
 
   const action=item.action||null;
@@ -198,6 +259,18 @@ function renderPriority(item){
         link.href='/console';
         link.textContent='Open current governed command';
         controls.append(link);
+      }else if(review.required&&!review.current){
+        const keep=document.createElement('button');
+        keep.type='button';
+        keep.textContent=`Keep ${strategyLabel(strategy.mode)}`;
+        keep.onclick=()=>reviewStrategy(item,'keep_selected',keep);
+        controls.append(keep);
+
+        const use=document.createElement('button');
+        use.type='button';
+        use.textContent=`Use ${strategyLabel(recommendation.recommended_mode)}`;
+        use.onclick=()=>reviewStrategy(item,'use_recommended',use);
+        controls.append(use);
       }else{
         const button=document.createElement('button');
         button.type='button';
@@ -275,6 +348,7 @@ function render(data){
   const actions=data.executive_actions||{};
   const memory=data.outcome_memory||{};
   const strategy=data.executive_strategy||{};
+  const reviews=data.executive_strategy_review||{};
   const outcomes=data.strategy_outcomes||{};
   const metrics=clear('#metrics');
   [
@@ -288,6 +362,8 @@ function render(data){
     ['Unsuccessful patterns',memory.unsuccessful_patterns||0],
     ['Strategy-informed',strategy.history_informed_priorities||0],
     ['Strategy recommendations',strategy.comparative_recommendations||0],
+    ['Strategy reviews',reviews.reviewed||0],
+    ['Pending reviews',(reviews.pending||0)+(reviews.stale||0)],
     ['Strategy attempts',outcomes.scored_attempts||0],
     ['Verified resolutions',outcomes.verified_resolution_associations||0],
   ].forEach(item=>metrics.append(metric(item[0],item[1])));
