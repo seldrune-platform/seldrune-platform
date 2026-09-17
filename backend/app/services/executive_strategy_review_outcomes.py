@@ -10,6 +10,9 @@ from backend.app.models.orchestration import OrchestrationRun
 from backend.app.services.executive_advisory_calibration import (
     build_executive_advisory_calibration,
 )
+from backend.app.services.executive_advisory_confidence import (
+    build_executive_advisory_confidence_guardrails,
+)
 from backend.app.services.executive_decision_advisory import decision_advisory
 
 _TERMINAL_STATUSES = {"succeeded", "partial", "failed", "cancelled"}
@@ -242,8 +245,9 @@ def build_executive_strategy_review_outcomes(
         organization_id,
         enriched,
     )
+    confidence = build_executive_advisory_confidence_guardrails(calibration["priorities"])
     return {
-        "priorities": calibration["priorities"],
+        "priorities": confidence["priorities"],
         "summary": {
             "reviewed_attempts": sum(int(card["attempts"]) for card in scorecards.values()),
             "resolution_associations": sum(
@@ -261,6 +265,7 @@ def build_executive_strategy_review_outcomes(
             "advisory_calibration": calibration["summary"],
             "advisory_calibration_scorecards": calibration["scorecards"],
             "advisory_calibration_history": calibration["recent"],
+            "advisory_confidence_guardrails": confidence["summary"],
         },
         "scorecards": ordered_scorecards[:12],
         "recent": recent[:12],
