@@ -46,6 +46,10 @@ class RefreshRequest(BaseModel):
     refresh_token: str = Field(min_length=32, max_length=512)
 
 
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
 class EmailVerificationRequest(BaseModel):
     token: str = Field(min_length=32, max_length=512)
 
