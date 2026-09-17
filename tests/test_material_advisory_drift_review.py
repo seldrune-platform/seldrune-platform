@@ -113,6 +113,7 @@ def test_material_advisory_drift_requires_fresh_owner_review(client) -> None:
     drifted = _project_priority(client, base, headers, target["id"])
     advisory = drifted["strategy_decision_advisory"]
     review = drifted["strategy_review"]
+    explanation = review["drift_explanation"]
     assert advisory["signal"] == "use_recommended"
     assert advisory["confidence"] == "medium"
     assert review["current"] is False
@@ -121,13 +122,32 @@ def test_material_advisory_drift_requires_fresh_owner_review(client) -> None:
     assert review["advisory_material_tracked"] is True
     assert review["advisory_material_current"] is False
     assert review["advisory_material_fingerprint"] != initial_material_fingerprint
+    assert explanation["active"] is True
+    assert explanation["owner_rereview_required"] is True
+    assert explanation["changes"] == [
+        "strategy_evidence",
+        "advisory_signal",
+        "advisory_confidence",
+    ]
+    assert explanation["reviewed"]["advisory_signal"] == "insufficient_evidence"
+    assert explanation["reviewed"]["advisory_confidence"] == "none"
+    assert explanation["current"]["advisory_signal"] == "use_recommended"
+    assert explanation["current"]["advisory_confidence"] == "medium"
+    assert explanation["causal_claim"] is False
 
     drift_brief = client.get(f"{base}/executive-brief", headers=headers)
     assert drift_brief.status_code == 200
-    drift_summary = drift_brief.json()["strategy_review_outcomes"]["post_advisory_review"]
+    outcome_summary = drift_brief.json()["strategy_review_outcomes"]
+    drift_summary = outcome_summary["post_advisory_review"]
     assert drift_summary["stale"] >= 1
     assert drift_summary["strategy_drift_stale"] >= 1
     assert drift_summary["material_drift_stale"] >= 1
+    explanation_summary = outcome_summary["review_drift"]
+    assert explanation_summary["stale_reviews"] >= 1
+    assert explanation_summary["explained_stale_reviews"] >= 1
+    assert explanation_summary["change_counts"]["advisory_signal"] >= 1
+    assert explanation_summary["change_counts"]["advisory_confidence"] >= 1
+    assert explanation_summary["change_counts"]["strategy_evidence"] >= 1
 
     blocked = client.post(
         f"{base}/executive-brief/actions/{drifted['key']}",
@@ -149,6 +169,7 @@ def test_material_advisory_drift_requires_fresh_owner_review(client) -> None:
     assert rereview_state["current"] is True
     assert rereview_state["advisory_material_current"] is True
     assert rereview_state["advisory_material_fingerprint"] != initial_material_fingerprint
+    assert rereview_state["drift_explanation"]["active"] is False
 
     created = client.post(
         f"{base}/executive-brief/actions/{drifted['key']}",
