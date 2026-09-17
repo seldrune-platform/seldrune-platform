@@ -59,12 +59,30 @@ def test_owner_attention_browser_alerts_are_explicit_opt_in(client) -> None:
     assert "Notification.requestPermission()" in script.text
     assert "seldruneOwnerAttentionAlerts" in script.text
     assert "localStorage.setItem" in script.text
-    assert "new Notification(envelope.title||'Seldrune Owner Attention'" in script.text
+    assert "navigator.serviceWorker.register('/owner-alert-worker.js')" in script.text
+    assert "registration.showNotification(title,options)" in script.text
+    assert "new Notification(title,options)" in script.text
     assert "previousFingerprint" in script.text
     assert "previousFingerprint!==lastAttentionFingerprint" in script.text
     assert "if(!alertsEnabled()||!document.hidden||!envelope.has_attention)return" in script.text
     assert "surfaceStale=true" in script.text
     assert "60s privacy-safe background watch" in script.text
+
+
+def test_owner_alert_service_worker_is_click_only_and_root_scoped(client) -> None:
+    worker = client.get("/owner-alert-worker.js")
+
+    assert worker.status_code == 200
+    assert "javascript" in worker.headers["content-type"]
+    assert worker.headers["service-worker-allowed"] == "/"
+    assert worker.headers["cache-control"] == "no-cache"
+    assert "addEventListener('notificationclick'" in worker.text
+    assert "self.clients.matchAll" in worker.text
+    assert "self.clients.openWindow" in worker.text
+    assert "self.clients.claim()" in worker.text
+    assert "self.skipWaiting()" in worker.text
+    assert "addEventListener('push'" not in worker.text
+    assert "fetch(" not in worker.text
 
 
 def test_action_inbox_is_navigation_and_review_surface(client) -> None:
