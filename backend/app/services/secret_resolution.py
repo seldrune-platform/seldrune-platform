@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import lru_cache
 
 from backend.app.models.secret_reference import SecretReference
 
@@ -29,7 +30,12 @@ class SecretResolver:
         if provider is None:
             raise SecretResolutionError("Unsupported secret provider")
 
-        value = provider(reference.locator)
+        try:
+            value = provider(reference.locator)
+        except SecretResolutionError:
+            raise
+        except Exception as exc:
+            raise SecretResolutionError("Secret provider is unavailable") from exc
         if value is None or value == "":
             raise SecretResolutionError("Secret value is unavailable")
         return value
@@ -42,9 +48,30 @@ def resolve_environment_secret(locator: str) -> str | None:
     return os.environ.get(key)
 
 
+@lru_cache
+def _aws_secrets_client():
+    try:
+        import boto3
+    except ImportError as exc:
+        raise SecretResolutionError("AWS Secrets Manager support is not installed") from exc
+    return boto3.client("secretsmanager")
+
+
+def resolve_aws_secrets_manager_secret(locator: str) -> str | None:
+    secret_id = locator.strip()
+    if not secret_id:
+        return None
+    response = _aws_secrets_client().get_secret_value(SecretId=secret_id)
+    value = response.get("SecretString")
+    if isinstance(value, str):
+        return value
+    return None
+
+
 default_secret_resolver = SecretResolver(
     providers={
         "env": resolve_environment_secret,
+        "aws-secrets-manager": resolve_aws_secrets_manager_secret,
     }
 )
 
