@@ -3,7 +3,11 @@ from sqlalchemy import select
 
 from backend.app.api.dependencies import SessionDep
 from backend.app.models.user import User
-from backend.app.schemas.auth import EmailVerificationRequest, EmailVerificationResponse, ResendVerificationRequest
+from backend.app.schemas.auth import (
+    EmailVerificationRequest,
+    EmailVerificationResponse,
+    ResendVerificationRequest,
+)
 from backend.app.services.audit import record_audit
 from backend.app.services.email_delivery import EmailDeliveryError, send_verification_email
 from backend.app.services.email_verification import (
