@@ -69,20 +69,30 @@ def test_owner_attention_browser_alerts_are_explicit_opt_in(client) -> None:
     assert "60s privacy-safe background watch" in script.text
 
 
-def test_owner_alert_service_worker_is_click_only_and_root_scoped(client) -> None:
+def test_owner_alert_service_worker_is_push_ready_and_root_scoped(client) -> None:
     worker = client.get("/owner-alert-worker.js")
 
     assert worker.status_code == 200
     assert "javascript" in worker.headers["content-type"]
     assert worker.headers["service-worker-allowed"] == "/"
     assert worker.headers["cache-control"] == "no-cache"
+    assert "addEventListener('push'" in worker.text
     assert "addEventListener('notificationclick'" in worker.text
+    assert "notification_version!==1" in worker.text
+    assert "payload.read_only!==true" in worker.text
+    assert "payload.privacy?.detail_level!=='counts_only'" in worker.text
+    assert "payload.has_attention!==true" in worker.text
+    assert "self.registration.showNotification(NOTIFICATION_TITLE" in worker.text
+    assert "Owner attention: ${parts.join(', ')}." in worker.text
+    assert "payload.title" not in worker.text
+    assert "payload.body" not in worker.text
     assert "self.clients.matchAll" in worker.text
     assert "self.clients.openWindow" in worker.text
     assert "self.clients.claim()" in worker.text
     assert "self.skipWaiting()" in worker.text
-    assert "addEventListener('push'" not in worker.text
     assert "fetch(" not in worker.text
+    assert "PushManager" not in worker.text
+    assert ".subscribe(" not in worker.text
 
 
 def test_action_inbox_is_navigation_and_review_surface(client) -> None:
