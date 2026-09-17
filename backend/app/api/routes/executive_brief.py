@@ -109,6 +109,18 @@ def _action_objective(priority: dict[str, Any]) -> str:
             f"Required evidence: {evidence}"
         )
 
+    recommendation = strategy.get("recommendation") or {}
+    recommended_mode = recommendation.get("recommended_mode")
+    if recommended_mode:
+        rate = round(float(recommendation.get("resolution_rate") or 0.0) * 100)
+        objective += (
+            " Comparative historical scorecards suggest considering strategy mode "
+            f"{recommended_mode} ({recommendation.get('evidence_strength', 'none')} evidence; "
+            f"{recommendation.get('attempts', 0)} attempts; {rate}% resolution association). "
+            "This recommendation is advisory, is not automatically applied, and does not prove "
+            "causation. The owner must review current evidence before changing strategy."
+        )
+
     memory = priority.get("outcome_memory") or {}
     preferred = memory.get("preferred_pattern") or {}
     avoid = memory.get("avoid_patterns") or []
@@ -151,6 +163,7 @@ def _memory_context(priority: dict[str, Any]) -> dict[str, Any]:
 def _strategy_context(priority: dict[str, Any]) -> dict[str, Any]:
     strategy = priority.get("strategy") or {}
     outcome_score = strategy.get("outcome_score") or {}
+    recommendation = strategy.get("recommendation") or {}
     return {
         "mode": strategy.get("mode", "baseline"),
         "rationale": strategy.get("rationale"),
@@ -168,6 +181,18 @@ def _strategy_context(priority: dict[str, Any]) -> dict[str, Any]:
             "unsuccessful_attempts": outcome_score.get("unsuccessful_attempts", 0),
             "resolution_rate": outcome_score.get("resolution_rate", 0.0),
             "evidence_strength": outcome_score.get("evidence_strength", "none"),
+            "causal_claim": False,
+        },
+        "recommendation": {
+            "selected_mode": recommendation.get("selected_mode"),
+            "recommended_mode": recommendation.get("recommended_mode"),
+            "basis": recommendation.get("basis"),
+            "evidence_strength": recommendation.get("evidence_strength", "none"),
+            "attempts": recommendation.get("attempts", 0),
+            "resolution_associations": recommendation.get("resolution_associations", 0),
+            "resolution_rate": recommendation.get("resolution_rate", 0.0),
+            "auto_applied": False,
+            "owner_review_required": True,
             "causal_claim": False,
         },
         "owner_approval_required": True,
