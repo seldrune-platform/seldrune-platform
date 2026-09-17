@@ -7,7 +7,8 @@ def test_background_browser_alerts_use_privacy_safe_envelope(client) -> None:
     assert "/owner-attention/notification-envelope" in text
     assert "/owner-attention/snapshot?limit=1" in text
     assert "body:envelope.body||'Owner attention changed.'" in text
-    assert "window.location.href=envelope.target||'/console#action-inbox'" in text
+    assert "const target=envelope.target||'/console#action-inbox'" in text
+    assert "data:{target}" in text
     assert "!envelope.has_attention" in text
     assert "snapshot.top_items" not in text
     assert "snapshot.headline" not in text
