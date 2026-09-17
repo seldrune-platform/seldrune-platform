@@ -74,6 +74,34 @@ function strategyLabel(mode){
     recover:'Escalated recovery',
   })[mode]||mode;
 }
+function advisorySignalLabel(signal){
+  return({
+    not_applicable:'Not applicable',
+    insufficient_evidence:'Insufficient evidence',
+    mixed:'Mixed evidence',
+    keep_selected:'Keep selected strategy',
+    use_recommended:'Use recommended strategy',
+  })[signal]||signal||'Not recorded';
+}
+function confidenceLabel(confidence){
+  return({none:'none',low:'low',medium:'medium',high:'high'})[confidence]||confidence||'none';
+}
+function driftChangeLabel(change){
+  return({
+    strategy_evidence:'strategy evidence',
+    selected_mode:'selected strategy',
+    recommended_mode:'recommended strategy',
+    advisory_signal:'advisory signal',
+    advisory_confidence:'advisory confidence',
+  })[change]||change;
+}
+function driftSnapshotLabel(snapshot){
+  const value=snapshot||{};
+  return `${advisorySignalLabel(value.advisory_signal)} · confidence `+
+    `${confidenceLabel(value.advisory_confidence)} · selected `+
+    `${strategyLabel(value.selected_mode)} · recommended `+
+    `${strategyLabel(value.recommended_mode||'none')}`;
+}
 
 async function runPriorityAction(item,button){
   button.disabled=true;
@@ -233,6 +261,23 @@ function renderPriority(item){
           'escalation',
         ),
       );
+      const drift=review.drift_explanation||{};
+      if(drift.active){
+        const changes=(drift.changes||[]).map(driftChangeLabel);
+        if(changes.length){
+          root.append(
+            text(
+              'p',
+              `Review evidence changes · ${changes.join(' · ')}.`,
+              'outcome-memory',
+            ),
+          );
+        }
+        root.append(
+          text('p',`Reviewed snapshot · ${driftSnapshotLabel(drift.reviewed)}.`,'muted'),
+          text('p',`Current snapshot · ${driftSnapshotLabel(drift.current)}.`,'muted'),
+        );
+      }
     }else{
       root.append(
         text(
@@ -350,6 +395,8 @@ function render(data){
   const strategy=data.executive_strategy||{};
   const reviews=data.executive_strategy_review||{};
   const outcomes=data.strategy_outcomes||{};
+  const reviewOutcomes=data.strategy_review_outcomes||{};
+  const reviewDrift=reviewOutcomes.review_drift||{};
   const metrics=clear('#metrics');
   [
     ['Open goals',snapshot.open_goals],
@@ -364,6 +411,8 @@ function render(data){
     ['Strategy recommendations',strategy.comparative_recommendations||0],
     ['Strategy reviews',reviews.reviewed||0],
     ['Pending reviews',(reviews.pending||0)+(reviews.stale||0)],
+    ['Stale review drift',reviewDrift.stale_reviews||0],
+    ['Explained drift',reviewDrift.explained_stale_reviews||0],
     ['Strategy attempts',outcomes.scored_attempts||0],
     ['Verified resolutions',outcomes.verified_resolution_associations||0],
   ].forEach(item=>metrics.append(metric(item[0],item[1])));
