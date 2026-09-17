@@ -7,6 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.models.orchestration import OrchestrationRun
+from backend.app.services.executive_advisory_calibration import (
+    build_executive_advisory_calibration,
+)
 from backend.app.services.executive_decision_advisory import decision_advisory
 
 _TERMINAL_STATUSES = {"succeeded", "partial", "failed", "cancelled"}
@@ -234,8 +237,13 @@ def build_executive_strategy_review_outcomes(
             directional_advisories += 1
         enriched.append({**with_outcomes, "strategy_decision_advisory": advisory})
 
+    calibration = build_executive_advisory_calibration(
+        session,
+        organization_id,
+        enriched,
+    )
     return {
-        "priorities": enriched,
+        "priorities": calibration["priorities"],
         "summary": {
             "reviewed_attempts": sum(int(card["attempts"]) for card in scorecards.values()),
             "resolution_associations": sum(
@@ -250,6 +258,9 @@ def build_executive_strategy_review_outcomes(
             "scored_families": len({card["family"] for card in scorecards.values()}),
             "active_advisories": active_advisories,
             "directional_advisories": directional_advisories,
+            "advisory_calibration": calibration["summary"],
+            "advisory_calibration_scorecards": calibration["scorecards"],
+            "advisory_calibration_history": calibration["recent"],
         },
         "scorecards": ordered_scorecards[:12],
         "recent": recent[:12],
