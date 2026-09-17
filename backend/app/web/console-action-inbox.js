@@ -55,7 +55,7 @@ function renderAlertControl(){
   button.disabled=false;
   if(alertsEnabled()){
     button.textContent='Disable browser alerts';
-    detail.textContent='Armed · checks every 60s in the background while this console remains open.';
+    detail.textContent='Armed · privacy-safe counts-only checks every 60s while this console remains open.';
   }else{
     button.textContent='Enable browser alerts';
     detail.textContent='Off · opt in to background alerts for new owner attention.';
@@ -217,7 +217,6 @@ function renderAllCommands(commands){
     meta.append(status,approval);
     content.append(title,meta);
     appendBudget(content,commandBudget(command));
-
     const actions=document.createElement('div');
     actions.className='actions';
     actions.append(actionButton('Decision brief','brief',command.id));
@@ -303,22 +302,16 @@ function showInboxError(message){
   root.append(error);
 }
 
-function notifyOwnerAttention(snapshot){
-  if(!alertsEnabled()||!document.hidden)return;
-  const total=Number(snapshot.total_items||snapshot.summary?.total||0);
-  if(total<=0)return;
-  const top=snapshot.top_items?.[0];
-  const body=top?.title
-    ?`${snapshot.headline||'Owner attention changed'} ${top.title}`
-    :(snapshot.headline||'New Seldrune owner attention requires review.');
-  const notification=new Notification('Seldrune Owner Attention',{
-    body,
+function notifyOwnerAttention(envelope){
+  if(!alertsEnabled()||!document.hidden||!envelope.has_attention)return;
+  const notification=new Notification(envelope.title||'Seldrune Owner Attention',{
+    body:envelope.body||'Owner attention changed.',
     tag:'seldrune-owner-attention',
     renotify:true,
   });
   notification.onclick=()=>{
     window.focus();
-    window.location.hash='#action-inbox';
+    window.location.href=envelope.target||'/console#action-inbox';
     notification.close();
   };
 }
@@ -376,22 +369,23 @@ async function pollAttention({force=false}={}){
     if(!organizationId)await resolveOrganization();
     const headers={};
     if(attentionEtag&&!force)headers['If-None-Match']=attentionEtag;
-    const response=await apiFetch(
-      `/organizations/${organizationId}/owner-attention/snapshot?limit=1`,
-      {headers},
-    );
+    const backgroundAlert=backgroundWatchActive();
+    const attentionPath=backgroundAlert
+      ?`/organizations/${organizationId}/owner-attention/notification-envelope`
+      :`/organizations/${organizationId}/owner-attention/snapshot?limit=1`;
+    const response=await apiFetch(attentionPath,{headers});
     if(response.status===304){
       if(!document.hidden)setSyncStatus('live','Live',lastCheckedLabel());
       return;
     }
     if(!response.ok){
       const body=await response.json().catch(()=>({}));
-      throw new Error(body.detail||`Snapshot failed (${response.status})`);
+      throw new Error(body.detail||`Attention check failed (${response.status})`);
     }
     attentionEtag=response.headers.get('ETag')||'';
-    const snapshot=await response.json();
+    const attentionCheck=await response.json();
     const previousFingerprint=lastAttentionFingerprint;
-    lastAttentionFingerprint=snapshot.fingerprint||'';
+    lastAttentionFingerprint=attentionCheck.fingerprint||'';
     const changed=Boolean(
       previousFingerprint
       &&lastAttentionFingerprint
@@ -399,7 +393,7 @@ async function pollAttention({force=false}={}){
     );
     if(document.hidden){
       surfaceStale=true;
-      if(changed)notifyOwnerAttention(snapshot);
+      if(changed)notifyOwnerAttention(attentionCheck);
     }else{
       await loadActionSurface();
       setSyncStatus('live',changed?'Live · updated':'Live',lastCheckedLabel());
@@ -447,7 +441,7 @@ document.addEventListener('visibilitychange',()=>{
   renderAlertControl();
   if(document.hidden){
     if(alertsEnabled()){
-      setSyncStatus('live','Alerts armed','60s background watch while this console remains open');
+      setSyncStatus('live','Alerts armed','60s privacy-safe background watch while this console remains open');
       schedulePoll(BACKGROUND_ALERT_INTERVAL_MS);
     }else{
       clearPoll();
