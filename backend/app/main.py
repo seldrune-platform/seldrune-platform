@@ -13,6 +13,7 @@ from backend.app.api.routes.organization_kernel import router as organization_ke
 from backend.app.api.routes.organizations import router as organizations_router
 from backend.app.api.routes.owner_attention import router as owner_attention_router
 from backend.app.api.routes.owner_commands import router as owner_commands_router
+from backend.app.api.routes.owner_push import router as owner_push_router
 from backend.app.api.routes.research import router as research_router
 from backend.app.api.routes.runtime import router as runtime_router
 from backend.app.api.routes.sense import router as sense_router
@@ -39,6 +40,7 @@ def create_app() -> FastAPI:
         organization_kernel_router,
         executive_brief_router,
         owner_attention_router,
+        owner_push_router,
         agent_tasks_router,
         orchestrations_router,
         sense_router,
