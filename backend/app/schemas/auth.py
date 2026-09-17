@@ -46,6 +46,14 @@ class RefreshRequest(BaseModel):
     refresh_token: str = Field(min_length=32, max_length=512)
 
 
+class EmailVerificationRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=512)
+
+
+class EmailVerificationResponse(BaseModel):
+    verified: bool
+
+
 class UserPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -53,6 +61,7 @@ class UserPublic(BaseModel):
     email: EmailStr
     display_name: str
     is_active: bool
+    email_verified: bool
 
 
 class OrganizationPublic(BaseModel):
