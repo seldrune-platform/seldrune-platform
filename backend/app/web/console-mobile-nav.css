@@ -1,0 +1,16 @@
+@media(max-width:900px){
+  aside nav{
+    display:flex;
+    gap:6px;
+    margin-top:16px;
+    overflow-x:auto;
+    padding-bottom:4px;
+    scrollbar-width:thin;
+    -webkit-overflow-scrolling:touch;
+  }
+  aside nav a{
+    flex:0 0 auto;
+    white-space:nowrap;
+  }
+  aside .secure{display:none;}
+}
