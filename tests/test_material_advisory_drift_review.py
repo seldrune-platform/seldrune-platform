@@ -117,10 +117,17 @@ def test_material_advisory_drift_requires_fresh_owner_review(client) -> None:
     assert advisory["confidence"] == "medium"
     assert review["current"] is False
     assert review["status"] == "stale"
-    assert review["stale_reason"] == "material_advisory_evidence_changed"
+    assert review["stale_reason"] == "strategy_and_material_advisory_evidence_changed"
     assert review["advisory_material_tracked"] is True
     assert review["advisory_material_current"] is False
     assert review["advisory_material_fingerprint"] != initial_material_fingerprint
+
+    drift_brief = client.get(f"{base}/executive-brief", headers=headers)
+    assert drift_brief.status_code == 200
+    drift_summary = drift_brief.json()["strategy_review_outcomes"]["post_advisory_review"]
+    assert drift_summary["stale"] >= 1
+    assert drift_summary["strategy_drift_stale"] >= 1
+    assert drift_summary["material_drift_stale"] >= 1
 
     blocked = client.post(
         f"{base}/executive-brief/actions/{drifted['key']}",
