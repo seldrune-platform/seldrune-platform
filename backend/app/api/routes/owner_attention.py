@@ -10,6 +10,9 @@ from backend.app.core.rbac import Permission, Role
 from backend.app.models.membership import Membership
 from backend.app.models.orchestration import OrchestrationRun
 from backend.app.services.owner_attention import build_owner_attention
+from backend.app.services.owner_attention_notification import (
+    build_owner_attention_notification_envelope,
+)
 from backend.app.services.owner_attention_snapshot import build_owner_attention_snapshot
 from backend.app.services.owner_dashboard import build_owner_dashboard
 
@@ -115,3 +118,36 @@ def get_owner_attention_snapshot(
     for name, value in headers.items():
         response.headers[name] = value
     return snapshot
+
+
+@router.get(
+    "/{organization_id}/owner-attention/notification-envelope",
+    response_model=dict[str, Any],
+    responses={304: {"description": "Owner attention has not meaningfully changed"}},
+)
+def get_owner_attention_notification_envelope(
+    organization_id: UUID,
+    request: Request,
+    response: Response,
+    membership: OwnerDep,
+    session: SessionDep,
+    previous_fingerprint: str | None = Query(
+        default=None,
+        min_length=64,
+        max_length=64,
+        pattern="^[0-9a-fA-F]{64}$",
+    ),
+) -> Any:
+    _require_owner(membership)
+    attention = _owner_attention_state(session, organization_id)
+    envelope = build_owner_attention_notification_envelope(
+        attention,
+        previous_fingerprint=previous_fingerprint,
+    )
+    fingerprint = str(envelope["fingerprint"])
+    headers = _snapshot_headers(fingerprint)
+    if _etag_matches(request.headers.get("if-none-match"), fingerprint):
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+    for name, value in headers.items():
+        response.headers[name] = value
+    return envelope
