@@ -65,3 +65,32 @@ def test_resolver_rejects_missing_value_without_exposing_locator() -> None:
         SecretResolver(providers={"env": lambda locator: None}).resolve(reference)
 
     assert reference.locator not in str(exc_info.value)
+
+
+def test_aws_provider_requests_only_configured_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    from backend.app.services import secret_resolution
+
+    class FakeClient:
+        def get_secret_value(self, *, SecretId: str) -> dict[str, str]:
+            assert SecretId == "prod/seldrune/openai"
+            return {"SecretString": "managed-secret-value"}
+
+    monkeypatch.setattr(secret_resolution, "_aws_secrets_client", lambda: FakeClient())
+
+    assert (
+        secret_resolution.resolve_aws_secrets_manager_secret("prod/seldrune/openai")
+        == "managed-secret-value"
+    )
+
+
+def test_provider_exception_is_sanitized() -> None:
+    def failing_provider(locator: str) -> str:
+        raise RuntimeError(f"failed to read {locator}")
+
+    reference = _reference(provider="managed", locator="sensitive/secret/name")
+
+    with pytest.raises(SecretResolutionError) as exc_info:
+        SecretResolver(providers={"managed": failing_provider}).resolve(reference)
+
+    assert "sensitive/secret/name" not in str(exc_info.value)
+    assert str(exc_info.value) == "Secret provider is unavailable"
