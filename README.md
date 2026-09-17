@@ -4,18 +4,18 @@ Core platform for the **Seldrune AI-native virtual organization**.
 
 Seldrune is a reusable operating layer for governed AI work across research, software engineering, automation, ventures, talent, managed operations, and future products.
 
-## Current milestone — Seldrune v1.1
+## Current milestone — Seldrune v1.3
 
 The platform has progressed beyond the original foundation milestone and now includes production-oriented organization, agent, security, governance, audit, billing, orchestration, and deployment-integrity capabilities.
 
 Current platform capabilities include:
 
-- organization identity, membership administration, RBAC, invitations, and tenant isolation
+- organization identity, membership administration, RBAC, invitations, tenant isolation, email verification, and account recovery
 - rotating refresh sessions, server-side logout/session revocation, login throttling, TOTP MFA, and one-time MFA recovery codes
 - security-event monitoring with owner attention integration
 - agent registry, model policy, tool grants, immutable configuration revisions, and governed restore
 - orchestration, human approval checkpoints, recovery runs, and project delivery workflows
-- tool gateway, knowledge/memory, research connectors, signed inbound webhooks, and secret references
+- tool gateway, knowledge/memory, research connectors, signed inbound webhooks, secret references, and provider-based managed-secret resolution
 - audit explorer, AI usage/cost reporting, budget authority, project/department attribution, and accounting integrity
 - owner attention, browser/web-push notification infrastructure, and executive operating surfaces
 - PostgreSQL/Alembic migrations, automated tests, GitHub Actions CI, and Render deployment configuration
