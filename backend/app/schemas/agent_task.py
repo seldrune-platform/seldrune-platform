@@ -21,6 +21,17 @@ class AgentCreate(BaseModel):
     runtime_config: dict[str, Any] = Field(default_factory=dict)
 
 
+class AgentUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=160)
+    description: str | None = Field(default=None, max_length=4000)
+    capabilities: list[str] | None = Field(default=None, max_length=100)
+    runtime_config: dict[str, Any] | None = None
+
+
+class AgentStatusUpdate(BaseModel):
+    status: AgentStatus
+
+
 class AgentPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
