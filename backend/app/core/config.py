@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Seldrune Platform"
-    app_version: str = "0.78.0"
+    app_version: str = "0.79.0"
     environment: str = "development"
     api_v1_prefix: str = "/api/v1"
     enable_docs: bool = True
@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     project_estimated_cost_per_step_usd: float = 0.05
     knowledge_retrieval_limit: int = 6
     knowledge_context_max_chars: int = 6000
+    owner_push_vapid_public_key: str | None = None
 
     @model_validator(mode="after")
     def validate_settings(self) -> "Settings":
