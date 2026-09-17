@@ -32,6 +32,8 @@ from backend.app.schemas.auth import (
     UserPublic,
 )
 from backend.app.services.audit import record_audit
+from backend.app.services.email_delivery import EmailDeliveryError, send_verification_email
+from backend.app.services.email_verification import issue_email_verification_token
 from backend.app.services.login_throttle import (
     LoginThrottleError,
     clear_login_failures,
@@ -166,6 +168,7 @@ def register(payload: RegisterRequest, session: SessionDep) -> AuthResponse:
             actor_user_id=user.id,
             resource_id=str(user.id),
         )
+        verification_issue = issue_email_verification_token(session, user.id)
         response = _auth_response(session, user)
         session.commit()
     except IntegrityError as exc:
@@ -175,6 +178,12 @@ def register(payload: RegisterRequest, session: SessionDep) -> AuthResponse:
             detail="Registration conflicts with an existing account",
         ) from exc
 
+    try:
+        send_verification_email(user.email, verification_issue.token)
+    except EmailDeliveryError:
+        # Registration must remain usable during provider outages; the owner can
+        # request a fresh verification message once delivery is restored.
+        pass
     return response
 
 
