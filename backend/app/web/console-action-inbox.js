@@ -14,6 +14,7 @@ let attentionEtag='';
 let lastAttentionFingerprint='';
 let hasLoaded=false;
 let surfaceStale=false;
+let alertWorkerReady=null;
 
 function token(){
   return sessionStorage.seldruneToken||'';
@@ -21,6 +22,26 @@ function token(){
 
 function notificationsSupported(){
   return 'Notification' in window;
+}
+
+function serviceWorkerSupported(){
+  return 'serviceWorker' in navigator;
+}
+
+async function ownerAlertWorker(){
+  if(!serviceWorkerSupported())return null;
+  if(!alertWorkerReady){
+    alertWorkerReady=(async()=>{
+      try{
+        await navigator.serviceWorker.register('/owner-alert-worker.js');
+        return await navigator.serviceWorker.ready;
+      }catch(error){
+        console.warn('Owner alert worker unavailable',error);
+        return null;
+      }
+    })();
+  }
+  return alertWorkerReady;
 }
 
 function alertsEnabled(){
@@ -75,6 +96,7 @@ async function toggleBrowserAlerts(){
   let permission=Notification.permission;
   if(permission==='default')permission=await Notification.requestPermission();
   if(permission==='granted'){
+    await ownerAlertWorker();
     setAlertPreference(true);
     schedulePoll(document.hidden?BACKGROUND_ALERT_INTERVAL_MS:0);
   }else{
@@ -302,16 +324,25 @@ function showInboxError(message){
   root.append(error);
 }
 
-function notifyOwnerAttention(envelope){
+async function notifyOwnerAttention(envelope){
   if(!alertsEnabled()||!document.hidden||!envelope.has_attention)return;
-  const notification=new Notification(envelope.title||'Seldrune Owner Attention',{
+  const title=envelope.title||'Seldrune Owner Attention';
+  const target=envelope.target||'/console#action-inbox';
+  const options={
     body:envelope.body||'Owner attention changed.',
     tag:'seldrune-owner-attention',
     renotify:true,
-  });
+    data:{target},
+  };
+  const registration=await ownerAlertWorker();
+  if(registration){
+    await registration.showNotification(title,options);
+    return;
+  }
+  const notification=new Notification(title,options);
   notification.onclick=()=>{
     window.focus();
-    window.location.href=envelope.target||'/console#action-inbox';
+    window.location.href=target;
     notification.close();
   };
 }
@@ -393,7 +424,7 @@ async function pollAttention({force=false}={}){
     );
     if(document.hidden){
       surfaceStale=true;
-      if(changed)notifyOwnerAttention(attentionCheck);
+      if(changed)await notifyOwnerAttention(attentionCheck);
     }else{
       await loadActionSurface();
       setSyncStatus('live',changed?'Live · updated':'Live',lastCheckedLabel());
