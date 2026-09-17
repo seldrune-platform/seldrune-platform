@@ -9,6 +9,7 @@ from backend.app.api.routes.audit import router as audit_router
 from backend.app.api.routes.auth import router as auth_router
 from backend.app.api.routes.billing import router as billing_router
 from backend.app.api.routes.console import router as console_router
+from backend.app.api.routes.email_verification import router as email_verification_router
 from backend.app.api.routes.executive_brief import router as executive_brief_router
 from backend.app.api.routes.knowledge import router as knowledge_router
 from backend.app.api.routes.membership_admin import router as membership_admin_router
@@ -44,6 +45,7 @@ def create_app() -> FastAPI:
     for item in (
         status_router,
         auth_router,
+        email_verification_router,
         mfa_router,
         organizations_router,
         membership_admin_router,
