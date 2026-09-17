@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from typing import Any
 from uuid import UUID
 
@@ -224,9 +223,9 @@ def build_executive_strategy_review_outcomes(
                     "decision_evidence": decision_evidence,
                     "causal_claim": False,
                     "interpretation": (
-                        "Owner strategy-decision scorecards describe recorded associations between "
-                        "review choices and later priority state; they do not prove that the review "
-                        "choice caused the outcome."
+                        "Owner strategy-decision scorecards describe recorded associations "
+                        "between review choices and later priority state; they do not prove that "
+                        "the review choice caused the outcome."
                     ),
                 },
             }
