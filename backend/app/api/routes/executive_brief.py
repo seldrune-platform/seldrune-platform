@@ -30,6 +30,9 @@ from backend.app.services.executive_strategy_review import (
     build_executive_strategy_reviews,
     record_executive_strategy_review,
 )
+from backend.app.services.executive_strategy_review_outcomes import (
+    build_executive_strategy_review_outcomes,
+)
 
 router = APIRouter(prefix="/organizations", tags=["executive-brief"])
 OwnerDep = Annotated[Membership, Depends(require_org_permission(Permission.ORG_MANAGE))]
@@ -91,13 +94,21 @@ def _brief_with_lifecycle(
         organization_id,
         strategy["priorities"],
     )
-    brief["priorities"] = reviews["priorities"]
+    review_outcomes = build_executive_strategy_review_outcomes(
+        session,
+        organization_id,
+        reviews["priorities"],
+    )
+    brief["priorities"] = review_outcomes["priorities"]
     brief["executive_actions"] = lifecycle["summary"]
     brief["resolved_actions"] = lifecycle["resolved_recent"]
     brief["outcome_memory"] = memory["summary"]
     brief["outcome_playbooks"] = memory["playbooks"]
     brief["executive_strategy"] = strategy["summary"]
     brief["executive_strategy_review"] = reviews["summary"]
+    brief["strategy_review_outcomes"] = review_outcomes["summary"]
+    brief["strategy_review_scorecards"] = review_outcomes["scorecards"]
+    brief["strategy_review_outcome_history"] = review_outcomes["recent"]
     brief["strategy_outcomes"] = outcomes["summary"]
     brief["strategy_scorecards"] = outcomes["scorecards"]
     brief["strategy_outcome_history"] = outcomes["recent"]
@@ -149,6 +160,14 @@ def _action_objective(priority: dict[str, Any]) -> str:
             "This recommendation is not automatically applied and does not prove causation."
         )
 
+    review_outcomes = priority.get("strategy_review_outcomes") or {}
+    if review_outcomes.get("total_reviewed_attempts"):
+        objective += (
+            " Historical owner review outcomes are available for this priority family. "
+            "Treat those decision-outcome associations as supporting evidence only; they do not "
+            "prove that choosing or rejecting a recommendation caused the later outcome."
+        )
+
     memory = priority.get("outcome_memory") or {}
     preferred = memory.get("preferred_pattern") or {}
     avoid = memory.get("avoid_patterns") or []
@@ -193,6 +212,7 @@ def _strategy_context(priority: dict[str, Any]) -> dict[str, Any]:
     outcome_score = strategy.get("outcome_score") or {}
     recommendation = strategy.get("recommendation") or {}
     review = priority.get("strategy_review") or {}
+    review_outcomes = priority.get("strategy_review_outcomes") or {}
     selected_mode = strategy.get("mode", "baseline")
     effective_mode = review.get("effective_mode") or selected_mode
     guidance = strategy_mode_guidance(str(effective_mode))
@@ -244,6 +264,13 @@ def _strategy_context(priority: dict[str, Any]) -> dict[str, Any]:
             "reviewed_at": reviewed_at,
             "actor_user_id": review.get("actor_user_id"),
             "evidence_fingerprint": review.get("evidence_fingerprint"),
+            "causal_claim": False,
+        },
+        "review_outcomes": {
+            "family": review_outcomes.get("family"),
+            "total_reviewed_attempts": review_outcomes.get("total_reviewed_attempts", 0),
+            "resolution_associations": review_outcomes.get("resolution_associations", 0),
+            "decision_evidence": review_outcomes.get("decision_evidence") or {},
             "causal_claim": False,
         },
         "owner_approval_required": True,
