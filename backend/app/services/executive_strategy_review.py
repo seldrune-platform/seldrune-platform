@@ -111,6 +111,21 @@ def strategy_review_fingerprint(priority: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def advisory_material_fingerprint(priority: dict[str, Any]) -> str:
+    advisory = priority.get("strategy_decision_advisory") or {}
+    confidence = advisory.get("confidence_calibration") or {}
+    payload = {
+        "signal": advisory.get("signal"),
+        "calibrated_confidence": str(
+            confidence.get("calibrated_confidence")
+            or advisory.get("confidence")
+            or "none"
+        ),
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def _latest_review_events(
     session: Session,
     organization_id: UUID,
@@ -141,11 +156,13 @@ def _review_state(
     recommended_mode = recommendation.get("recommended_mode")
     required = bool(recommended_mode)
     fingerprint = strategy_review_fingerprint(priority)
+    material_fingerprint = advisory_material_fingerprint(priority)
 
     base = {
         "required": required,
         "current": False,
         "status": "not_required" if not required else "pending",
+        "stale_reason": None,
         "selected_mode": selected_mode,
         "recommended_mode": recommended_mode,
         "effective_mode": selected_mode,
@@ -155,6 +172,9 @@ def _review_state(
         "reviewed_at": None,
         "actor_user_id": None,
         "evidence_fingerprint": fingerprint,
+        "advisory_material_fingerprint": material_fingerprint,
+        "advisory_material_tracked": False,
+        "advisory_material_current": None,
         "decision_advisory_snapshot": None,
         "decision_matched_directional_signal": None,
         "causal_claim": False,
@@ -165,7 +185,7 @@ def _review_state(
     details = event.details or {}
     decision = details.get("decision")
     chosen_mode = details.get("chosen_mode")
-    current = (
+    strategy_current = (
         details.get("evidence_fingerprint") == fingerprint
         and details.get("selected_mode") == selected_mode
         and details.get("recommended_mode") == recommended_mode
@@ -174,12 +194,26 @@ def _review_state(
             or (decision == "use_recommended" and chosen_mode == recommended_mode)
         )
     )
+    stored_material_fingerprint = details.get("advisory_material_fingerprint")
+    advisory_tracked = bool(stored_material_fingerprint)
+    advisory_current = (
+        stored_material_fingerprint == material_fingerprint if advisory_tracked else True
+    )
+    current = strategy_current and advisory_current
+    stale_reason = None
+    if not strategy_current:
+        stale_reason = "strategy_evidence_changed"
+    elif not advisory_current:
+        stale_reason = "material_advisory_evidence_changed"
+
     event_fields = {
         "decision": decision,
         "reason": details.get("reason"),
         "event_id": str(event.id),
         "reviewed_at": event.occurred_at,
         "actor_user_id": str(event.actor_user_id) if event.actor_user_id else None,
+        "advisory_material_tracked": advisory_tracked,
+        "advisory_material_current": advisory_current,
         "decision_advisory_snapshot": details.get("decision_advisory_snapshot"),
         "decision_matched_directional_signal": details.get(
             "decision_matched_directional_signal"
@@ -190,6 +224,7 @@ def _review_state(
             **base,
             **event_fields,
             "status": "stale",
+            "stale_reason": stale_reason,
         }
 
     return {
@@ -214,6 +249,7 @@ def build_executive_strategy_reviews(
     reviewed = 0
     pending = 0
     stale = 0
+    material_drift_stale = 0
     accepted_selected = 0
     accepted_recommended = 0
 
@@ -229,6 +265,8 @@ def build_executive_strategy_reviews(
             pending += 1
         elif review["status"] == "stale":
             stale += 1
+            if review["stale_reason"] == "material_advisory_evidence_changed":
+                material_drift_stale += 1
         elif review["status"] == "accepted_selected":
             accepted_selected += 1
         elif review["status"] == "accepted_recommended":
@@ -241,6 +279,7 @@ def build_executive_strategy_reviews(
             "reviewed": reviewed,
             "pending": pending,
             "stale": stale,
+            "material_drift_stale": material_drift_stale,
             "accepted_selected": accepted_selected,
             "accepted_recommended": accepted_recommended,
         },
@@ -290,6 +329,7 @@ def record_executive_strategy_review(
             "chosen_mode": chosen_mode,
             "reason": reason,
             "evidence_fingerprint": strategy_review_fingerprint(priority),
+            "advisory_material_fingerprint": advisory_material_fingerprint(priority),
             "recommendation_basis": recommendation.get("basis"),
             "recommendation_evidence_strength": recommendation.get(
                 "evidence_strength", "none"
