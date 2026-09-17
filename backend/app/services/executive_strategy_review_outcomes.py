@@ -14,6 +14,7 @@ from backend.app.services.executive_advisory_confidence import (
     build_executive_advisory_confidence_guardrails,
 )
 from backend.app.services.executive_decision_advisory import decision_advisory
+from backend.app.services.executive_strategy_review import build_executive_strategy_reviews
 
 _TERMINAL_STATUSES = {"succeeded", "partial", "failed", "cancelled"}
 _UNSUCCESSFUL_STATUSES = {"partial", "failed", "cancelled"}
@@ -246,8 +247,13 @@ def build_executive_strategy_review_outcomes(
         enriched,
     )
     confidence = build_executive_advisory_confidence_guardrails(calibration["priorities"])
+    refreshed_reviews = build_executive_strategy_reviews(
+        session,
+        organization_id,
+        confidence["priorities"],
+    )
     return {
-        "priorities": confidence["priorities"],
+        "priorities": refreshed_reviews["priorities"],
         "summary": {
             "reviewed_attempts": sum(int(card["attempts"]) for card in scorecards.values()),
             "resolution_associations": sum(
@@ -266,6 +272,7 @@ def build_executive_strategy_review_outcomes(
             "advisory_calibration_scorecards": calibration["scorecards"],
             "advisory_calibration_history": calibration["recent"],
             "advisory_confidence_guardrails": confidence["summary"],
+            "post_advisory_review": refreshed_reviews["summary"],
         },
         "scorecards": ordered_scorecards[:12],
         "recent": recent[:12],
