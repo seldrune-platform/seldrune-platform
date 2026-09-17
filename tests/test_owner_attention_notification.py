@@ -29,7 +29,11 @@ def _attention() -> dict:
                 "resource_type": "task_failed",
                 "resource_id": "secret-resource-id",
                 "occurred_at": now,
-                "action": {"kind": "navigate", "label": "Open incidents", "href": "#incident-title"},
+                "action": {
+                    "kind": "navigate",
+                    "label": "Open incidents",
+                    "href": "#incident-title",
+                },
             },
             {
                 "kind": "pending_strategy_review",
@@ -42,7 +46,11 @@ def _attention() -> dict:
                 "resource_type": "executive_priority",
                 "resource_id": "priority-1",
                 "occurred_at": now,
-                "action": {"kind": "navigate", "label": "Open Review Drift", "href": "/console-assets/executive-brief.html"},
+                "action": {
+                    "kind": "navigate",
+                    "label": "Open Review Drift",
+                    "href": "/console-assets/executive-brief.html",
+                },
             },
             {
                 "kind": "command_approval",
@@ -55,7 +63,11 @@ def _attention() -> dict:
                 "resource_type": "owner_command",
                 "resource_id": "command-1",
                 "occurred_at": now,
-                "action": {"kind": "review_command", "label": "Review command", "command_id": "command-1"},
+                "action": {
+                    "kind": "review_command",
+                    "label": "Review command",
+                    "command_id": "command-1",
+                },
             },
         ],
         "read_only": True,
