@@ -17,6 +17,7 @@ _BLOCKER_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bnot ready\b", "The result explicitly declares that it is not ready."),
     (r"\b(?:has|have|was|were)?\s*not been verified\b", "Required verification is incomplete."),
     (r"\bnot verified\b", "Required verification is incomplete."),
+    (r"\brequired verification is incomplete\b", "Required verification is incomplete."),
     (r"\bdo not mark\b", "The result explicitly rejects a successful conclusion."),
     (r"\bcannot confirm\b", "The result cannot confirm the objective."),
     (r"\bunable to verify\b", "The result could not verify the objective."),
