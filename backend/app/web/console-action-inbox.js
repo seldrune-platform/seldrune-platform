@@ -1,6 +1,8 @@
 (()=>{
 const API='/api/v1';
 const POLL_INTERVAL_MS=30000;
+const BACKGROUND_ALERT_INTERVAL_MS=60000;
+const ALERT_STORAGE_KEY='seldruneOwnerAttentionAlerts';
 const $=selector=>document.querySelector(selector);
 let organizationId='';
 let loading=false;
@@ -9,10 +11,76 @@ let reloadTimer=null;
 let pollTimer=null;
 let commandObserver=null;
 let attentionEtag='';
+let lastAttentionFingerprint='';
 let hasLoaded=false;
+let surfaceStale=false;
 
 function token(){
   return sessionStorage.seldruneToken||'';
+}
+
+function notificationsSupported(){
+  return 'Notification' in window;
+}
+
+function alertsEnabled(){
+  return notificationsSupported()
+    &&Notification.permission==='granted'
+    &&localStorage.getItem(ALERT_STORAGE_KEY)==='enabled';
+}
+
+function setAlertPreference(enabled){
+  if(enabled)localStorage.setItem(ALERT_STORAGE_KEY,'enabled');
+  else localStorage.removeItem(ALERT_STORAGE_KEY);
+  renderAlertControl();
+}
+
+function renderAlertControl(){
+  const button=$('#attention-alert-toggle');
+  const detail=$('#attention-alert-detail');
+  if(!button||!detail)return;
+  if(!notificationsSupported()){
+    button.textContent='Browser alerts unavailable';
+    button.disabled=true;
+    detail.textContent='This browser does not expose the Notification API.';
+    return;
+  }
+  if(Notification.permission==='denied'){
+    localStorage.removeItem(ALERT_STORAGE_KEY);
+    button.textContent='Browser alerts blocked';
+    button.disabled=true;
+    detail.textContent='Enable notifications for this site in browser settings to use owner alerts.';
+    return;
+  }
+  button.disabled=false;
+  if(alertsEnabled()){
+    button.textContent='Disable browser alerts';
+    detail.textContent='Armed · checks every 60s in the background while this console remains open.';
+  }else{
+    button.textContent='Enable browser alerts';
+    detail.textContent='Off · opt in to background alerts for new owner attention.';
+  }
+}
+
+async function toggleBrowserAlerts(){
+  if(!notificationsSupported())return;
+  if(alertsEnabled()){
+    setAlertPreference(false);
+    if(document.hidden){
+      clearPoll();
+      setSyncStatus('paused','Paused','Live attention resumes when this tab is visible');
+    }
+    return;
+  }
+  let permission=Notification.permission;
+  if(permission==='default')permission=await Notification.requestPermission();
+  if(permission==='granted'){
+    setAlertPreference(true);
+    schedulePoll(document.hidden?BACKGROUND_ALERT_INTERVAL_MS:0);
+  }else{
+    setAlertPreference(false);
+  }
+  renderAlertControl();
 }
 
 async function apiFetch(path,{headers={}}={}){
@@ -235,6 +303,26 @@ function showInboxError(message){
   root.append(error);
 }
 
+function notifyOwnerAttention(snapshot){
+  if(!alertsEnabled()||!document.hidden)return;
+  const total=Number(snapshot.total_items||snapshot.summary?.total||0);
+  if(total<=0)return;
+  const top=snapshot.top_items?.[0];
+  const body=top?.title
+    ?`${snapshot.headline||'Owner attention changed'} ${top.title}`
+    :(snapshot.headline||'New Seldrune owner attention requires review.');
+  const notification=new Notification('Seldrune Owner Attention',{
+    body,
+    tag:'seldrune-owner-attention',
+    renotify:true,
+  });
+  notification.onclick=()=>{
+    window.focus();
+    window.location.hash='#action-inbox';
+    notification.close();
+  };
+}
+
 async function loadActionSurface(){
   const view=$('#console-view');
   if(loading||!view||view.classList.contains('hidden'))return;
@@ -249,6 +337,7 @@ async function loadActionSurface(){
     renderInbox(attention);
     renderAllCommands(commands);
     hasLoaded=true;
+    surfaceStale=false;
   }catch(error){
     if(!hasLoaded)showInboxError(error.message);
     throw error;
@@ -262,18 +351,27 @@ function clearPoll(){
   pollTimer=null;
 }
 
-function schedulePoll(delay=POLL_INTERVAL_MS){
+function backgroundWatchActive(){
+  return document.hidden&&alertsEnabled();
+}
+
+function schedulePoll(delay=null){
   clearPoll();
   const view=$('#console-view');
-  if(document.hidden||!view||view.classList.contains('hidden')||!token())return;
-  pollTimer=setTimeout(()=>pollAttention(),delay);
+  if(!view||view.classList.contains('hidden')||!token())return;
+  if(document.hidden&&!alertsEnabled())return;
+  const interval=delay===null
+    ?(document.hidden?BACKGROUND_ALERT_INTERVAL_MS:POLL_INTERVAL_MS)
+    :delay;
+  pollTimer=setTimeout(()=>pollAttention(),interval);
 }
 
 async function pollAttention({force=false}={}){
   const view=$('#console-view');
-  if(polling||document.hidden||!view||view.classList.contains('hidden')||!token())return;
+  if(polling||!view||view.classList.contains('hidden')||!token())return;
+  if(document.hidden&&!alertsEnabled())return;
   polling=true;
-  setSyncStatus('checking','Checking attention','Using conditional owner snapshot');
+  if(!document.hidden)setSyncStatus('checking','Checking attention','Using conditional owner snapshot');
   try{
     if(!organizationId)await resolveOrganization();
     const headers={};
@@ -283,7 +381,7 @@ async function pollAttention({force=false}={}){
       {headers},
     );
     if(response.status===304){
-      setSyncStatus('live','Live',lastCheckedLabel());
+      if(!document.hidden)setSyncStatus('live','Live',lastCheckedLabel());
       return;
     }
     if(!response.ok){
@@ -291,12 +389,26 @@ async function pollAttention({force=false}={}){
       throw new Error(body.detail||`Snapshot failed (${response.status})`);
     }
     attentionEtag=response.headers.get('ETag')||'';
-    await response.json();
-    await loadActionSurface();
-    setSyncStatus('live','Live · updated',lastCheckedLabel());
+    const snapshot=await response.json();
+    const previousFingerprint=lastAttentionFingerprint;
+    lastAttentionFingerprint=snapshot.fingerprint||'';
+    const changed=Boolean(
+      previousFingerprint
+      &&lastAttentionFingerprint
+      &&previousFingerprint!==lastAttentionFingerprint,
+    );
+    if(document.hidden){
+      surfaceStale=true;
+      if(changed)notifyOwnerAttention(snapshot);
+    }else{
+      await loadActionSurface();
+      setSyncStatus('live',changed?'Live · updated':'Live',lastCheckedLabel());
+    }
   }catch(error){
     if(!hasLoaded)showInboxError(error.message);
-    setSyncStatus('error','Sync unavailable','Keeping the last good owner-attention view');
+    if(!document.hidden){
+      setSyncStatus('error','Sync unavailable','Keeping the last good owner-attention view');
+    }
   }finally{
     polling=false;
     schedulePoll();
@@ -328,18 +440,26 @@ $('#owner-action-list')?.addEventListener('click',event=>{
   setTimeout(()=>card.querySelector('button[data-action="brief"]')?.click(),180);
 });
 
+$('#attention-alert-toggle')?.addEventListener('click',()=>toggleBrowserAlerts());
 $('#refresh')?.addEventListener('click',()=>scheduleReload({force:true}));
 
 document.addEventListener('visibilitychange',()=>{
+  renderAlertControl();
   if(document.hidden){
-    clearPoll();
-    setSyncStatus('paused','Paused','Live attention resumes when this tab is visible');
+    if(alertsEnabled()){
+      setSyncStatus('live','Alerts armed','60s background watch while this console remains open');
+      schedulePoll(BACKGROUND_ALERT_INTERVAL_MS);
+    }else{
+      clearPoll();
+      setSyncStatus('paused','Paused','Live attention resumes when this tab is visible');
+    }
   }else{
-    scheduleReload();
+    scheduleReload({force:surfaceStale});
   }
 });
 window.addEventListener('focus',()=>{
-  if(!document.hidden)scheduleReload();
+  renderAlertControl();
+  if(!document.hidden)scheduleReload({force:surfaceStale});
 });
 
 const consoleView=$('#console-view');
@@ -349,13 +469,17 @@ if(consoleView){
       clearPoll();
       organizationId='';
       attentionEtag='';
+      lastAttentionFingerprint='';
       hasLoaded=false;
+      surfaceStale=false;
       setSyncStatus('paused','Paused','Sign in to resume live owner attention');
     }else{
+      renderAlertControl();
       scheduleReload({force:true});
     }
   }).observe(consoleView,{attributes:true,attributeFilter:['class']});
 }
+renderAlertControl();
 observeCommandList();
 if(consoleView&&!consoleView.classList.contains('hidden'))scheduleReload({force:true});
 })();
