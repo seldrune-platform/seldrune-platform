@@ -3,6 +3,8 @@ def test_owner_console_serves_action_inbox_assets(client) -> None:
     assert page.status_code == 200
     assert 'id="action-inbox"' in page.text
     assert 'href="#action-inbox"' in page.text
+    assert 'id="attention-sync"' in page.text
+    assert "Live attention will poll every 30 seconds" in page.text
     assert "/console-assets/console-action-inbox.css" in page.text
     assert "/console-assets/console-action-inbox.js" in page.text
     assert "Complete governed command history" in page.text
@@ -13,6 +15,9 @@ def test_owner_console_serves_action_inbox_assets(client) -> None:
     assert ".action-inbox-critical" in stylesheet.text
     assert ".action-inbox-review" in stylesheet.text
     assert ".action-inbox-approval" in stylesheet.text
+    assert ".attention-sync-live" in stylesheet.text
+    assert ".attention-sync-paused" in stylesheet.text
+    assert ".attention-sync-error" in stylesheet.text
     assert "prefers-reduced-motion:reduce" in stylesheet.text
 
 
@@ -27,6 +32,19 @@ def test_action_inbox_uses_server_ranked_attention(client) -> None:
     assert "renderAllCommands" in script.text
     assert "commandListMatches" in script.text
     assert "dataset.action" in script.text
+
+
+def test_action_inbox_live_polling_uses_conditional_snapshot(client) -> None:
+    script = client.get("/console-assets/console-action-inbox.js")
+    assert script.status_code == 200
+    assert "const POLL_INTERVAL_MS=30000" in script.text
+    assert "/owner-attention/snapshot?limit=1" in script.text
+    assert "If-None-Match" in script.text
+    assert "response.status===304" in script.text
+    assert "document.hidden" in script.text
+    assert "visibilitychange" in script.text
+    assert "Keeping the last good owner-attention view" in script.text
+    assert "schedulePoll()" in script.text
 
 
 def test_action_inbox_is_navigation_and_review_surface(client) -> None:
