@@ -182,3 +182,10 @@ def test_strategy_review_controls_are_served(client) -> None:
     assert "Reviewed snapshot" in script.text
     assert "Stale review drift" in script.text
     assert "review_drift" in script.text
+
+
+def test_owner_console_links_to_executive_brief_review_drift(client) -> None:
+    console = client.get("/console")
+    assert console.status_code == 200
+    assert "/console-assets/executive-brief.html" in console.text
+    assert "Executive Brief / Review Drift" in console.text
