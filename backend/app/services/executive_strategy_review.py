@@ -201,7 +201,9 @@ def _review_state(
     )
     current = strategy_current and advisory_current
     stale_reason = None
-    if not strategy_current:
+    if not strategy_current and not advisory_current:
+        stale_reason = "strategy_and_material_advisory_evidence_changed"
+    elif not strategy_current:
         stale_reason = "strategy_evidence_changed"
     elif not advisory_current:
         stale_reason = "material_advisory_evidence_changed"
@@ -249,6 +251,7 @@ def build_executive_strategy_reviews(
     reviewed = 0
     pending = 0
     stale = 0
+    strategy_drift_stale = 0
     material_drift_stale = 0
     accepted_selected = 0
     accepted_recommended = 0
@@ -265,7 +268,12 @@ def build_executive_strategy_reviews(
             pending += 1
         elif review["status"] == "stale":
             stale += 1
-            if review["stale_reason"] == "material_advisory_evidence_changed":
+            if review["stale_reason"] in {
+                "strategy_evidence_changed",
+                "strategy_and_material_advisory_evidence_changed",
+            }:
+                strategy_drift_stale += 1
+            if review["advisory_material_current"] is False:
                 material_drift_stale += 1
         elif review["status"] == "accepted_selected":
             accepted_selected += 1
@@ -279,6 +287,7 @@ def build_executive_strategy_reviews(
             "reviewed": reviewed,
             "pending": pending,
             "stale": stale,
+            "strategy_drift_stale": strategy_drift_stale,
             "material_drift_stale": material_drift_stale,
             "accepted_selected": accepted_selected,
             "accepted_recommended": accepted_recommended,
