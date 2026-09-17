@@ -59,12 +59,12 @@ def test_owner_attention_browser_alerts_are_explicit_opt_in(client) -> None:
     assert "Notification.requestPermission()" in script.text
     assert "seldruneOwnerAttentionAlerts" in script.text
     assert "localStorage.setItem" in script.text
-    assert "new Notification('Seldrune Owner Attention'" in script.text
+    assert "new Notification(envelope.title||'Seldrune Owner Attention'" in script.text
     assert "previousFingerprint" in script.text
     assert "previousFingerprint!==lastAttentionFingerprint" in script.text
-    assert "if(!alertsEnabled()||!document.hidden)return" in script.text
+    assert "if(!alertsEnabled()||!document.hidden||!envelope.has_attention)return" in script.text
     assert "surfaceStale=true" in script.text
-    assert "60s background watch" in script.text
+    assert "60s privacy-safe background watch" in script.text
 
 
 def test_action_inbox_is_navigation_and_review_surface(client) -> None:
