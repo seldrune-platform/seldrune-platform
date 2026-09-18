@@ -1,8 +1,8 @@
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class WorkerState(str, Enum):
+class WorkerState(StrEnum):
     READY = "ready"
     BUSY = "busy"
     DRAINING = "draining"
