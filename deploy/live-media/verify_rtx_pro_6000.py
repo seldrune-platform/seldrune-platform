@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import subprocess
 
-from services.live_media.capacity import estimate_session_capacity
+from services.live_media.capacity import DEFAULT_RTX_PRO_6000_CAPACITY
 from services.live_media.hardware_policy import DetectedHardware, admit_hardware
 from services.live_media.hardware_profiles import default_live_media_accelerator
 
@@ -26,7 +26,7 @@ def main() -> None:
     vram_gb = memory_mib / 1024
     profile = default_live_media_accelerator()
     detected = DetectedHardware(
-        device_name=name,
+        name=name,
         vram_gb=vram_gb,
         cuda_available=True,
         hardware_video_codec=True,
@@ -36,8 +36,11 @@ def main() -> None:
     print(f"VRAM: {vram_gb:.2f} GiB")
     print(f"Profile: {profile.key}")
     print(f"Admission: {admission}")
-    print(f"Planning session capacity: {estimate_session_capacity(vram_gb)}")
-    if not admission.admitted:
+    print(
+        "Planning session capacity: "
+        f"{DEFAULT_RTX_PRO_6000_CAPACITY.max_sessions(vram_gb)}"
+    )
+    if not admission.accepted:
         raise SystemExit("RTX PRO 6000 worker admission failed")
     print("SELD RUNE GPU WORKER: READY")
 
