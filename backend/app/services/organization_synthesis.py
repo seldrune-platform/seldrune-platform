@@ -13,11 +13,11 @@ class OrganizationUnitSpec:
 
 
 _BASE_UNITS = (
-    OrganizationUnitSpec("Research", "research", ("research",), "Discover evidence, constraints, and unknowns."),
-    OrganizationUnitSpec("Strategy & Analysis", "strategy-analysis", ("analysis",), "Evaluate options, risks, economics, and outcomes."),
-    OrganizationUnitSpec("Architecture", "architecture", ("architecture",), "Design the organization, systems, controls, and interfaces."),
-    OrganizationUnitSpec("Engineering", "engineering", ("engineering",), "Build verified technical artifacts and capabilities."),
-    OrganizationUnitSpec("Validation", "validation", ("validation",), "Independently test evidence, quality, safety, and acceptance criteria."),
+    OrganizationUnitSpec("Research", "research", ("research",),\n        "Discover evidence, constraints, and unknowns."),
+    OrganizationUnitSpec("Strategy & Analysis", "strategy-analysis", ("analysis",),\n        "Evaluate options, risks, economics, and outcomes."),
+    OrganizationUnitSpec("Architecture", "architecture", ("architecture",),\n        "Design the organization, systems, controls, and interfaces."),
+    OrganizationUnitSpec("Engineering", "engineering", ("engineering",),\n        "Build verified technical artifacts and capabilities."),
+    OrganizationUnitSpec("Validation", "validation", ("validation",),\n        "Independently test evidence, quality, safety, and acceptance criteria."),
 )
 
 _DOMAIN_HINTS = {
@@ -52,7 +52,7 @@ def synthesize_organization(objective: str) -> dict:
         raise ValueError("Objective is required")
     domains = infer_domain_factories(objective)
     units = [
-        {"name": unit.name, "slug": unit.slug, "capabilities": list(unit.capabilities), "purpose": unit.purpose}
+        {\n            "name": unit.name, "slug": unit.slug,\n            "capabilities": list(unit.capabilities), "purpose": unit.purpose,\n        }
         for unit in _BASE_UNITS
     ]
     for domain in domains:
@@ -60,7 +60,7 @@ def synthesize_organization(objective: str) -> dict:
             "name": f"{domain.replace('-', ' ').title()} Factory",
             "slug": f"factory-{_slug(domain)}",
             "capabilities": ["research", "analysis", "architecture", "engineering", "validation"],
-            "purpose": f"Compose domain-specialist work for the {domain} requirements of the objective.",
+            "purpose": (\n                f"Compose domain-specialist work for the {domain} requirements "\n                "of the objective."\n            ),
         })
     return {
         "version": "universal-org-v1",
