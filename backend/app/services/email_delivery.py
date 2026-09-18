@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from email.message import EmailMessage
 import smtplib
+import logging
 from urllib.parse import urlencode
 
 from backend.app.core.config import settings
+
+
+logger = logging.getLogger(__name__)
 
 
 class EmailDeliveryError(RuntimeError):
@@ -14,6 +18,32 @@ class EmailDeliveryError(RuntimeError):
 def verification_url(token: str) -> str:
     base = f"{settings.public_app_url.rstrip('/')}/verify-email"
     return f"{base}?{urlencode({'token': token})}"
+
+
+def _record_delivery_failure(kind: str, exc: BaseException) -> None:
+    # Deliberately exclude recipient addresses, message bodies, tokens, and SMTP
+    # credentials from telemetry. Operators still get a stable failure signal.
+    logger.error(
+        "outbound_email_delivery_failed",
+        extra={"email_kind": kind, "exception_type": type(exc).__name__},
+    )
+
+
+def _send_message(message: EmailMessage, *, kind: str) -> None:
+    try:
+        with smtplib.SMTP(
+            settings.smtp_host,
+            settings.smtp_port,
+            timeout=settings.smtp_timeout_seconds,
+        ) as smtp:
+            if settings.smtp_starttls:
+                smtp.starttls()
+            if settings.smtp_username and settings.smtp_password:
+                smtp.login(settings.smtp_username, settings.smtp_password)
+            smtp.send_message(message)
+    except (OSError, smtplib.SMTPException) as exc:
+        _record_delivery_failure(kind, exc)
+        raise EmailDeliveryError(f"{kind} email delivery failed") from exc
 
 
 def send_verification_email(email: str, token: str) -> bool:
@@ -35,19 +65,7 @@ def send_verification_email(email: str, token: str) -> bool:
         "If you did not request this, you can ignore this message."
     )
 
-    try:
-        with smtplib.SMTP(
-            settings.smtp_host,
-            settings.smtp_port,
-            timeout=settings.smtp_timeout_seconds,
-        ) as smtp:
-            if settings.smtp_starttls:
-                smtp.starttls()
-            if settings.smtp_username and settings.smtp_password:
-                smtp.login(settings.smtp_username, settings.smtp_password)
-            smtp.send_message(message)
-    except (OSError, smtplib.SMTPException) as exc:
-        raise EmailDeliveryError("Verification email delivery failed") from exc
+    _send_message(message, kind="verification")
     return True
 
 
@@ -71,17 +89,5 @@ def send_password_reset_email(email: str, token: str) -> bool:
         "If you did not request this, you can ignore this message."
     )
 
-    try:
-        with smtplib.SMTP(
-            settings.smtp_host,
-            settings.smtp_port,
-            timeout=settings.smtp_timeout_seconds,
-        ) as smtp:
-            if settings.smtp_starttls:
-                smtp.starttls()
-            if settings.smtp_username and settings.smtp_password:
-                smtp.login(settings.smtp_username, settings.smtp_password)
-            smtp.send_message(message)
-    except (OSError, smtplib.SMTPException) as exc:
-        raise EmailDeliveryError("Password reset email delivery failed") from exc
+    _send_message(message, kind="password_reset")
     return True
