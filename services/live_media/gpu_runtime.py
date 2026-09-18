@@ -1,9 +1,9 @@
 """Cloud GPU runtime contract and health/capacity model."""
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class RuntimeKind(str, Enum):
+class RuntimeKind(StrEnum):
     CUDA = "cuda"
     TENSORRT = "tensorrt"
     ONNX_CUDA = "onnx-cuda"
