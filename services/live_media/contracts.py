@@ -1,9 +1,8 @@
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 
 
-class ClientKind(str, Enum):
+class ClientKind(StrEnum):
     WEB = "web"
     ANDROID = "android"
     IOS = "ios"
@@ -24,9 +23,9 @@ class TransformRequest:
     session_id: str
     user_id: str
     client: ClientKind
-    face_profile_id: Optional[str] = None
-    voice_profile_id: Optional[str] = None
-    consent_token: Optional[str] = None
+    face_profile_id: str | None = None
+    voice_profile_id: str | None = None
+    consent_token: str | None = None
     capabilities: MediaCapabilities = field(default_factory=MediaCapabilities)
 
 
