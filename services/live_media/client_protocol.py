@@ -1,8 +1,8 @@
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class ClientCommand(str, Enum):
+class ClientCommand(StrEnum):
     START = "start"
     STOP = "stop"
     SET_FACE = "set_face"
