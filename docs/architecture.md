@@ -76,9 +76,16 @@ Status responses include non-secret release provenance when available and expose
 
 ## Current production-readiness priorities
 
-The v1.x core now has identity, organization governance, agent/tool/model controls, orchestration, audit/security monitoring, billing integrity, and deployment migration gates. The principal remaining production controls before broad external customer access are:
+The v1.x core now has identity, organization governance, agent/tool/model controls, orchestration, audit/security monitoring, billing integrity, deployment migration gates, one-time email verification and password/account recovery flows, and provider-based managed secret resolution including AWS Secrets Manager.
 
-1. email verification with a real outbound delivery provider,
-2. password/account recovery beyond MFA recovery codes,
-3. managed cloud secret-store integration,
-4. continued production observability, backup/recovery, and scaling validation as usage grows.
+### v1.4 roadmap — production resilience
+
+The next release phase focuses on proving operational resilience rather than adding another control-plane primitive:
+
+1. integrate a real outbound email delivery provider with delivery-failure observability for verification and recovery flows,
+2. automate PostgreSQL backup creation and document a tested restore procedure with explicit recovery objectives,
+3. extend production observability with actionable health, error, latency, and saturation signals while preserving secret-safe telemetry,
+4. validate scaling behavior and degraded-dependency recovery under representative load,
+5. keep lint, full tests, PostgreSQL migration smoke, and production startup/readiness smoke as mandatory release gates.
+
+Broad external customer access should remain gated on successful backup/restore validation and production observability evidence.
