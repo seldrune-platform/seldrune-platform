@@ -79,3 +79,38 @@ def test_expired_verification_token_is_rejected(session: Session) -> None:
     with pytest.raises(VerificationTokenError, match="expired"):
         consume_email_verification_token(session, issue.token)
     assert user.email_verified is False
+
+
+def test_delivery_failure_telemetry_excludes_sensitive_data(monkeypatch, caplog) -> None:
+    from backend.app.services import email_delivery
+
+    monkeypatch.setattr(email_delivery.settings, "smtp_host", "smtp.example.test")
+    monkeypatch.setattr(email_delivery.settings, "email_from_address", "noreply@example.test")
+
+    class FailingSMTP:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def starttls(self):
+            raise OSError("provider unavailable")
+
+    monkeypatch.setattr(email_delivery.smtplib, "SMTP", FailingSMTP)
+    token = "super-secret-verification-token"
+    recipient = "private-user@example.test"
+
+    with caplog.at_level("ERROR"), pytest.raises(email_delivery.EmailDeliveryError):
+        email_delivery.send_verification_email(recipient, token)
+
+    rendered = "\n".join(record.getMessage() for record in caplog.records)
+    assert "outbound_email_delivery_failed" in rendered
+    assert token not in rendered
+    assert recipient not in rendered
+    assert "smtp.example.test" not in rendered
+    assert any(getattr(record, "email_kind", None) == "verification" for record in caplog.records)
+    assert any(getattr(record, "exception_type", None) == "OSError" for record in caplog.records)
