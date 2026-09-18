@@ -2,32 +2,39 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
+
 class ClientKind(str, Enum):
-    WEB="web"; ANDROID="android"; IOS="ios"; DESKTOP="desktop"
+    WEB = "web"
+    ANDROID = "android"
+    IOS = "ios"
+    DESKTOP = "desktop"
+
 
 @dataclass(frozen=True)
 class MediaCapabilities:
-    max_width:int=1280
-    max_height:int=720
-    max_fps:int=30
-    audio:bool=True
-    video:bool=True
+    max_width: int = 1280
+    max_height: int = 720
+    max_fps: int = 30
+    audio: bool = True
+    video: bool = True
+
 
 @dataclass(frozen=True)
 class TransformRequest:
-    session_id:str
-    user_id:str
-    client:ClientKind
-    face_profile_id:Optional[str]=None
-    voice_profile_id:Optional[str]=None
-    consent_token:Optional[str]=None
-    capabilities:MediaCapabilities=field(default_factory=MediaCapabilities)
+    session_id: str
+    user_id: str
+    client: ClientKind
+    face_profile_id: Optional[str] = None
+    voice_profile_id: Optional[str] = None
+    consent_token: Optional[str] = None
+    capabilities: MediaCapabilities = field(default_factory=MediaCapabilities)
+
 
 @dataclass(frozen=True)
 class SessionPlan:
-    face_enabled:bool
-    voice_enabled:bool
-    width:int
-    height:int
-    fps:int
-    synthetic_media_indicator:bool=True
+    face_enabled: bool
+    voice_enabled: bool
+    width: int
+    height: int
+    fps: int
+    synthetic_media_indicator: bool = True
