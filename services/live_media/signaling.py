@@ -1,9 +1,9 @@
 """Authenticated signaling state machine for WebRTC session negotiation."""
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 
-class SignalState(str, Enum):
+class SignalState(StrEnum):
     NEW = "new"
     OFFERED = "offered"
     CONNECTED = "connected"
