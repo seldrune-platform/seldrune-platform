@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from time import monotonic
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 from .processors import MediaFrame
 
