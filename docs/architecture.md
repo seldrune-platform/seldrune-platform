@@ -89,3 +89,39 @@ The next release phase focuses on proving operational resilience rather than add
 5. keep lint, full tests, PostgreSQL migration smoke, and production startup/readiness smoke as mandatory release gates.
 
 Broad external customer access should remain gated on successful backup/restore validation and production observability evidence.
+
+## Universal Organization OS north star
+
+Seldrune is a universal AI-native organization operating system, not a domain-specific application. Domain factories such as software, automation, healthcare, research, business, talent, infrastructure, and game production are dynamically composed capabilities of the same organization kernel.
+
+The target execution loop is:
+
+1. accept an owner objective and determine measurable outcomes and constraints,
+2. research unknown requirements and retrieve reusable organizational playbooks,
+3. synthesize a temporary or durable organization graph of directors, specialist teams, agents, humans, tools, models, vendors, and infrastructure,
+4. decompose the objective into dependency-aware work and execute safe independent work in parallel,
+5. acquire or build missing tools/capabilities in isolated environments and register them only after verification,
+6. continuously verify outputs with evidence, critics, tests, policy gates, budgets, and approval requirements,
+7. deploy or operate verified deliverables through governed integrations,
+8. recover from failures, measure outcomes, consolidate successful playbooks, and reuse learned capabilities.
+
+### Universal factories
+
+The kernel may instantiate Software, Automation, R&D, Business, Operations, Talent, Growth, Venture, Infrastructure, Creative/Game, and new domain factories discovered at runtime. Factories are organizational templates rather than hard-coded limits on what Seldrune can pursue.
+
+### Self-expanding capability loop
+
+When an objective requires an unavailable capability, Seldrune should research the requirement, identify suitable models/tools/APIs or implementation paths, create the missing capability in a sandbox, test and security-review it, register the verified capability, resume the blocked objective, and record evidence and a reusable playbook. Unknown capability must never be treated as successful capability merely because a model claims it exists.
+
+### Development priorities after v1.4 resilience
+
+1. hierarchical organization synthesis and recursive delegation,
+2. dependency-aware parallel orchestration with bounded concurrency and budgets,
+3. sandboxed tool/capability construction and verification,
+4. software and automation factories as the first end-to-end production benchmarks,
+5. human/vendor/workforce routing for objectives requiring real-world execution,
+6. outcome-driven learning, playbook promotion, and capability evaluation,
+7. elastic cloud/GPU worker scheduling and cost-aware execution,
+8. domain-factory generation without coupling the core OS to any single industry.
+
+Consequential production, financial, employment, security, and legal actions remain approval-gated even when planning and preparation are autonomous.
