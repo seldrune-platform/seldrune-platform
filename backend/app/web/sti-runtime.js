@@ -11,6 +11,12 @@
     q('#sti-runtime-source').textContent =
       'Measured from ' + (data.source || 'durable-run-store') + ' · no simulated activity';
 
+    const forge = data.forge || {};
+    q('#forge-queued').textContent = forge.queued ?? 0;
+    q('#forge-running').textContent = forge.running ?? 0;
+    q('#forge-verified').textContent = forge.verified ?? 0;
+    q('#forge-failed').textContent = forge.failed ?? 0;
+
     const list = q('#sti-run-list');
     list.replaceChildren();
     const runs = data.recent || [];
