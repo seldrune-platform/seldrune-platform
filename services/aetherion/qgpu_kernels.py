@@ -24,7 +24,11 @@ class KernelReceipt:
     hardware_benchmark: bool = False
 
 
-def run_kernel(kind: KernelKind, left: tuple[float, ...], right: tuple[float, ...]) -> KernelReceipt:
+def run_kernel(
+    kind: KernelKind,
+    left: tuple[float, ...],
+    right: tuple[float, ...],
+) -> KernelReceipt:
     if len(left) != len(right):
         raise ValueError("kernel inputs must have equal length")
     if kind is KernelKind.VECTOR_ADD:
