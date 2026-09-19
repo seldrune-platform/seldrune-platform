@@ -26,7 +26,11 @@ def test_pyvirtualcam_sink_and_runtime_evidence(monkeypatch):
     module = types.SimpleNamespace(Camera=FakeCamera)
     monkeypatch.setitem(sys.modules, "pyvirtualcam", module)
     sink = PyVirtualCameraSink().open()
-    frame = object()
+    class Frame:
+        shape = (256, 256, 3)
+        dtype = "uint8"
+
+    frame = Frame()
     receipt = asyncio.run(prove_virtual_camera_delivery(sink, frame))
     assert receipt.state == "succeeded"
     assert receipt.virtual_camera_connected is True
