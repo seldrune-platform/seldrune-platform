@@ -6,7 +6,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
-from services.live_media.face_dataset import DatasetSplit, IdentityRecord
+from services.live_media.face_dataset import DatasetSplit
 from services.live_media.face_tensor_batches import FaceTrainingSample
 from services.live_media.face_training_bundle import FaceTrainingBundle
 
