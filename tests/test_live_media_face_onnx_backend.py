@@ -8,9 +8,13 @@ from services.live_media.face_onnx_backend import (
     AuthorizedReferenceProfile,
     LiveOnnxFaceInferenceBackend,
     OnnxFaceTransformBackend,
+    load_live_onnx_face_backend,
 )
 from services.live_media.face_onnx_loader import LoadedFaceModel
+from services.live_media.model_adapters import AuthorizedFaceAdapter
+from services.live_media.pipeline import LivePipeline
 from services.live_media.processors import MediaFrame
+from services.live_media.processors import PassthroughAudioProcessor
 
 
 class Codec:
@@ -79,3 +83,44 @@ def test_profile_requires_authorization_and_disclosure() -> None:
         AuthorizedReferenceProfile("profile", b"reference", False, True).validate()
     with pytest.raises(ValueError, match="indicator"):
         AuthorizedReferenceProfile("profile", b"reference", True, False).validate()
+
+
+def test_factory_connects_verified_model_to_live_pipeline(monkeypatch, tmp_path) -> None:
+    artifact = tmp_path / "face.onnx"
+    artifact.write_bytes(b"verified-model")
+    expected_sha = "b" * 64
+    load_call = {}
+
+    def fake_load(path, *, expected_sha256, prefer_cuda):
+        load_call.update(
+            path=path,
+            expected_sha256=expected_sha256,
+            prefer_cuda=prefer_cuda,
+        )
+        return Session(), _model()
+
+    monkeypatch.setattr(
+        "services.live_media.face_onnx_backend.load_face_onnx",
+        fake_load,
+    )
+    backend = load_live_onnx_face_backend(
+        artifact,
+        expected_sha256=expected_sha,
+        codec=Codec(),
+        profiles=(_profile(),),
+    )
+    pipeline = LivePipeline(
+        video=AuthorizedFaceAdapter(backend),
+        audio=PassthroughAudioProcessor(),
+        face_profile_id="owner-profile",
+    )
+
+    output = asyncio.run(pipeline.video_frame(MediaFrame(b"live-frame", 456)))
+
+    assert output.payload.startswith(b"onnx-output:")
+    assert output.timestamp_ms == 456
+    assert load_call == {
+        "path": artifact,
+        "expected_sha256": expected_sha,
+        "prefer_cuda": True,
+    }
