@@ -14,7 +14,14 @@ EncodeAudioFrame = Callable[[MediaFrame, object], object]
 class LiveShiftAudioTrack:
     kind = "audio"
 
-    def __init__(self, source_track: object, pipeline: LivePipeline, *, decode_frame: DecodeAudioFrame, encode_frame: EncodeAudioFrame) -> None:
+    def __init__(
+        self,
+        source_track: object,
+        pipeline: LivePipeline,
+        *,
+        decode_frame: DecodeAudioFrame,
+        encode_frame: EncodeAudioFrame,
+    ) -> None:
         self._source_track = source_track
         self._pipeline = pipeline
         self._decode_frame = decode_frame
@@ -27,11 +34,22 @@ class LiveShiftAudioTrack:
         return self._encode_frame(transformed, source)
 
 
-def _build_real_aiortc_audio_track(source_track: object, pipeline: LivePipeline, *, decode_frame: DecodeAudioFrame, encode_frame: EncodeAudioFrame) -> object:
+def _build_real_aiortc_audio_track(
+    source_track: object,
+    pipeline: LivePipeline,
+    *,
+    decode_frame: DecodeAudioFrame,
+    encode_frame: EncodeAudioFrame,
+) -> object:
     try:
         from aiortc import MediaStreamTrack
     except ImportError:
-        return LiveShiftAudioTrack(source_track, pipeline, decode_frame=decode_frame, encode_frame=encode_frame)
+        return LiveShiftAudioTrack(
+            source_track,
+            pipeline,
+            decode_frame=decode_frame,
+            encode_frame=encode_frame,
+        )
 
     class _AiortcLiveShiftAudioTrack(MediaStreamTrack):
         kind = "audio"
@@ -48,7 +66,19 @@ def _build_real_aiortc_audio_track(source_track: object, pipeline: LivePipeline,
     return _AiortcLiveShiftAudioTrack()
 
 
-def attach_audio_track(peer: object, source_track: object, pipeline: LivePipeline, *, decode_frame: DecodeAudioFrame, encode_frame: EncodeAudioFrame) -> object:
-    track = _build_real_aiortc_audio_track(source_track, pipeline, decode_frame=decode_frame, encode_frame=encode_frame)
+def attach_audio_track(
+    peer: object,
+    source_track: object,
+    pipeline: LivePipeline,
+    *,
+    decode_frame: DecodeAudioFrame,
+    encode_frame: EncodeAudioFrame,
+) -> object:
+    track = _build_real_aiortc_audio_track(
+        source_track,
+        pipeline,
+        decode_frame=decode_frame,
+        encode_frame=encode_frame,
+    )
     peer.addTrack(track)
     return track
