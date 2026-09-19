@@ -22,7 +22,11 @@ class ExperimentResult:
     hardware_benchmark: bool = False
 
 
-def _run(strategy: str, work: Callable[[], bytes], avoided: int = 0) -> ExperimentResult:
+def _run(
+    strategy: str,
+    work: Callable[[], bytes],
+    avoided: int = 0,
+) -> ExperimentResult:
     started = time.perf_counter_ns()
     output = work()
     elapsed = time.perf_counter_ns() - started
@@ -45,7 +49,11 @@ def temporal_delta(previous: bytes, current: bytes) -> ExperimentResult:
     return _run("temporal-delta-execution", work, unchanged)
 
 
-def predictive_reuse(cache: dict[str, bytes], key: str, compute: Callable[[], bytes]) -> ExperimentResult:
+def predictive_reuse(
+    cache: dict[str, bytes],
+    key: str,
+    compute: Callable[[], bytes],
+) -> ExperimentResult:
     hit = key in cache
 
     def work() -> bytes:
