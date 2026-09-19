@@ -67,3 +67,26 @@ def test_loader_can_force_cpu_preference(tmp_path):
         _, loaded = load_face_onnx(path, expected_sha256=expected, prefer_cuda=False)
 
     assert loaded.providers == ("CPUExecutionProvider",)
+
+
+class _ReferenceSession(_Session):
+    def get_inputs(self):
+        return [SimpleNamespace(name="source_image"), SimpleNamespace(name="reference_image")]
+
+
+class _ReferenceOrt(_Ort):
+    InferenceSession = _ReferenceSession
+
+
+def test_loader_accepts_reference_conditioned_contract(tmp_path):
+    path = tmp_path / "face-reference.onnx"
+    payload = b"seldrune-face-v01-reference"
+    path.write_bytes(payload)
+    expected = sha256(payload).hexdigest()
+
+    with patch.dict("sys.modules", {"onnxruntime": _ReferenceOrt}):
+        _, loaded = load_face_onnx(path, expected_sha256=expected)
+
+    assert loaded.providers[0] == "CUDAExecutionProvider"
+    assert loaded.input_names == ("source_image", "reference_image")
+    assert loaded.output_names == ("transformed_image",)
