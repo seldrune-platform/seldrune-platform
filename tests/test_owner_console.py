@@ -42,6 +42,8 @@ def test_owner_console_is_served() -> None:
         assert "face-verification-receipt" in response.text
         assert "face-file-evidence" in response.text
         assert "face-verification-cli" in response.text
+        assert "face-frame-execution" in response.text
+        assert "face-stream-execution" in response.text
 
 
 def test_owner_console_assets_are_served() -> None:
