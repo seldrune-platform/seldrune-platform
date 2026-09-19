@@ -20,10 +20,18 @@ def sti_telemetry() -> dict[str, object]:
     store = _store()
     counts = store.state_counts()
     recent = store.recent()
+    forge = tuple(item for item in recent if item.run_id.startswith("forge:"))
     return {
         "system": "Seldrune STI — Aethelion Intelligence Foundry",
         "source": "durable-run-store",
         "counts": {state.value: counts[state] for state in RunState},
+        "forge": {
+            "queued": sum(item.state == RunState.QUEUED for item in forge),
+            "running": sum(item.state == RunState.RUNNING for item in forge),
+            "verified": sum(item.state == RunState.VERIFIED for item in forge),
+            "failed": sum(item.state == RunState.FAILED for item in forge),
+            "recent_count": len(forge),
+        },
         "recent": [
             {
                 "run_id": item.run_id,
