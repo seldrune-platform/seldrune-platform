@@ -9,7 +9,7 @@ from typing import Any
 from services.live_media.face_gpu_coordinator import coordinate_gpu_training
 from services.live_media.face_gpu_execution import GpuTrainingExecution
 from services.live_media.face_gpu_receipt_io import write_gpu_training_receipt
-from services.live_media.face_gpu_training_bridge import execute_admitted_training
+from services.live_media.face_gpu_training_bridge import execute_admitted_paired_training
 from services.live_media.face_preprocessing import preprocess_training_bundle
 from services.live_media.face_training_bundle import load_training_bundle
 
@@ -36,7 +36,7 @@ def run_training(
     optimizer: Any,
     batches: Any,
 ) -> dict[str, Any]:
-    result = execute_admitted_training(
+    result = execute_admitted_paired_training(
         execution,
         model,
         optimizer,
@@ -74,7 +74,7 @@ def main() -> int:
             "accelerator": execution.accelerator,
             "execution_digest": execution.digest(),
             "max_steps": execution.max_steps,
-            "training_bridge": "ready",
+            "training_bridge": "paired-reference-ready",
         }, sort_keys=True))
         return 0
 
