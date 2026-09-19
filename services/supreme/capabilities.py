@@ -23,16 +23,56 @@ class Capability:
 
 
 ALIEN_CAPABILITIES = (
-    Capability("time_fork", "Run competing future execution plans before commitment.", "verified_success_rate"),
-    Capability("dream_lab", "Use idle compute for bounded hypothesis and experiment generation.", "useful_discoveries_per_gpu_hour"),
-    Capability("skill_genesis", "Turn verified solutions into reusable executable skills.", "skill_reuse_success_rate"),
-    Capability("unknown_radar", "Detect unsupported conclusions and launch evidence acquisition.", "uncertainty_calibration_error"),
-    Capability("expert_civilization", "Spawn cooperating specialist populations around one objective.", "completed_work_per_wall_clock_hour"),
-    Capability("evolution_arena", "Test candidate system improvements in isolated benchmark tournaments.", "validated_improvement_rate"),
-    Capability("hyper_context", "Compress project state into retrievable working representations.", "retrieval_fidelity_per_byte"),
-    Capability("counterfactual_worlds", "Simulate alternative decisions and compare measurable outcomes.", "prediction_calibration"),
-    Capability("proof_mesh", "Require independent executable or evidence-based verification for critical claims.", "verified_error_escape_rate"),
-    Capability("compute_shapeshift", "Continuously map work to the cheapest capable compute path.", "successful_tasks_per_gpu_second"),
+    Capability(
+        "time_fork",
+        "Run competing future execution plans before commitment.",
+        "verified_success_rate",
+    ),
+    Capability(
+        "dream_lab",
+        "Use idle compute for bounded hypothesis and experiment generation.",
+        "useful_discoveries_per_gpu_hour",
+    ),
+    Capability(
+        "skill_genesis",
+        "Turn verified solutions into reusable executable skills.",
+        "skill_reuse_success_rate",
+    ),
+    Capability(
+        "unknown_radar",
+        "Detect unsupported conclusions and launch evidence acquisition.",
+        "uncertainty_calibration_error",
+    ),
+    Capability(
+        "expert_civilization",
+        "Spawn cooperating specialist populations around one objective.",
+        "completed_work_per_wall_clock_hour",
+    ),
+    Capability(
+        "evolution_arena",
+        "Test candidate system improvements in isolated benchmark tournaments.",
+        "validated_improvement_rate",
+    ),
+    Capability(
+        "hyper_context",
+        "Compress project state into retrievable working representations.",
+        "retrieval_fidelity_per_byte",
+    ),
+    Capability(
+        "counterfactual_worlds",
+        "Simulate alternative decisions and compare measurable outcomes.",
+        "prediction_calibration",
+    ),
+    Capability(
+        "proof_mesh",
+        "Require independent executable or evidence-based verification.",
+        "verified_error_escape_rate",
+    ),
+    Capability(
+        "compute_shapeshift",
+        "Continuously map work to the cheapest capable compute path.",
+        "successful_tasks_per_gpu_second",
+    ),
 )
 
 
