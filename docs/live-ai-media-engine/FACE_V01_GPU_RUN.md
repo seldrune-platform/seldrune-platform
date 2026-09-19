@@ -45,3 +45,16 @@ A real-output claim must now pass one receipt that binds ten gates to the same r
 The receipt is a verification contract only. Default thresholds are policy defaults,
 not evidence that any GPU run, checkpoint, ONNX export, frame transform, or live stream
 has occurred.
+
+## Verification command
+
+After an actual GPU run, ONNX export, transformed-frame measurement and continuous
+stream test have populated a receipt, verify it with:
+
+```bash
+python -m services.live_media.face_verify --receipt /evidence/face-verification.json
+```
+
+The command exits successfully and prints `"status": "verified"` only after the
+receipt schema and all proof gates validate. It does not generate measurements or turn
+placeholder digests into evidence.
