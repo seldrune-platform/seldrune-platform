@@ -10,7 +10,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from services.live_media.interfaces import MediaFrame
+from services.live_media.processors import MediaFrame
 
 HDTransform = Callable[[object, object], Awaitable[object]]
 ReferenceProvider = Callable[[str], object]
