@@ -22,7 +22,7 @@ def _identity(split: DatasetSplit = DatasetSplit.TRAIN) -> IdentityRecord:
     )
 
 
-def _sample(identity: IdentityRecord | None = None, capture_id: str = "capture-001") -> FaceTrainingSample:
+def _sample(\n    identity: IdentityRecord | None = None,\n    capture_id: str = "capture-001",\n) -> FaceTrainingSample:
     return FaceTrainingSample(
         identity=identity or _identity(),
         capture_id=capture_id,
