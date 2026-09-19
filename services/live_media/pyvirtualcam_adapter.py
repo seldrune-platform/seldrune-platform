@@ -47,7 +47,7 @@ class PyVirtualCameraSink:
         if camera is not None:
             camera.close()
 
-    def __enter__(self) -> "PyVirtualCameraSink":
+    def __enter__(self) -> PyVirtualCameraSink:
         return self.open()
 
     def __exit__(self, *_: object) -> None:
