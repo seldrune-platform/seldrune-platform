@@ -48,6 +48,8 @@
     q('#face-verification-cli').textContent = faceState(face.verification_cli);
     q('#face-frame-execution').textContent = faceState(face.single_frame_execution);
     q('#face-stream-execution').textContent = faceState(face.continuous_stream_execution);
+    q('#face-onnx-backend').textContent = faceState(face.onnx_cuda_backend);
+    q('#face-live-onnx-adapter').textContent = faceState(face.liveshift_onnx_adapter);
     q('#face-v01-gpu').textContent = face.gpu_training_completed
       ? 'GPU training verified'
       : 'GPU training pending';
