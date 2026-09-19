@@ -40,7 +40,15 @@ jobs:
         run: ruff check .
 
       - name: Test
-        run: pytest -q
+        run: pytest -q --junitxml=pytest-results.xml
+
+      - name: Upload pytest diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-diagnostics
+          path: pytest-results.xml
+          retention-days: 1
 
       - name: PostgreSQL migration smoke
         env:
