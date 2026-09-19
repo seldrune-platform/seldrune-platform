@@ -12,11 +12,7 @@ EncodeVideoFrame = Callable[[MediaFrame, object], Awaitable[object]]
 
 
 class LiveShiftVideoTrack:
-    """Transform inbound aiortc video frames through a Seldrune LivePipeline.
-
-    The wrapper intentionally avoids importing aiortc at module import time.
-    A deployment adapter can expose this object's recv() through VideoStreamTrack.
-    """
+    """Provider-neutral transform wrapper used by unit tests and adapters."""
 
     kind = "video"
 
@@ -40,6 +36,37 @@ class LiveShiftVideoTrack:
         return await self._encode_frame(transformed, source_av_frame)
 
 
+def _build_real_aiortc_track(
+    source_track: object,
+    pipeline: LivePipeline,
+    *,
+    decode_frame: DecodeVideoFrame,
+    encode_frame: EncodeVideoFrame,
+) -> object:
+    """Return a genuine aiortc MediaStreamTrack when aiortc is installed."""
+    try:
+        from aiortc import VideoStreamTrack
+    except ImportError:
+        return LiveShiftVideoTrack(
+            source_track,
+            pipeline,
+            decode_frame=decode_frame,
+            encode_frame=encode_frame,
+        )
+
+    class _AiortcLiveShiftVideoTrack(VideoStreamTrack):
+        def __init__(self) -> None:
+            super().__init__()
+
+        async def recv(self) -> object:
+            source_av_frame = await source_track.recv()
+            media_frame = await decode_frame(source_av_frame)
+            transformed = await pipeline.video_frame(media_frame)
+            return await encode_frame(transformed, source_av_frame)
+
+    return _AiortcLiveShiftVideoTrack()
+
+
 def attach_video_track(
     peer: object,
     source_track: object,
@@ -47,9 +74,9 @@ def attach_video_track(
     *,
     decode_frame: DecodeVideoFrame,
     encode_frame: EncodeVideoFrame,
-) -> LiveShiftVideoTrack:
+) -> object:
     """Attach a transformed outbound video track to an aiortc peer."""
-    track = LiveShiftVideoTrack(
+    track = _build_real_aiortc_track(
         source_track,
         pipeline,
         decode_frame=decode_frame,
