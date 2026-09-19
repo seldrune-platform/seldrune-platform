@@ -3,9 +3,6 @@ import asyncio
 import sys
 import types
 
-import numpy as np
-from PIL import Image
-
 from services.live_media import virtual_camera_device_proof as proof
 
 
@@ -24,12 +21,16 @@ class FakeCamera:
         pass
 
 
+class FakeArray:
+    def __init__(self):
+        self.shape = (16, 16, 3)
+
+
 def test_real_device_proof_contract_with_fake_backend(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "pyvirtualcam", types.SimpleNamespace(Camera=FakeCamera))
-    image_path = tmp_path / "frame.png"
-    Image.fromarray(np.zeros((16, 16, 3), dtype=np.uint8)).save(image_path)
+    monkeypatch.setattr(proof, "_load_rgb", lambda path, width, height: FakeArray())
     args = argparse.Namespace(
-        frame=image_path,
+        frame=tmp_path / "frame.png",
         receipt=tmp_path / "receipt.json",
         width=16,
         height=16,
