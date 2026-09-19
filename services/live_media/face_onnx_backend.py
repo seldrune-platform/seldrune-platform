@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
-from services.live_media.face_onnx_loader import LoadedFaceModel
+from services.live_media.face_onnx_loader import LoadedFaceModel, load_face_onnx
 from services.live_media.inference_backend import FaceInferenceBackend
 from services.live_media.processors import MediaFrame
 
@@ -93,3 +94,23 @@ class LiveOnnxFaceInferenceBackend(FaceInferenceBackend):
         if transformed == frame.payload:
             raise ValueError("ONNX Face backend returned an unchanged frame")
         return MediaFrame(transformed, frame.timestamp_ms)
+
+
+def load_live_onnx_face_backend(
+    artifact_path: str | Path,
+    *,
+    expected_sha256: str,
+    codec: FaceTensorCodec,
+    profiles: tuple[AuthorizedReferenceProfile, ...],
+    prefer_cuda: bool = True,
+) -> LiveOnnxFaceInferenceBackend:
+    """Verify an ONNX artifact and assemble the authorized LiveShift backend."""
+    session, model = load_face_onnx(
+        artifact_path,
+        expected_sha256=expected_sha256,
+        prefer_cuda=prefer_cuda,
+    )
+    return LiveOnnxFaceInferenceBackend(
+        OnnxFaceTransformBackend(session, model, codec),
+        profiles,
+    )
