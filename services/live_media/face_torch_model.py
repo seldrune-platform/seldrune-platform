@@ -18,7 +18,6 @@ def build_face_model(architecture: FaceArchitecture) -> Any:
     """Build an untrained Seldrune-owned identity-conditioned RGB network."""
     architecture.validate()
     try:
-        import torch
         from torch import nn
     except ImportError as exc:
         raise RuntimeError("PyTorch is required to build Seldrune Face v0.1") from exc
