@@ -45,11 +45,11 @@ def test_coordinate_gpu_training_emits_checkpoint_backed_receipt(monkeypatch) ->
         lambda value: runtime,
     )
     monkeypatch.setattr(
-        "services.live_media.face_gpu_coordinator.build_tensor_batches",
+        "services.live_media.face_gpu_coordinator.build_paired_batches",
         lambda samples, batch_size: [("image", "identity", "target")],
     )
     monkeypatch.setattr(
-        "services.live_media.face_gpu_coordinator.execute_admitted_training",
+        "services.live_media.face_gpu_coordinator.execute_admitted_paired_training",
         lambda *args, **kwargs: result,
     )
 
@@ -76,11 +76,11 @@ def test_coordinate_gpu_training_rejects_success_without_checkpoint(monkeypatch)
         lambda value: runtime,
     )
     monkeypatch.setattr(
-        "services.live_media.face_gpu_coordinator.build_tensor_batches",
+        "services.live_media.face_gpu_coordinator.build_paired_batches",
         lambda samples, batch_size: [("image", "identity", "target")],
     )
     monkeypatch.setattr(
-        "services.live_media.face_gpu_coordinator.execute_admitted_training",
+        "services.live_media.face_gpu_coordinator.execute_admitted_paired_training",
         lambda *args, **kwargs: result,
     )
 
@@ -109,11 +109,11 @@ def test_receipt_timestamps_are_timezone_aware(monkeypatch) -> None:
         lambda value: runtime,
     )
     monkeypatch.setattr(
-        "services.live_media.face_gpu_coordinator.build_tensor_batches",
+        "services.live_media.face_gpu_coordinator.build_paired_batches",
         lambda samples, batch_size: [("image", "identity", "target")],
     )
     monkeypatch.setattr(
-        "services.live_media.face_gpu_coordinator.execute_admitted_training",
+        "services.live_media.face_gpu_coordinator.execute_admitted_paired_training",
         lambda *args, **kwargs: result,
     )
 
