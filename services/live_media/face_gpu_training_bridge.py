@@ -64,36 +64,44 @@ def execute_admitted_paired_training(
     *,
     device: str = "cuda",
 ) -> TrainingLoopResult:
-    """Train source/reference pairs within the exact admitted execution limits."""
+    """Train source/reference pairs until the admitted max-step budget is exhausted."""
     if device != "cuda":
         raise ValueError("GPU worker training requires CUDA")
     job = execution_to_training_job(execution)
+
+    # Materialize the rights-cleared batches once, then run additional epochs over
+    # that exact admitted set until max_steps. This prevents a small dataset from
+    # terminating before the first required checkpoint.
+    admitted_batches = tuple(batches)
+    if not admitted_batches:
+        raise ValueError("paired training requires at least one admitted batch")
+
     checkpoints = []
     last = None
     completed = 0
-    for batch in batches:
-        if completed >= job.config.max_steps:
-            break
-        completed += 1
-        last = paired_train_step(
-            model,
-            batch,
-            optimizer,
-            device=device,
-            precision=execution.precision,
-        )
-        if completed % job.config.checkpoint_every == 0 or completed == job.config.max_steps:
-            checkpoints.append(
-                write_checkpoint(
-                    model,
-                    optimizer,
-                    job,
-                    step=completed,
-                    output_dir=Path(execution.output_dir),
-                )
+    while completed < job.config.max_steps:
+        for batch in admitted_batches:
+            if completed >= job.config.max_steps:
+                break
+            completed += 1
+            last = paired_train_step(
+                model,
+                batch,
+                optimizer,
+                device=device,
+                precision=execution.precision,
             )
-    if last is None:
-        raise ValueError("paired training requires at least one admitted batch")
+            if completed % job.config.checkpoint_every == 0 or completed == job.config.max_steps:
+                checkpoints.append(
+                    write_checkpoint(
+                        model,
+                        optimizer,
+                        job,
+                        step=completed,
+                        output_dir=Path(execution.output_dir),
+                    )
+                )
+
     return TrainingLoopResult(
         completed_steps=completed,
         last_loss=last.loss,
