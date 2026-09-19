@@ -11,10 +11,10 @@ import hashlib
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 
 
-class ComputeClass(str, Enum):
+class ComputeClass(StrEnum):
     RTX_PRO_6000 = "rtx-pro-6000"
     AETHERION_VIRTUAL = "aetherion-virtual"
 
