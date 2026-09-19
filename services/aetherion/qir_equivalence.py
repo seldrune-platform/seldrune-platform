@@ -26,6 +26,8 @@ def reduce_common_subexpressions(program: QIRProgram) -> QIRProgram:
 
     for op in program.operations:
         inputs = tuple(aliases.get(item, item) for item in op.inputs)
+        if op.opcode.value in {"add", "mul", "xor"}:
+            inputs = tuple(sorted(inputs))
         signature = (op.opcode, inputs, op.value)
         existing = signatures.get(signature)
         if existing is not None:
