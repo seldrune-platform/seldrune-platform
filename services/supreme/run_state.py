@@ -18,6 +18,7 @@ class RunRecord:
     state: RunState = RunState.QUEUED
     attempts: int = 0
     evidence: tuple[str, ...] = ()
+    error: str | None = None
 
 
 def start(record: RunRecord) -> RunRecord:
@@ -43,4 +44,33 @@ def verified(record: RunRecord, evidence: tuple[str, ...]) -> RunRecord:
         RunState.VERIFIED,
         record.attempts,
         evidence,
+    )
+
+
+def failed(record: RunRecord, error: str) -> RunRecord:
+    if record.state is not RunState.RUNNING:
+        raise ValueError("run must be running")
+    if not error.strip():
+        raise ValueError("error is required")
+    return RunRecord(
+        record.run_id,
+        record.task_id,
+        RunState.FAILED,
+        record.attempts,
+        record.evidence,
+        error,
+    )
+
+
+def retry(record: RunRecord, max_attempts: int = 3) -> RunRecord:
+    if record.state is not RunState.FAILED:
+        raise ValueError("only failed runs can retry")
+    if record.attempts >= max_attempts:
+        raise ValueError("maximum attempts reached")
+    return RunRecord(
+        record.run_id,
+        record.task_id,
+        RunState.QUEUED,
+        record.attempts,
+        record.evidence,
     )
