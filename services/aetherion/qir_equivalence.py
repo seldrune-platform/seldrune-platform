@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .qgpu_model import EvidenceLevel
-from .qir import QIROp, QIROpcode, QIRProgram, execute
+from .qir import QIROp, QIRProgram, execute
 
 
 @dataclass(frozen=True)
