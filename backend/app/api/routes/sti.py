@@ -66,6 +66,8 @@ def sti_telemetry() -> dict[str, object]:
             "verification_cli": "ready",
             "single_frame_execution": "ready",
             "continuous_stream_execution": "ready",
+            "onnx_cuda_backend": "ready",
+            "liveshift_onnx_adapter": "ready",
             "gpu_training_completed": True,
             "checkpoint_verified": True,
             "onnx_export_verified": True,
