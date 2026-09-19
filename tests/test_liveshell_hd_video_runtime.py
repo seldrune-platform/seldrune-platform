@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from services.live_media.interfaces import MediaFrame
+from services.live_media.processors import MediaFrame
 from services.liveshell.hd_video_runtime import LiveShellHDVideoProcessor
 
 
