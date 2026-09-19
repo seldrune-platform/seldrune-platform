@@ -29,6 +29,24 @@
     q('#liveshift-note').textContent =
       liveshift.note || 'Measured runtime detection · product milestones remain locked until verified.';
 
+    const face = data.face_v01 || {};
+    const faceState = value => String(value || 'pending').toUpperCase();
+    q('#face-v01-version').textContent = face.model_version || 'seldrune-face-v0.1';
+    q('#face-dataset').textContent = faceState(face.dataset_contract);
+    q('#face-manifest').textContent = faceState(face.manifest_validation);
+    q('#face-architecture').textContent = faceState(face.architecture_contract);
+    q('#face-pytorch').textContent = faceState(face.pytorch_model);
+    q('#face-cuda-step').textContent = faceState(face.cuda_training_step);
+    q('#face-checkpoint').textContent = faceState(face.checkpoint_writer);
+    q('#face-multistep').textContent = faceState(face.multistep_training);
+    q('#face-onnx-export').textContent = faceState(face.onnx_export);
+    q('#face-loader').textContent = faceState(face.liveshift_loader);
+    q('#face-v01-gpu').textContent = face.gpu_training_completed
+      ? 'GPU training verified'
+      : 'GPU training pending';
+    q('#face-v01-note').textContent =
+      face.note || 'Measured from STI telemetry · trained weights are never implied.';
+
     const forge = data.forge || {};
     q('#forge-queued').textContent = forge.queued ?? 0;
     q('#forge-running').textContent = forge.running ?? 0;
