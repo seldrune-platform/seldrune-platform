@@ -6,8 +6,9 @@ model quality and device readiness evidence-gated.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Protocol
+from typing import Protocol
 
 from services.live_media.interfaces import MediaFrame
 
