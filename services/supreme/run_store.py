@@ -47,6 +47,41 @@ class RunStore:
                 ),
             )
 
+    def claim_queued(self, limit: int = 8) -> tuple[RunRecord, ...]:
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            rows = db.execute(
+                """SELECT run_id, task_id, attempts, evidence, error
+                FROM supreme_runs WHERE state = ?
+                ORDER BY run_id LIMIT ?""",
+                (RunState.QUEUED.value, limit),
+            ).fetchall()
+            claimed = []
+            for run_id, task_id, attempts, evidence, error in rows:
+                record = RunRecord(
+                    run_id,
+                    task_id,
+                    RunState.RUNNING,
+                    attempts + 1,
+                    tuple(json.loads(evidence)),
+                    error,
+                )
+                db.execute(
+                    """UPDATE supreme_runs
+                    SET state = ?, attempts = ?
+                    WHERE run_id = ? AND state = ?""",
+                    (
+                        RunState.RUNNING.value,
+                        record.attempts,
+                        run_id,
+                        RunState.QUEUED.value,
+                    ),
+                )
+                claimed.append(record)
+            return tuple(claimed)
+
     def load(self, run_id: str) -> RunRecord | None:
         with self._connect() as db:
             row = db.execute(
