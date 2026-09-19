@@ -105,7 +105,7 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
                     audio_track=server_tracks["audio"],
                     pipeline=pipeline,
                 )
-                setattr(server, "_seldrune_av_attached", True)
+                server._seldrune_av_attached = True
 
     @client.on("track")
     def on_client_track(track):
