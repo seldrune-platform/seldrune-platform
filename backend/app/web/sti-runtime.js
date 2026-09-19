@@ -41,6 +41,11 @@
     q('#face-multistep').textContent = faceState(face.multistep_training);
     q('#face-onnx-export').textContent = faceState(face.onnx_export);
     q('#face-loader').textContent = faceState(face.liveshift_loader);
+    q('#face-reference').textContent = faceState(face.reference_encoder);
+    q('#face-paired-training').textContent = faceState(face.paired_gpu_training);
+    q('#face-verification-receipt').textContent = faceState(face.verification_receipt);
+    q('#face-file-evidence').textContent = faceState(face.file_evidence_collector);
+    q('#face-verification-cli').textContent = faceState(face.verification_cli);
     q('#face-v01-gpu').textContent = face.gpu_training_completed
       ? 'GPU training verified'
       : 'GPU training pending';
