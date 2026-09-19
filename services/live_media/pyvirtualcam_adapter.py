@@ -35,9 +35,19 @@ class PyVirtualCameraSink:
         )
         return self
 
+    def _validate_frame(self, frame: object) -> None:
+        shape = getattr(frame, "shape", None)
+        expected = (self.height, self.width, 3)
+        if shape != expected:
+            raise ValueError(f"virtual-camera frame shape must be {expected}, got {shape}")
+        dtype = getattr(frame, "dtype", None)
+        if dtype is not None and str(dtype) != "uint8":
+            raise ValueError(f"virtual-camera frame dtype must be uint8, got {dtype}")
+
     async def send(self, frame: object) -> None:
         if self._camera is None:
             raise RuntimeError("virtual camera is not open")
+        self._validate_frame(frame)
         self._camera.send(frame)
         self._camera.sleep_until_next_frame()
 
