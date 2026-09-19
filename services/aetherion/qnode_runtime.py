@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from .qgpu_model import EvidenceLevel
 from .qir import QIRProgram
 from .qir_fingerprint import program_fingerprint
-from .qir_parallelism import estimate_parallelism
 from .qir_pipeline_v2 import run_pipeline_v2
 from .qnode import QNodeRole
 from .qnode_consensus import ConsensusReceipt, verify_consensus
