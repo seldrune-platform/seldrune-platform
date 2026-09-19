@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.routes.agent_revisions import router as agent_revisions_router
 from backend.app.api.routes.agent_tasks import router as agent_tasks_router
+from backend.app.api.routes.aetherion import router as aetherion_router
 from backend.app.api.routes.audit import router as audit_router
 from backend.app.api.routes.auth import router as auth_router
 from backend.app.api.routes.billing import router as billing_router
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
     app.mount("/console-assets", StaticFiles(directory=WEB_ROOT), name="console-assets")
     for item in (
         status_router,
+        aetherion_router,
         sti_router,
         auth_router,
         email_verification_router,
