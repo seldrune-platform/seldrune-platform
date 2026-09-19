@@ -1,4 +1,5 @@
 from services.supreme.feedback_loop import failed_gaps, learning_objectives
+from services.supreme.skill_evolution import Skill
 from services.supreme.verifiers import threshold_check
 
 
@@ -20,7 +21,9 @@ def test_failed_checks_become_learning_gaps():
 
 def test_failed_checks_create_asee_objectives():
     checks = (threshold_check("quality", 0.5, 0.8, "artifact://quality"),)
-    objectives = learning_objectives("face-quality", checks)
+    skill = Skill("face-quality", "LiveShift face quality")
+    objectives = learning_objectives(skill, checks)
     assert len(objectives) == 1
     assert objectives[0].skill_id == "face-quality"
     assert "quality" in objectives[0].gap
+    assert "LiveShift face quality" in objectives[0].hypothesis
