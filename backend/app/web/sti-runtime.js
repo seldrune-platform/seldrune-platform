@@ -11,6 +11,24 @@
     q('#sti-runtime-source').textContent =
       'Measured from ' + (data.source || 'durable-run-store') + ' · no simulated activity';
 
+    const liveshift = data.liveshift || {};
+    const stateText = value => value ? 'READY' : 'PENDING';
+    q('#ls-webrtc').textContent = stateText(liveshift.webrtc_runtime);
+    q('#ls-cuda').textContent = stateText(liveshift.cuda_runtime);
+    q('#ls-onnx').textContent = stateText(liveshift.onnx_runtime);
+    q('#ls-tensorrt').textContent = stateText(liveshift.tensorrt_runtime);
+    q('#ls-face-model').textContent = stateText(liveshift.face_model_loaded);
+    q('#ls-first-frame').textContent = stateText(liveshift.first_frame_transformed);
+    q('#ls-live-return').textContent = stateText(liveshift.live_stream_returned);
+    q('#ls-camera').textContent = stateText(liveshift.virtual_camera_connected);
+    q('#liveshift-accelerator').textContent =
+      liveshift.accelerator_name || 'Accelerator profile unavailable';
+    q('#liveshift-vram').textContent = liveshift.preferred_vram_gb
+      ? ' · preferred ' + liveshift.preferred_vram_gb + ' GB VRAM'
+      : '';
+    q('#liveshift-note').textContent =
+      liveshift.note || 'Measured runtime detection · product milestones remain locked until verified.';
+
     const forge = data.forge || {};
     q('#forge-queued').textContent = forge.queued ?? 0;
     q('#forge-running').textContent = forge.running ?? 0;
