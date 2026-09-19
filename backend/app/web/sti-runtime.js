@@ -46,6 +46,8 @@
     q('#face-verification-receipt').textContent = faceState(face.verification_receipt);
     q('#face-file-evidence').textContent = faceState(face.file_evidence_collector);
     q('#face-verification-cli').textContent = faceState(face.verification_cli);
+    q('#face-frame-execution').textContent = faceState(face.single_frame_execution);
+    q('#face-stream-execution').textContent = faceState(face.continuous_stream_execution);
     q('#face-v01-gpu').textContent = face.gpu_training_completed
       ? 'GPU training verified'
       : 'GPU training pending';
