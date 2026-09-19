@@ -21,7 +21,7 @@ class PyVirtualCameraSink:
     def connected(self) -> bool:
         return self._camera is not None
 
-    def open(self) -> "PyVirtualCameraSink":
+    def open(self) -> PyVirtualCameraSink:
         try:
             import pyvirtualcam
         except ImportError as exc:
