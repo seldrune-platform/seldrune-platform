@@ -26,6 +26,7 @@ from backend.app.api.routes.secret_references import router as secret_references
 from backend.app.api.routes.security_events import router as security_events_router
 from backend.app.api.routes.sense import router as sense_router
 from backend.app.api.routes.status import router as status_router
+from backend.app.api.routes.sti import router as sti_router
 from backend.app.api.routes.tools import router as tools_router
 from backend.app.api.routes.webhooks import router as webhooks_router
 from backend.app.core.config import settings
@@ -44,6 +45,7 @@ def create_app() -> FastAPI:
     app.mount("/console-assets", StaticFiles(directory=WEB_ROOT), name="console-assets")
     for item in (
         status_router,
+        sti_router,
         auth_router,
         email_verification_router,
         mfa_router,
