@@ -1,66 +1,90 @@
-"""Aetherion experimental execution planner.
+"""Aetherion QGPU hypothetical architecture model.
 
-Ranks software execution plans from observable workload properties. Planner
-scores are decision heuristics, never hardware benchmark results.
+This module formalizes an invented universal quantum-cloud GPU target. It is a
+research model, not evidence that quantum GPU hardware exists.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
+
+
+class EvidenceLevel(StrEnum):
+    HYPOTHETICAL = "hypothetical"
+    EXPERIMENTAL = "experimental"
+    VERIFIED = "verified"
+
+
+class WorkloadDomain(StrEnum):
+    AI = "ai"
+    GRAPHICS = "graphics"
+    SIMULATION = "simulation"
+    MEDIA = "media"
+    SCIENTIFIC = "scientific"
+    GENERAL_PARALLEL = "general-parallel"
 
 
 @dataclass(frozen=True)
-class WorkloadProfile:
-    temporal_similarity: float
-    sparsity: float
-    locality: float
-    parallel_fraction: float
-    fusion_opportunity: float
+class QGPUWorkload:
+    domain: WorkloadDomain
+    state_space: int
+    dependency_edges: int
+    reusable_fraction: float
+    sparse_fraction: float
 
     def validate(self) -> None:
-        for value in self.__dict__.values():
-            if not 0.0 <= value <= 1.0:
-                raise ValueError("workload properties must be normalized to 0..1")
+        if self.state_space < 1 or self.dependency_edges < 0:
+            raise ValueError("invalid workload graph")
+        if not 0 <= self.reusable_fraction <= 1:
+            raise ValueError("reusable_fraction must be normalized")
+        if not 0 <= self.sparse_fraction <= 1:
+            raise ValueError("sparse_fraction must be normalized")
 
 
 @dataclass(frozen=True)
-class ExecutionPlan:
-    strategies: tuple[str, ...]
-    heuristic_score: float
-    measured: bool = False
-    hardware_benchmark: bool = False
+class QuantumExecutionField:
+    candidate_states: int
+    reducible_states: int
+    surviving_states: int
+    evidence: EvidenceLevel = EvidenceLevel.HYPOTHETICAL
 
 
-def build_plan(profile: WorkloadProfile) -> ExecutionPlan:
-    profile.validate()
-    candidates = (
-        ("temporal-delta-execution", profile.temporal_similarity),
-        ("predictive-tensor-reuse", profile.temporal_similarity * profile.locality),
-        ("adaptive-sparse-routing", profile.sparsity),
-        ("distributed-memory-locality", profile.locality),
-        ("workload-specific-kernel-fusion", profile.fusion_opportunity),
-        ("speculative-parallel-branches", profile.parallel_fraction),
-        (
-            "quantum-inspired-schedule-search",
-            (profile.parallel_fraction + profile.fusion_opportunity) / 2,
-        ),
+@dataclass(frozen=True)
+class QGPUPlan:
+    domain: WorkloadDomain
+    qir_version: str
+    execution_field: QuantumExecutionField
+    engines: tuple[str, ...]
+    evidence: EvidenceLevel = EvidenceLevel.HYPOTHETICAL
+    physical_quantum_hardware_verified: bool = False
+
+
+def construct_execution_field(workload: QGPUWorkload) -> QuantumExecutionField:
+    workload.validate()
+    reducible_fraction = min(
+        1.0,
+        (workload.reusable_fraction + workload.sparse_fraction) / 2,
     )
-    ranked = sorted(candidates, key=lambda item: (-item[1], item[0]))
-    selected = tuple(name for name, score in ranked if score >= 0.5)
-    heuristic = sum(score for _, score in ranked[:3]) / 3
-    return ExecutionPlan(selected, round(heuristic, 6))
+    reducible = int(workload.state_space * reducible_fraction)
+    return QuantumExecutionField(
+        candidate_states=workload.state_space,
+        reducible_states=reducible,
+        surviving_states=workload.state_space - reducible,
+    )
 
 
-def live_media_profile(
-    *,
-    temporal_similarity: float,
-    sparsity: float,
-    locality: float,
-) -> WorkloadProfile:
-    return WorkloadProfile(
-        temporal_similarity=temporal_similarity,
-        sparsity=sparsity,
-        locality=locality,
-        parallel_fraction=0.8,
-        fusion_opportunity=0.8,
+def compile_qgpu_plan(workload: QGPUWorkload) -> QGPUPlan:
+    field = construct_execution_field(workload)
+    return QGPUPlan(
+        domain=workload.domain,
+        qir_version="qir-0.1-hypothesis",
+        execution_field=field,
+        engines=(
+            "qef-state-reduction",
+            "dependency-fabric",
+            "probabilistic-scheduler",
+            "universal-tensor-graphics-engine",
+            "q-memory",
+        ),
     )
