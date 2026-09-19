@@ -3,10 +3,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-torch = pytest.importorskip("torch")
-
 from services.live_media.face_dataset import DatasetSplit, IdentityRecord
 from services.live_media.face_tensor_batches import FaceTrainingSample, build_tensor_batches
+
+torch = pytest.importorskip("torch")
 
 
 def _identity(split: DatasetSplit = DatasetSplit.TRAIN) -> IdentityRecord:
@@ -22,7 +22,10 @@ def _identity(split: DatasetSplit = DatasetSplit.TRAIN) -> IdentityRecord:
     )
 
 
-def _sample(\n    identity: IdentityRecord | None = None,\n    capture_id: str = "capture-001",\n) -> FaceTrainingSample:
+def _sample(
+    identity: IdentityRecord | None = None,
+    capture_id: str = "capture-001",
+) -> FaceTrainingSample:
     return FaceTrainingSample(
         identity=identity or _identity(),
         capture_id=capture_id,
