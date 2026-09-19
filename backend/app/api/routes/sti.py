@@ -62,6 +62,8 @@ def sti_telemetry() -> dict[str, object]:
             "verification_receipt": "ready",
             "file_evidence_collector": "ready",
             "verification_cli": "ready",
+            "single_frame_execution": "ready",
+            "continuous_stream_execution": "ready",
             "gpu_training_completed": False,
             "note": "Code readiness only; no claim of trained weights or completed GPU training.",
         },
