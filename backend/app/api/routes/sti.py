@@ -56,7 +56,7 @@ def sti_telemetry() -> dict[str, object]:
             "checkpoint_writer": "ready",
             "multistep_training": "ready",
             "onnx_export": "ready",
-            "liveshift_loader": "pending",
+            "liveshift_loader": "ready",
             "gpu_training_completed": False,
             "note": "Code readiness only; no claim of trained weights or completed GPU training.",
         },
