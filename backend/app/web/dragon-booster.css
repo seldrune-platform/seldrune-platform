@@ -1,0 +1,84 @@
+/* Aethelion Dragon Booster — luxury high-performance Owner Console skin */
+:root{
+  --aethelion-gold:#f2d58a;
+  --aethelion-ember:#ff9b52;
+  --aethelion-obsidian:#030504;
+  --aethelion-jade:#49e6ad;
+}
+body{
+  background:
+    radial-gradient(circle at 72% 14%,rgba(255,155,82,.10),transparent 24%),
+    radial-gradient(circle at 18% 4%,rgba(242,213,138,.08),transparent 28%),
+    linear-gradient(145deg,#020403 0%,#06110d 44%,#090806 100%);
+}
+body::after{
+  right:-3vw;
+  top:2vh;
+  width:min(66vw,920px);
+  opacity:.30;
+  filter:
+    drop-shadow(0 0 18px rgba(242,213,138,.24))
+    drop-shadow(0 0 54px rgba(255,155,82,.12));
+}
+.app-shell::after{
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:-1;
+  pointer-events:none;
+  background:
+    radial-gradient(ellipse at 78% 38%,rgba(255,155,82,.08),transparent 18%),
+    radial-gradient(ellipse at 68% 52%,rgba(73,230,173,.06),transparent 25%),
+    linear-gradient(115deg,transparent 48%,rgba(242,213,138,.025) 50%,transparent 52%);
+  animation:aethelionBoost 9s ease-in-out infinite alternate;
+}
+.brand>span{
+  border-color:rgba(242,213,138,.58);
+  color:var(--aethelion-gold);
+  box-shadow:inset 0 0 24px rgba(242,213,138,.07),0 0 32px rgba(255,155,82,.10);
+}
+.brand small{color:rgba(242,213,138,.68);letter-spacing:.09em}
+.eyebrow{color:var(--aethelion-gold)!important;letter-spacing:.16em}
+.panel,.metrics article{
+  border-color:rgba(242,213,138,.14)!important;
+  background:
+    linear-gradient(145deg,rgba(10,25,19,.84),rgba(8,10,8,.82))!important;
+  box-shadow:
+    inset 0 1px rgba(255,255,255,.025),
+    0 22px 60px rgba(0,0,0,.28),
+    0 0 0 1px rgba(73,230,173,.025)!important;
+  backdrop-filter:blur(18px);
+}
+.panel:hover,.metrics article:hover{
+  border-color:rgba(242,213,138,.28)!important;
+  box-shadow:0 26px 70px rgba(0,0,0,.34),0 0 28px rgba(255,155,82,.045)!important;
+}
+button{
+  border-color:rgba(242,213,138,.28)!important;
+  background:linear-gradient(135deg,#173c30,#10271f 55%,#2b2416)!important;
+  box-shadow:0 12px 30px rgba(0,0,0,.24),inset 0 1px rgba(242,213,138,.12);
+}
+button:hover{transform:translateY(-1px);box-shadow:0 16px 38px rgba(0,0,0,.32),0 0 22px rgba(242,213,138,.08)}
+.runtime-status{border-color:rgba(242,213,138,.18)!important}
+.runtime-status>span{box-shadow:0 0 18px currentColor}
+header{position:relative}
+header::after{
+  content:"PARALLEL CREATION · PROOF MESH · FORGE · LIVESHIFT";
+  position:absolute;
+  right:0;
+  bottom:-15px;
+  font-size:9px;
+  letter-spacing:.16em;
+  color:rgba(242,213,138,.40);
+}
+@keyframes aethelionBoost{
+  from{filter:saturate(.92) brightness(.96)}
+  to{filter:saturate(1.12) brightness(1.05)}
+}
+@media (prefers-reduced-motion:reduce){
+  .app-shell::after{animation:none}
+}
+@media(max-width:760px){
+  body::after{width:92vw;right:-32vw;top:8vh;opacity:.18}
+  header::after{display:none}
+}
