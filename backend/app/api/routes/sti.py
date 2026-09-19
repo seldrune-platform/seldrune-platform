@@ -54,7 +54,7 @@ def sti_telemetry() -> dict[str, object]:
             "cuda_training_step": "ready",
             "checkpoint_evidence": "ready",
             "checkpoint_writer": "ready",
-            "multistep_training": "pending",
+            "multistep_training": "ready",
             "onnx_export": "pending",
             "liveshift_loader": "pending",
             "gpu_training_completed": False,
