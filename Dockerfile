@@ -4,6 +4,7 @@ WORKDIR /app
 RUN addgroup --system seldrune && adduser --system --ingroup seldrune seldrune
 COPY pyproject.toml README.md alembic.ini ./
 COPY backend ./backend
+COPY services ./services
 COPY migrations ./migrations
 RUN pip install --no-cache-dir .
 RUN chown -R seldrune:seldrune /app
