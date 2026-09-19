@@ -58,3 +58,14 @@ python -m services.live_media.face_verify --receipt /evidence/face-verification.
 The command exits successfully and prints `"status": "verified"` only after the
 receipt schema and all proof gates validate. It does not generate measurements or turn
 placeholder digests into evidence.
+
+## File-backed evidence collection
+
+The verification pipeline now hashes the actual checkpoint, ONNX model, input frame,
+transformed output frame and authorized reference image. Missing and empty files are
+rejected, identical input/output bytes are rejected, and measured authorization,
+identity, latency and stream values must pass the unified receipt before it can be
+written as verified evidence.
+
+This collector does not run inference or calculate identity similarity. Those values
+must come from the real GPU inference and benchmark stages.
