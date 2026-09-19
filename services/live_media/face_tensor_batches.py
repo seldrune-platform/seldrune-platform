@@ -1,8 +1,9 @@
 """Rights-gated tensor batch construction for Seldrune Face training."""
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 from services.live_media.face_dataset import (
     DatasetSplit,
