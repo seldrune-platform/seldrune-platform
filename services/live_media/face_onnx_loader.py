@@ -55,9 +55,12 @@ def load_face_onnx(
     session = ort.InferenceSession(str(path), providers=providers)
     inputs = tuple(item.name for item in session.get_inputs())
     outputs = tuple(item.name for item in session.get_outputs())
-    required = {"image", "identity_embedding"}
-    if not required.issubset(inputs):
-        raise ValueError("Face model ONNX inputs do not match the LiveShift contract")
+    supported_contracts = (
+        {"image", "identity_embedding"},
+        {"source_image", "reference_image"},
+    )
+    if not any(required.issubset(inputs) for required in supported_contracts):
+        raise ValueError("Face model ONNX inputs do not match a LiveShift contract")
     if "transformed_image" not in outputs:
         raise ValueError("Face model ONNX output does not match the LiveShift contract")
 
