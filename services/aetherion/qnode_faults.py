@@ -15,6 +15,18 @@ class FaultReceipt:
 
 
 def classify(results: dict[str, BaseException | int]) -> FaultReceipt:
-    failed = tuple(sorted(name for name, value in results.items() if isinstance(value, BaseException)))
-    succeeded = tuple(sorted(name for name, value in results.items() if not isinstance(value, BaseException)))
+    failed = tuple(
+        sorted(
+            name
+            for name, value in results.items()
+            if isinstance(value, BaseException)
+        )
+    )
+    succeeded = tuple(
+        sorted(
+            name
+            for name, value in results.items()
+            if not isinstance(value, BaseException)
+        )
+    )
     return FaultReceipt(succeeded, failed)
