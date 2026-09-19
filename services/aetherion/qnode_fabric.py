@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Callable
+from collections.abc import Callable
 
 from .qgpu_model import EvidenceLevel
 from .qnode import QNodeReport, QNodeRole
