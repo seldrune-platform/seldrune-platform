@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .pipeline import LivePipeline
-from .processors import MediaFrame
 from .transport import MediaTransport
 
 
