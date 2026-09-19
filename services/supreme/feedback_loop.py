@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from .learning_loop import LearningObjective, create_learning_objective
+from .skill_evolution import Skill
 from .verifiers import CheckResult, CheckState
 
 
@@ -28,13 +29,13 @@ def failed_gaps(checks: tuple[CheckResult, ...]) -> tuple[VerificationGap, ...]:
 
 
 def learning_objectives(
-    skill_id: str,
+    skill: Skill,
     checks: tuple[CheckResult, ...],
 ) -> tuple[LearningObjective, ...]:
     gaps = failed_gaps(checks)
     return tuple(
         create_learning_objective(
-            skill_id,
+            skill,
             f"{gap.check_name}: measured={gap.measured}, threshold={gap.threshold}",
         )
         for gap in gaps
