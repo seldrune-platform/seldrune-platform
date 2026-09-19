@@ -82,6 +82,39 @@ class RunStore:
                 claimed.append(record)
             return tuple(claimed)
 
+    def state_counts(self) -> dict[RunState, int]:
+        """Return measured durable run counts for Owner Console telemetry."""
+        counts = {state: 0 for state in RunState}
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT state, COUNT(*) FROM supreme_runs GROUP BY state"
+            ).fetchall()
+        for state, count in rows:
+            counts[RunState(state)] = int(count)
+        return counts
+
+    def recent(self, limit: int = 12) -> tuple[RunRecord, ...]:
+        """Return recent durable runs without inventing runtime activity."""
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+        with self._connect() as db:
+            rows = db.execute(
+                """SELECT run_id, task_id, state, attempts, evidence, error
+                FROM supreme_runs ORDER BY rowid DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return tuple(
+            RunRecord(
+                run_id,
+                task_id,
+                RunState(state),
+                attempts,
+                tuple(json.loads(evidence)),
+                error,
+            )
+            for run_id, task_id, state, attempts, evidence, error in rows
+        )
+
     def load(self, run_id: str) -> RunRecord | None:
         with self._connect() as db:
             row = db.execute(
