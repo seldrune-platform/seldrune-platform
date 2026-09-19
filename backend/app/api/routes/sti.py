@@ -69,7 +69,12 @@ def sti_telemetry() -> dict[str, object]:
             "real_image_inference_verified": True,
             "training_accelerator": "rtx-pro-6000-blackwell",
             "training_final_step": 100,
-            "note": (\n                "Face v0.1 GPU training/checkpoint, reference-conditioned ONNX export, "\n                "CUDA ONNX inference, and first real-image inference have runtime evidence. "\n                "Live streaming and virtual-camera delivery remain unverified."\n            ),
+            "note": (
+                "Face v0.1 GPU training/checkpoint and reference-conditioned "
+                "ONNX export have runtime evidence. CUDA ONNX inference and "
+                "first real-image inference are verified. Live streaming and "
+                "virtual-camera delivery remain unverified."
+            ),
         },
         "forge": {
             "queued": sum(item.state == RunState.QUEUED for item in forge),
