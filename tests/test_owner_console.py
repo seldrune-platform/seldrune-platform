@@ -44,6 +44,8 @@ def test_owner_console_is_served() -> None:
         assert "face-verification-cli" in response.text
         assert "face-frame-execution" in response.text
         assert "face-stream-execution" in response.text
+        assert "face-onnx-backend" in response.text
+        assert "face-live-onnx-adapter" in response.text
 
 
 def test_owner_console_assets_are_served() -> None:
