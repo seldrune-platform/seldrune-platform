@@ -24,9 +24,10 @@ async def decode_av_audio_frame(frame: object) -> MediaFrame:
 
     def convert():
         samples = frame.to_ndarray()
+        source_dtype = samples.dtype
         tensor = np.asarray(samples, dtype=np.float32)
-        if tensor.dtype.kind in {"i", "u"}:
-            tensor = tensor / max(float(np.iinfo(samples.dtype).max), 1.0)
+        if source_dtype.kind in {"i", "u"}:
+            tensor = tensor / max(float(np.iinfo(source_dtype).max), 1.0)
         timestamp_ms = 0
         if getattr(frame, "time", None) is not None:
             timestamp_ms = int(float(frame.time) * 1000)
@@ -46,7 +47,10 @@ async def encode_av_audio_frame(frame: MediaFrame, original: object) -> object:
         if samples.ndim != 2:
             raise ValueError("voice output must be mono/stereo planar audio")
         samples = np.clip(samples, -1.0, 1.0)
-        output = AudioFrame.from_ndarray(samples, format="fltp")
+        layout = getattr(getattr(original, "layout", None), "name", None)
+        if not layout:
+            layout = "mono" if samples.shape[0] == 1 else "stereo"
+        output = AudioFrame.from_ndarray(samples, format="fltp", layout=layout)
         output.sample_rate = getattr(original, "sample_rate", 48000)
         output.pts = getattr(original, "pts", None)
         output.time_base = getattr(original, "time_base", None)
