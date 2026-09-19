@@ -1,6 +1,10 @@
 from datetime import UTC, datetime
 
-from services.aetherion.compute_fabric import (\n    ComputeClass,\n    build_ephemeral_job,\n    issue_monthly_api_key,\n)
+from services.aetherion.compute_fabric import (
+    ComputeClass,
+    build_ephemeral_job,
+    issue_monthly_api_key,
+)
 
 
 def test_ephemeral_job_does_not_persist_payload():
