@@ -1,10 +1,10 @@
 """Rights and provenance validation for Seldrune Face training manifests."""
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 
-class DatasetSplit(str, Enum):
+class DatasetSplit(StrEnum):
     TRAIN = "train"
     VALIDATION = "validation"
     TEST = "test"
