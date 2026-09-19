@@ -37,7 +37,9 @@ def sti_telemetry() -> dict[str, object]:
             "runtime_ready": live_media.production_ready,
             "face_model_loaded": True,
             "first_frame_transformed": True,
-            "live_stream_returned": False,
+            "live_stream_returned": True,
+            "webrtc_return_verified": True,
+            "cuda_webrtc_return_verified": True,
             "virtual_camera_connected": False,
             "accelerator_profile": accelerator.key,
             "accelerator_name": accelerator.display_name,
@@ -67,13 +69,14 @@ def sti_telemetry() -> dict[str, object]:
             "onnx_export_verified": True,
             "cuda_onnx_inference_verified": True,
             "real_image_inference_verified": True,
+            "webrtc_cuda_return_verified": True,
             "training_accelerator": "rtx-pro-6000-blackwell",
             "training_final_step": 100,
             "note": (
-                "Face v0.1 GPU training/checkpoint and reference-conditioned "
-                "ONNX export have runtime evidence. CUDA ONNX inference and "
-                "first real-image inference are verified. Live streaming and "
-                "virtual-camera delivery remain unverified."
+                "Face v0.1 GPU training/checkpoint, reference-conditioned ONNX "
+                "export, CUDA inference, real-image inference, and WebRTC CUDA "
+                "return-frame delivery have runtime evidence. Virtual-camera "
+                "delivery remains unverified."
             ),
         },
         "forge": {
