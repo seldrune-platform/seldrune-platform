@@ -1,5 +1,3 @@
-import asyncio
-
 import pytest
 
 from services.live_media.combined_av_runtime import build_reference_av_pipeline
