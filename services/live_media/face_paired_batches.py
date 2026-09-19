@@ -15,13 +15,13 @@ def build_paired_batches(
     """Pair each admitted source with another admitted capture of the same identity."""
     if batch_size < 1:
         raise ValueError("batch_size must be positive")
+    admitted = list(samples)
+    if not admitted:
+        raise ValueError("at least one admitted training sample is required")
     try:
         import torch
     except ImportError as exc:
         raise RuntimeError("PyTorch is required to construct paired Face batches") from exc
-    admitted = list(samples)
-    if not admitted:
-        raise ValueError("at least one admitted training sample is required")
     for sample in admitted:
         sample.validate()
     by_subject: dict[str, list[FaceTrainingSample]] = {}
