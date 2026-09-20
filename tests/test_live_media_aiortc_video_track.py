@@ -77,3 +77,26 @@ def test_attach_video_track_registers_outbound_track():
 
     assert peer.tracks == [track]
     assert track.kind == "video"
+
+
+class _LatencyObserver:
+    def __init__(self):
+        self.latencies_ms = []
+
+    def record_returned_frame(self, latency_ms):
+        self.latencies_ms.append(latency_ms)
+
+
+def test_video_track_records_positive_processing_latency_after_encode():
+    observer = _LatencyObserver()
+    track = LiveShiftVideoTrack(
+        _SourceTrack(),
+        _pipeline(),
+        decode_frame=_decode,
+        encode_frame=_encode,
+        metadata_observer=observer,
+    )
+    output = asyncio.run(track.recv())
+    assert output["pixels"] == b"source:face-v01"
+    assert len(observer.latencies_ms) == 1
+    assert observer.latencies_ms[0] > 0
