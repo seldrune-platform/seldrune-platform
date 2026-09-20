@@ -60,11 +60,15 @@ class ReceiverObservationRecorder:
         self.latest_video = observation
         return observation
 
-    def record_video_return_latency(self, latency_ms: float) -> None:
+    def record_client_received_frame(self, latency_ms: float) -> None:
         """Record latency only when measured at the receiving client."""
         if not math.isfinite(latency_ms) or latency_ms <= 0:
             raise ValueError("client-received video latency must be positive")
         self._video_return_latencies_ms.append(latency_ms)
+
+    def record_video_return_latency(self, latency_ms: float) -> None:
+        """Backward-compatible alias for controlled runtime proof callers."""
+        self.record_client_received_frame(latency_ms)
 
     @property
     def p95_video_return_latency_ms(self) -> float | None:
