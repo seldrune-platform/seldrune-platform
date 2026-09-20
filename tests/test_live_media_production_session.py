@@ -22,8 +22,7 @@ def _recorder(tmp_path) -> FaceProductionRecorder:
     )
 
 
-@pytest.mark.asyncio
-async def test_failed_session_removes_stale_evidence(tmp_path) -> None:
+def test_failed_session_removes_stale_evidence(tmp_path) -> None:
     output = tmp_path / "production.json"
     output.write_text("stale", encoding="utf-8")
 
@@ -31,13 +30,12 @@ async def test_failed_session_removes_stale_evidence(tmp_path) -> None:
         raise RuntimeError("transport failed")
 
     with pytest.raises(RuntimeError, match="transport failed"):
-        await record_production_session(_recorder(tmp_path), fail, output_path=output)
+        asyncio.run(record_production_session(_recorder(tmp_path), fail, output_path=output))
 
     assert not output.exists()
 
 
-@pytest.mark.asyncio
-async def test_cancelled_session_removes_stale_evidence(tmp_path) -> None:
+def test_cancelled_session_removes_stale_evidence(tmp_path) -> None:
     output = tmp_path / "production.json"
     output.write_text("stale", encoding="utf-8")
 
@@ -45,19 +43,18 @@ async def test_cancelled_session_removes_stale_evidence(tmp_path) -> None:
         raise asyncio.CancelledError
 
     with pytest.raises(asyncio.CancelledError):
-        await record_production_session(_recorder(tmp_path), cancel, output_path=output)
+        asyncio.run(record_production_session(_recorder(tmp_path), cancel, output_path=output))
 
     assert not output.exists()
 
 
-@pytest.mark.asyncio
-async def test_invalid_completed_session_writes_no_evidence(tmp_path) -> None:
+def test_invalid_completed_session_writes_no_evidence(tmp_path) -> None:
     output = tmp_path / "production.json"
 
     async def empty(_recorder):
         return None
 
     with pytest.raises(ValueError, match="no transformed frames"):
-        await record_production_session(_recorder(tmp_path), empty, output_path=output)
+        asyncio.run(record_production_session(_recorder(tmp_path), empty, output_path=output))
 
     assert not output.exists()
