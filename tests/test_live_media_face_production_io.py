@@ -5,6 +5,7 @@ import json
 import pytest
 
 from services.live_media.face_production_io import load_production_gates
+from services.live_media.face_production_verify import verify_production_files
 from services.live_media.face_training_executor import sha256_file
 
 
@@ -68,6 +69,13 @@ def test_matching_receipts_unlock_measured_product_gates(tmp_path) -> None:
     assert gates.live_session_verified is True
     assert gates.mobile_hd_output_verified is True
     assert gates.voice_hd_output_verified is True
+    summary = verify_production_files(evidence_path, receipt_path)
+    assert summary == {
+        "status": "verified",
+        "live_session_verified": True,
+        "mobile_hd_output_verified": True,
+        "voice_hd_output_verified": True,
+    }
 
 
 def test_mismatched_receipt_cannot_unlock_product_gates(tmp_path) -> None:
