@@ -91,7 +91,9 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
     returned_video = asyncio.get_running_loop().create_future()
     returned_audio = asyncio.get_running_loop().create_future()
     server_tracks = {}
-    receiver_observations = ReceiverObservationRecorder()\n    video_target_frames = max(30, args.video_frames)\n    audio_target_duration_seconds = max(1.0, args.audio_duration_seconds)
+    receiver_observations = ReceiverObservationRecorder()
+    video_target_frames = max(30, args.video_frames)
+    audio_target_duration_seconds = max(1.0, args.audio_duration_seconds)
 
     client.addTrack(VideoSource())
     client.addTrack(AudioSource())
