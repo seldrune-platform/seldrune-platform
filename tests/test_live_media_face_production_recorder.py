@@ -50,6 +50,7 @@ def test_recorder_refuses_empty_or_untrusted_session_evidence(tmp_path) -> None:
 
     recorder = _recorder(tmp_path, authorization_verified=False)
     recorder.record_returned_frame(10.0)
+    recorder.record_audio_duration(1.0)
     with pytest.raises(ValueError, match="authorized identity"):
         recorder.finish(session_duration_seconds=1.0, output_path=output)
     assert not output.exists()
