@@ -11,6 +11,12 @@
     q('#sti-runtime-source').textContent =
       'Measured from ' + (data.source || 'durable-run-store') + ' · no simulated activity';
 
+    const evidence = data.evidence_levels || {};
+    q('#evidence-verified').title = evidence.verified || 'Runtime proof required.';
+    q('#evidence-implemented').title = evidence.implemented || 'Code and tests only.';
+    q('#evidence-simulated').title = evidence.simulated || 'Controlled inputs only.';
+    q('#evidence-planned').title = evidence.planned || 'Not implemented.';
+
     const liveshift = data.liveshift || {};
     const stateText = value => value ? 'READY' : 'PENDING';
     q('#ls-webrtc').textContent = stateText(liveshift.webrtc_runtime);
