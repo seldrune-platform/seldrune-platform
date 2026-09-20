@@ -23,6 +23,8 @@ def _evidence() -> FaceProductionEvidence:
         audio_duration_seconds=10.0,
         authorization_verified=True,
         synthetic_media_indicator_verified=True,
+        client_frames_received=300,
+        client_p95_return_latency_ms=100.0,
     )
 
 
@@ -66,3 +68,27 @@ def test_gate_rejects_untrusted_or_malformed_evidence() -> None:
         evaluate_production_gates(replace(_evidence(), verification_receipt_sha256="not-a-hash"))
     with pytest.raises(ValueError, match="audio evidence"):
         evaluate_production_gates(replace(_evidence(), audio_duration_seconds=None))
+
+
+def test_server_evidence_without_client_receipt_cannot_promote_live_gate() -> None:
+    evidence = replace(
+        _evidence(), client_frames_received=None, client_p95_return_latency_ms=None
+    )
+    gates = evaluate_production_gates(evidence)
+    assert gates.live_session_verified is False
+    assert gates.mobile_hd_output_verified is False
+    assert gates.voice_hd_output_verified is False
+
+
+def test_slow_client_return_keeps_live_gate_pending() -> None:
+    gates = evaluate_production_gates(
+        replace(_evidence(), client_p95_return_latency_ms=151.0)
+    )
+    assert gates.live_session_verified is False
+
+
+def test_partial_client_receipt_evidence_is_rejected() -> None:
+    with pytest.raises(ValueError, match="client receipt evidence"):
+        evaluate_production_gates(
+            replace(_evidence(), client_p95_return_latency_ms=None)
+        )
