@@ -9,6 +9,10 @@ from pathlib import Path
 
 from services.live_media.face_production_gate import FaceProductionEvidence
 from services.live_media.face_training_executor import sha256_file
+from services.live_media.transport_metadata import (
+    DeliveredAudioMetadata,
+    DeliveredVideoMetadata,
+)
 
 
 class FaceProductionRecorder:
@@ -35,6 +39,14 @@ class FaceProductionRecorder:
         self._latencies_ms: list[float] = []
         self._audio_duration_seconds = 0.0
         self._last_audio_timestamp_ms: int | None = None
+        self._delivered_video_metadata: DeliveredVideoMetadata | None = None
+        self._delivered_audio_metadata: DeliveredAudioMetadata | None = None
+
+    def record_delivered_video_metadata(self, metadata: DeliveredVideoMetadata) -> None:
+        self._delivered_video_metadata = metadata
+
+    def record_delivered_audio_metadata(self, metadata: DeliveredAudioMetadata) -> None:
+        self._delivered_audio_metadata = metadata
 
     def record_returned_frame(self, latency_ms: float) -> None:
         if not math.isfinite(latency_ms) or latency_ms <= 0:
@@ -77,15 +89,30 @@ class FaceProductionRecorder:
         audio_duration = (
             self._audio_duration_seconds if self._audio_sample_rate_hz is not None else None
         )
+        output_width = (
+            self._delivered_video_metadata.width
+            if self._delivered_video_metadata is not None
+            else self._output_width
+        )
+        output_height = (
+            self._delivered_video_metadata.height
+            if self._delivered_video_metadata is not None
+            else self._output_height
+        )
+        audio_sample_rate_hz = (
+            self._delivered_audio_metadata.sample_rate_hz
+            if self._delivered_audio_metadata is not None
+            else self._audio_sample_rate_hz
+        )
         evidence = FaceProductionEvidence(
             run_id=self._run_id,
             verification_receipt_sha256=sha256_file(self._receipt_path),
             frames_returned=len(ordered),
             session_duration_seconds=session_duration_seconds,
             p95_latency_ms=ordered[percentile_index],
-            output_width=self._output_width,
-            output_height=self._output_height,
-            audio_sample_rate_hz=self._audio_sample_rate_hz,
+            output_width=output_width,
+            output_height=output_height,
+            audio_sample_rate_hz=audio_sample_rate_hz,
             audio_duration_seconds=audio_duration,
             authorization_verified=self._authorization_verified,
             synthetic_media_indicator_verified=self._synthetic_media_indicator_verified,
