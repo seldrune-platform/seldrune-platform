@@ -12,6 +12,10 @@ class ReturnedFrameObserver(Protocol):
     def record_returned_frame(self, latency_ms: float) -> None: ...
 
 
+class ReturnedAudioObserver(Protocol):
+    def record_returned_audio_timestamp(self, timestamp_ms: int) -> None: ...
+
+
 async def run_video(
     transport: MediaTransport,
     pipeline: LivePipeline,
@@ -26,10 +30,17 @@ async def run_video(
             observer.record_returned_frame((monotonic() - started) * 1000)
 
 
-async def run_audio(transport: MediaTransport, pipeline: LivePipeline) -> None:
+async def run_audio(
+    transport: MediaTransport,
+    pipeline: LivePipeline,
+    observer: ReturnedAudioObserver | None = None,
+) -> None:
     while True:
         frame = await transport.recv_audio()
-        await transport.send_audio(await pipeline.audio_frame(frame))
+        output = await pipeline.audio_frame(frame)
+        await transport.send_audio(output)
+        if observer is not None:
+            observer.record_returned_audio_timestamp(output.timestamp_ms)
 
 
 async def run_session(
@@ -37,11 +48,12 @@ async def run_session(
     pipeline: LivePipeline,
     *,
     video_observer: ReturnedFrameObserver | None = None,
+    audio_observer: ReturnedAudioObserver | None = None,
 ) -> None:
     try:
         await asyncio.gather(
             run_video(transport, pipeline, video_observer),
-            run_audio(transport, pipeline),
+            run_audio(transport, pipeline, audio_observer),
         )
     finally:
         await transport.close()
