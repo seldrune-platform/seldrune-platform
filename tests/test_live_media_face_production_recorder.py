@@ -158,3 +158,25 @@ def test_recorder_accepts_measured_audio_format_without_configured_claim(tmp_pat
 
     assert evidence.audio_sample_rate_hz == 48_000
     assert evidence.audio_duration_seconds == pytest.approx(1.0)
+
+
+def test_recorder_persists_client_received_latency_evidence(tmp_path) -> None:
+    recorder = _recorder(tmp_path)
+    recorder.record_returned_frame(10.0)
+    for latency in range(1, 101):
+        recorder.record_client_received_frame(float(latency))
+    recorder.record_audio_duration(1.0)
+
+    evidence = recorder.finish(
+        session_duration_seconds=1.0,
+        output_path=tmp_path / "client-receipt-production.json",
+    )
+
+    assert evidence.client_frames_received == 100
+    assert evidence.client_p95_return_latency_ms == 95.0
+
+
+def test_recorder_rejects_invalid_client_received_latency(tmp_path) -> None:
+    recorder = _recorder(tmp_path)
+    with pytest.raises(ValueError, match="client-received frame latency must be positive"):
+        recorder.record_client_received_frame(0.0)
