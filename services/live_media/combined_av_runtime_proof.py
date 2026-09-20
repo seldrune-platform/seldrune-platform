@@ -116,7 +116,12 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
 
             async def receive_one():
                 try:
-                    frame = await track.recv()\n                    if track.kind == "video":\n                        receiver_observations.record_video(frame)\n                    else:\n                        receiver_observations.record_audio(frame)\n                    target.set_result(frame)
+                    frame = await track.recv()
+                    if track.kind == "video":
+                        receiver_observations.record_video(frame)
+                    else:
+                        receiver_observations.record_audio(frame)
+                    target.set_result(frame)
                 except Exception as exc:
                     if not target.done():
                         target.set_exception(exc)
@@ -135,7 +140,11 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
             asyncio.gather(returned_video, returned_audio),
             timeout=args.timeout,
         )
-        video_observation = receiver_observations.latest_video\n        audio_observation = receiver_observations.latest_audio\n        if video_observation is None or audio_observation is None:\n            raise RuntimeError("client receive observations are incomplete")\n        video = video_frame.to_ndarray(format="rgb24")
+        video_observation = receiver_observations.latest_video
+        audio_observation = receiver_observations.latest_audio
+        if video_observation is None or audio_observation is None:
+            raise RuntimeError("client receive observations are incomplete")
+        video = video_frame.to_ndarray(format="rgb24")
         audio = audio_frame.to_ndarray()
         if video.shape != (256, 256, 3) or not np.isfinite(video).all():
             raise RuntimeError("returned video is invalid")
@@ -151,7 +160,12 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
                 "providers": list(loaded.providers),
                 "video_shape": list(video.shape),
                 "audio_sample_rate": audio_frame.sample_rate,
-                "client_received_video_frames": receiver_observations.video_frames,\n                "client_received_audio_duration_seconds": (\n                    receiver_observations.audio_duration_seconds\n                ),\n                "client_received_video": {\n                    "width": video_observation.width,
+                "client_received_video_frames": receiver_observations.video_frames,
+                "client_received_audio_duration_seconds": (
+                    receiver_observations.audio_duration_seconds
+                ),
+                "client_received_video": {
+                    "width": video_observation.width,
                     "height": video_observation.height,
                     "timestamp_ms": video_observation.timestamp_ms,
                 },
@@ -165,7 +179,8 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
             raise RuntimeError(
                 f"combined A/V drift exceeded budget: {evidence.drift_ms} ms"
             )
-        Path(args.receipt).write_text(json.dumps(receipt, indent=2) + "\n")
+        Path(args.receipt).write_text(json.dumps(receipt, indent=2) + "
+")
         return receipt
     finally:
         await client.close()
