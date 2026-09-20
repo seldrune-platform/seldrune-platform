@@ -195,7 +195,7 @@ def main() -> None:
     parser.add_argument("--face-profile-id", default="authorized-face-proof")
     parser.add_argument("--voice-profile-id", default="authorized-voice-proof")
     parser.add_argument("--receipt", required=True)
-    parser.add_argument("--timeout", type=float, default=30.0)
+    parser.add_argument("--timeout", type=float, default=30.0)\n    parser.add_argument("--video-frames", type=int, default=30)\n    parser.add_argument("--audio-duration-seconds", type=float, default=1.0)
     print(json.dumps(asyncio.run(run_proof(parser.parse_args())), indent=2))
 
 
