@@ -50,6 +50,7 @@ def test_owner_console_is_served() -> None:
         assert "face-mobile-hd" in response.text
         assert "face-voice-hd" in response.text
         assert "face-production-recorder" in response.text
+        assert "face-session-evidence" in response.text
         assert "face-production-verifier" in response.text
         assert "face-production-evidence" in response.text
         assert "EVIDENCE TRUTH LAYER" in response.text
