@@ -61,6 +61,7 @@
     q('#face-mobile-hd').textContent = verifiedState(face.mobile_hd_output_verified);
     q('#face-voice-hd').textContent = verifiedState(face.voice_hd_output_verified);
     q('#face-production-recorder').textContent = faceState(face.production_evidence_recorder);
+    q('#face-session-evidence').textContent = faceState(face.session_evidence_integration);
     q('#face-production-verifier').textContent = faceState(face.production_evidence_verifier);
     q('#face-production-evidence').textContent = faceState(face.production_evidence_status);
     q('#face-v01-gpu').textContent = face.gpu_training_completed
