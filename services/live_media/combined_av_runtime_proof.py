@@ -179,8 +179,7 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
             raise RuntimeError(
                 f"combined A/V drift exceeded budget: {evidence.drift_ms} ms"
             )
-        Path(args.receipt).write_text(json.dumps(receipt, indent=2) + "
-")
+        Path(args.receipt).write_text(json.dumps(receipt, indent=2) + "\n")
         return receipt
     finally:
         await client.close()
