@@ -80,6 +80,9 @@ def sti_telemetry() -> dict[str, object]:
             "cuda_onnx_inference_verified": True,
             "real_image_inference_verified": True,
             "webrtc_cuda_return_verified": True,
+            "production_live_session_verified": False,
+            "mobile_hd_output_verified": False,
+            "voice_hd_output_verified": False,
             "training_accelerator": "rtx-pro-6000-blackwell",
             "training_final_step": 100,
             "note": (
