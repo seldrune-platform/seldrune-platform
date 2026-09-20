@@ -56,6 +56,10 @@
     q('#face-stream-execution').textContent = faceState(face.continuous_stream_execution);
     q('#face-onnx-backend').textContent = faceState(face.onnx_cuda_backend);
     q('#face-live-onnx-adapter').textContent = faceState(face.liveshift_onnx_adapter);
+    const verifiedState = value => value ? 'VERIFIED' : 'PENDING';
+    q('#face-production-live').textContent = verifiedState(face.production_live_session_verified);
+    q('#face-mobile-hd').textContent = verifiedState(face.mobile_hd_output_verified);
+    q('#face-voice-hd').textContent = verifiedState(face.voice_hd_output_verified);
     q('#face-v01-gpu').textContent = face.gpu_training_completed
       ? 'GPU training verified'
       : 'GPU training pending';
