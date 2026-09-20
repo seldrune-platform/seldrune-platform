@@ -36,6 +36,8 @@ def _receipt_payload() -> dict[str, object]:
         "frame_change_ratio": 0.24,
         "authorization_verified": True,
         "synthetic_media_indicator_verified": True,
+            "client_frames_received": 300,
+            "client_p95_return_latency_ms": 100.0,
     }
 
 
