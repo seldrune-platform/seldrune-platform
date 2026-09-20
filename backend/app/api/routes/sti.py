@@ -1,9 +1,12 @@
+from os import getenv
 from pathlib import Path
 
 from fastapi import APIRouter
 
 from services.supreme.run_state import RunState
 from services.supreme.run_store import RunStore
+from services.live_media.face_production_gate import FaceProductionGates
+from services.live_media.face_production_io import load_production_gates
 from services.live_media.hardware_profiles import default_live_media_accelerator
 from services.live_media.readiness import check_readiness
 
@@ -16,6 +19,18 @@ def _store() -> RunStore:
     return RunStore(path)
 
 
+def _face_production_gates() -> tuple[FaceProductionGates, str]:
+    evidence_path = getenv("SELDRUNE_FACE_PRODUCTION_EVIDENCE")
+    receipt_path = getenv("SELDRUNE_FACE_VERIFICATION_RECEIPT")
+    pending = FaceProductionGates(False, False, False)
+    if not evidence_path or not receipt_path:
+        return pending, "pending-evidence"
+    try:
+        return load_production_gates(evidence_path, receipt_path), "verified-evidence"
+    except (OSError, ValueError):
+        return pending, "invalid-evidence"
+
+
 @router.get("/telemetry")
 def sti_telemetry() -> dict[str, object]:
     """Measured Seldrune STI execution telemetry for the Owner Console."""
@@ -25,6 +40,7 @@ def sti_telemetry() -> dict[str, object]:
     forge = tuple(item for item in recent if item.run_id.startswith("forge:"))
     live_media = check_readiness()
     accelerator = default_live_media_accelerator()
+    production_gates, production_evidence_status = _face_production_gates()
     return {
         "system": "Seldrune STI — Aethelion Intelligence Foundry",
         "source": "durable-run-store",
@@ -80,9 +96,10 @@ def sti_telemetry() -> dict[str, object]:
             "cuda_onnx_inference_verified": True,
             "real_image_inference_verified": True,
             "webrtc_cuda_return_verified": True,
-            "production_live_session_verified": False,
-            "mobile_hd_output_verified": False,
-            "voice_hd_output_verified": False,
+            "production_live_session_verified": production_gates.live_session_verified,
+            "mobile_hd_output_verified": production_gates.mobile_hd_output_verified,
+            "voice_hd_output_verified": production_gates.voice_hd_output_verified,
+            "production_evidence_status": production_evidence_status,
             "training_accelerator": "rtx-pro-6000-blackwell",
             "training_final_step": 100,
             "note": (
