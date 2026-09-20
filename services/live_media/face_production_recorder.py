@@ -34,6 +34,7 @@ class FaceProductionRecorder:
         self._synthetic_media_indicator_verified = synthetic_media_indicator_verified
         self._latencies_ms: list[float] = []
         self._audio_duration_seconds = 0.0
+        self._last_audio_timestamp_ms: int | None = None
 
     def record_returned_frame(self, latency_ms: float) -> None:
         if not math.isfinite(latency_ms) or latency_ms <= 0:
@@ -46,6 +47,20 @@ class FaceProductionRecorder:
         if not math.isfinite(duration_seconds) or duration_seconds <= 0:
             raise ValueError("audio duration must be positive")
         self._audio_duration_seconds += duration_seconds
+
+    def record_returned_audio_timestamp(self, timestamp_ms: int) -> None:
+        """Measure delivered audio duration from monotonic media timestamps."""
+        if self._audio_sample_rate_hz is None:
+            raise ValueError("audio sample rate is required before recording audio")
+        if timestamp_ms < 0:
+            raise ValueError("audio timestamp must be non-negative")
+        previous = self._last_audio_timestamp_ms
+        if previous is not None:
+            delta_ms = timestamp_ms - previous
+            if delta_ms <= 0:
+                raise ValueError("audio timestamps must increase")
+            self._audio_duration_seconds += delta_ms / 1000.0
+        self._last_audio_timestamp_ms = timestamp_ms
 
     def finish(
         self,
