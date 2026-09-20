@@ -142,3 +142,19 @@ def test_recorder_does_not_promote_configured_hd_over_measured_sd(tmp_path) -> N
 
     assert evidence.output_width == 854
     assert evidence.output_height == 480
+
+
+def test_recorder_accepts_measured_audio_format_without_configured_claim(tmp_path) -> None:
+    recorder = _recorder(tmp_path, audio_sample_rate_hz=None)
+    recorder.record_delivered_audio_metadata(DeliveredAudioMetadata(48_000))
+    recorder.record_returned_frame(10.0)
+    recorder.record_returned_audio_timestamp(0)
+    recorder.record_returned_audio_timestamp(1_000)
+
+    evidence = recorder.finish(
+        session_duration_seconds=1.0,
+        output_path=tmp_path / "measured-audio-production.json",
+    )
+
+    assert evidence.audio_sample_rate_hz == 48_000
+    assert evidence.audio_duration_seconds == pytest.approx(1.0)
