@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from time import monotonic
 
 from .pipeline import LivePipeline
 from .processors import MediaFrame
@@ -34,9 +35,14 @@ class LiveShiftVideoTrack:
 
     async def recv(self) -> object:
         source_av_frame = await self._source_track.recv()
+        started = monotonic()
         media_frame = await self._decode_frame(source_av_frame)
         transformed = await self._pipeline.video_frame(media_frame)
         returned = await self._encode_frame(transformed, source_av_frame)
+        if self._metadata_observer is not None and hasattr(
+            self._metadata_observer, "record_returned_frame"
+        ):
+            self._metadata_observer.record_returned_frame((monotonic() - started) * 1000.0)
         if self._metadata_observer is not None:
             width = getattr(returned, "width", None)
             height = getattr(returned, "height", None)
@@ -73,9 +79,14 @@ def _build_real_aiortc_track(
 
         async def recv(self) -> object:
             source_av_frame = await source_track.recv()
+            started = monotonic()
             media_frame = await decode_frame(source_av_frame)
             transformed = await pipeline.video_frame(media_frame)
             returned = await encode_frame(transformed, source_av_frame)
+            if metadata_observer is not None and hasattr(
+                metadata_observer, "record_returned_frame"
+            ):
+                metadata_observer.record_returned_frame((monotonic() - started) * 1000.0)
             if metadata_observer is not None:
                 width = getattr(returned, "width", None)
                 height = getattr(returned, "height", None)
