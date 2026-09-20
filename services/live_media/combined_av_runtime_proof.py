@@ -24,7 +24,7 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
     )
     from .face_onnx_loader import load_face_onnx
     from .gpu_runtime_proof import _load_tensor
-    from .receiver_observation import observe_received_audio, observe_received_video
+    from .receiver_observation import ReceiverObservationRecorder
 
     session, loaded = load_face_onnx(
         args.model, expected_sha256=args.sha256, prefer_cuda=True
@@ -91,6 +91,7 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
     returned_video = asyncio.get_running_loop().create_future()
     returned_audio = asyncio.get_running_loop().create_future()
     server_tracks = {}
+    receiver_observations = ReceiverObservationRecorder()
 
     client.addTrack(VideoSource())
     client.addTrack(AudioSource())
@@ -115,7 +116,7 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
 
             async def receive_one():
                 try:
-                    target.set_result(await track.recv())
+                    frame = await track.recv()\n                    if track.kind == "video":\n                        receiver_observations.record_video(frame)\n                    else:\n                        receiver_observations.record_audio(frame)\n                    target.set_result(frame)
                 except Exception as exc:
                     if not target.done():
                         target.set_exception(exc)
@@ -134,9 +135,7 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
             asyncio.gather(returned_video, returned_audio),
             timeout=args.timeout,
         )
-        video_observation = observe_received_video(video_frame)
-        audio_observation = observe_received_audio(audio_frame)
-        video = video_frame.to_ndarray(format="rgb24")
+        video_observation = receiver_observations.latest_video\n        audio_observation = receiver_observations.latest_audio\n        if video_observation is None or audio_observation is None:\n            raise RuntimeError("client receive observations are incomplete")\n        video = video_frame.to_ndarray(format="rgb24")
         audio = audio_frame.to_ndarray()
         if video.shape != (256, 256, 3) or not np.isfinite(video).all():
             raise RuntimeError("returned video is invalid")
@@ -152,8 +151,7 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
                 "providers": list(loaded.providers),
                 "video_shape": list(video.shape),
                 "audio_sample_rate": audio_frame.sample_rate,
-                "client_received_video": {
-                    "width": video_observation.width,
+                "client_received_video_frames": receiver_observations.video_frames,\n                "client_received_audio_duration_seconds": (\n                    receiver_observations.audio_duration_seconds\n                ),\n                "client_received_video": {\n                    "width": video_observation.width,
                     "height": video_observation.height,
                     "timestamp_ms": video_observation.timestamp_ms,
                 },
