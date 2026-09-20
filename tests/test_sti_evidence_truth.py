@@ -1,0 +1,21 @@
+"""Regression tests for truthful Owner Console milestone classification."""
+
+from backend.app.api.routes.sti import sti_telemetry
+
+
+def test_face_execution_code_is_not_reported_as_production_verified(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    telemetry = sti_telemetry()
+    face = telemetry["face_v01"]
+
+    assert face["single_frame_execution"] == "implemented"
+    assert face["continuous_stream_execution"] == "implemented"
+    assert face["onnx_cuda_backend"] == "implemented"
+    assert face["liveshift_onnx_adapter"] == "implemented"
+    assert set(telemetry["evidence_levels"]) == {
+        "verified",
+        "implemented",
+        "simulated",
+        "planned",
+    }
