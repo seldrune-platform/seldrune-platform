@@ -60,3 +60,43 @@ def test_recorder_requires_audio_format_before_audio_measurement(tmp_path) -> No
     recorder = _recorder(tmp_path, audio_sample_rate_hz=None)
     with pytest.raises(ValueError, match="sample rate"):
         recorder.record_audio_duration(1.0)
+
+
+def test_recorder_derives_audio_duration_from_returned_timestamps(tmp_path) -> None:
+    receipt = tmp_path / "receipt.json"
+    receipt.write_text("verified", encoding="utf-8")
+    recorder = FaceProductionRecorder(
+        run_id="audio-session",
+        verification_receipt_path=receipt,
+        output_width=1280,
+        output_height=720,
+        audio_sample_rate_hz=48_000,
+        authorization_verified=True,
+        synthetic_media_indicator_verified=True,
+    )
+    recorder.record_returned_frame(10.0)
+    recorder.record_returned_audio_timestamp(1_000)
+    recorder.record_returned_audio_timestamp(1_500)
+    recorder.record_returned_audio_timestamp(2_000)
+    evidence = recorder.finish(
+        session_duration_seconds=1.0,
+        output_path=tmp_path / "production.json",
+    )
+    assert evidence.audio_duration_seconds == pytest.approx(1.0)
+
+
+def test_recorder_rejects_non_monotonic_audio_timestamps(tmp_path) -> None:
+    receipt = tmp_path / "receipt.json"
+    receipt.write_text("verified", encoding="utf-8")
+    recorder = FaceProductionRecorder(
+        run_id="audio-session",
+        verification_receipt_path=receipt,
+        output_width=1280,
+        output_height=720,
+        audio_sample_rate_hz=48_000,
+        authorization_verified=True,
+        synthetic_media_indicator_verified=True,
+    )
+    recorder.record_returned_audio_timestamp(1_000)
+    with pytest.raises(ValueError, match="timestamps must increase"):
+        recorder.record_returned_audio_timestamp(1_000)
