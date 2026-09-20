@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
+import math
 
 
 @dataclass(frozen=True)
@@ -51,12 +52,27 @@ class ReceiverObservationRecorder:
         self.latest_audio: ReceivedAudioObservation | None = None
         self._first_audio_timestamp_ms: float | None = None
         self._last_audio_timestamp_ms: float | None = None
+        self._video_return_latencies_ms: list[float] = []
 
     def record_video(self, frame: object) -> ReceivedVideoObservation:
         observation = observe_received_video(frame)
         self.video_frames += 1
         self.latest_video = observation
         return observation
+
+    def record_video_return_latency(self, latency_ms: float) -> None:
+        """Record latency only when measured at the receiving client."""
+        if not math.isfinite(latency_ms) or latency_ms <= 0:
+            raise ValueError("client-received video latency must be positive")
+        self._video_return_latencies_ms.append(latency_ms)
+
+    @property
+    def p95_video_return_latency_ms(self) -> float | None:
+        if not self._video_return_latencies_ms:
+            return None
+        ordered = sorted(self._video_return_latencies_ms)
+        index = max(0, math.ceil(len(ordered) * 0.95) - 1)
+        return ordered[index]
 
     def record_audio(self, frame: object) -> ReceivedAudioObservation:
         observation = observe_received_audio(frame)
