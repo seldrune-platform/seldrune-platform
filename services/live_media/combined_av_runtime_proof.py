@@ -7,6 +7,7 @@ import asyncio
 import json
 from fractions import Fraction
 from pathlib import Path
+from time import monotonic
 
 
 async def run_proof(args: argparse.Namespace) -> dict[str, object]:
@@ -41,6 +42,7 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
         def __init__(self) -> None:
             super().__init__()
             self._pts = 0
+            self.sent_at_by_pts: dict[int, float] = {}
 
         async def recv(self):
             await asyncio.sleep(1 / 30)
@@ -49,6 +51,7 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
             frame = VideoFrame.from_ndarray(rgb, format="rgb24")
             frame.pts = self._pts
             frame.time_base = Fraction(1, 90000)
+            self.sent_at_by_pts[self._pts] = monotonic()
             self._pts += 3000
             return frame
 
@@ -95,7 +98,8 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
     video_target_frames = max(30, args.video_frames)
     audio_target_duration_seconds = max(1.0, args.audio_duration_seconds)
 
-    client.addTrack(VideoSource())
+    video_source = VideoSource()
+    client.addTrack(video_source)
     client.addTrack(AudioSource())
 
     @server.on("track")
@@ -122,7 +126,13 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
                     while True:
                         frame = await track.recv()
                         if track.kind == "video":
-                            receiver_observations.record_video(frame)
+                            observation = receiver_observations.record_video(frame)
+                            if frame.pts is not None:
+                                sent_at = video_source.sent_at_by_pts.pop(frame.pts, None)
+                                if sent_at is not None:
+                                    receiver_observations.record_video_return_latency(
+                                        (monotonic() - sent_at) * 1000
+                                    )
                             if receiver_observations.video_frames >= video_target_frames:
                                 break
                         else:
@@ -172,6 +182,9 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
                 "video_shape": list(video.shape),
                 "audio_sample_rate": audio_frame.sample_rate,
                 "client_received_video_frames": receiver_observations.video_frames,
+                "client_received_video_p95_return_latency_ms": (
+                    receiver_observations.p95_video_return_latency_ms
+                ),
                 "client_received_audio_duration_seconds": (
                     receiver_observations.audio_duration_seconds
                 ),
