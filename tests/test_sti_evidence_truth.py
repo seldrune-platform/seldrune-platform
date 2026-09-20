@@ -13,6 +13,7 @@ def test_face_execution_code_is_not_reported_as_production_verified(tmp_path, mo
     assert face["continuous_stream_execution"] == "implemented"
     assert face["onnx_cuda_backend"] == "implemented"
     assert face["liveshift_onnx_adapter"] == "implemented"
+    assert face["production_evidence_recorder"] == "implemented"
     assert face["production_evidence_verifier"] == "implemented"
     assert face["production_live_session_verified"] is False
     assert face["mobile_hd_output_verified"] is False
