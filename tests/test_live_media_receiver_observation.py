@@ -62,3 +62,26 @@ def test_receiver_rejects_non_increasing_audio_timestamps():
 
     with pytest.raises(ValueError, match="timestamps must increase"):
         recorder.record_audio(_AudioFrame(960))
+
+
+def test_receiver_records_client_video_latency_p95():
+    recorder = ReceiverObservationRecorder()
+
+    for latency_ms in (10.0, 20.0, 30.0, 40.0, 50.0):
+        recorder.record_video_return_latency(latency_ms)
+
+    assert recorder.p95_video_return_latency_ms == pytest.approx(50.0)
+
+
+def test_receiver_has_no_client_latency_before_measurement():
+    recorder = ReceiverObservationRecorder()
+
+    assert recorder.p95_video_return_latency_ms is None
+
+
+@pytest.mark.parametrize("latency_ms", [0.0, -1.0, float("inf"), float("nan")])
+def test_receiver_rejects_invalid_client_video_latency(latency_ms):
+    recorder = ReceiverObservationRecorder()
+
+    with pytest.raises(ValueError, match="client-received video latency must be positive"):
+        recorder.record_video_return_latency(latency_ms)
