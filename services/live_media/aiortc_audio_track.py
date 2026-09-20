@@ -50,6 +50,7 @@ def _build_real_aiortc_audio_track(
     *,
     decode_frame: DecodeAudioFrame,
     encode_frame: EncodeAudioFrame,
+    metadata_observer: object | None = None,
 ) -> object:
     try:
         from aiortc import MediaStreamTrack
@@ -59,6 +60,7 @@ def _build_real_aiortc_audio_track(
             pipeline,
             decode_frame=decode_frame,
             encode_frame=encode_frame,
+            metadata_observer=metadata_observer,
         )
 
     class _AiortcLiveShiftAudioTrack(MediaStreamTrack):
@@ -71,7 +73,14 @@ def _build_real_aiortc_audio_track(
             source = await source_track.recv()
             decoded = decode_frame(source)
             transformed = await pipeline.audio_frame(decoded)
-            return encode_frame(transformed, source)
+            returned = encode_frame(transformed, source)
+            if metadata_observer is not None:
+                sample_rate = getattr(returned, "sample_rate", None)
+                if sample_rate is not None:
+                    metadata_observer.record_delivered_audio_metadata(
+                        DeliveredAudioMetadata(int(sample_rate))
+                    )
+            return returned
 
     return _AiortcLiveShiftAudioTrack()
 
@@ -83,12 +92,14 @@ def attach_audio_track(
     *,
     decode_frame: DecodeAudioFrame,
     encode_frame: EncodeAudioFrame,
+    metadata_observer: object | None = None,
 ) -> object:
     track = _build_real_aiortc_audio_track(
         source_track,
         pipeline,
         decode_frame=decode_frame,
         encode_frame=encode_frame,
+        metadata_observer=metadata_observer,
     )
     peer.addTrack(track)
     return track
