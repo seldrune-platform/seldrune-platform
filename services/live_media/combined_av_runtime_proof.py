@@ -126,7 +126,7 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
                     while True:
                         frame = await track.recv()
                         if track.kind == "video":
-                            observation = receiver_observations.record_video(frame)
+                            receiver_observations.record_video(frame)
                             if frame.pts is not None:
                                 sent_at = video_source.sent_at_by_pts.pop(frame.pts, None)
                                 if sent_at is not None:
