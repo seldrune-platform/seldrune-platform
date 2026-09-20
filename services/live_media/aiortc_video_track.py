@@ -53,6 +53,7 @@ def _build_real_aiortc_track(
     *,
     decode_frame: DecodeVideoFrame,
     encode_frame: EncodeVideoFrame,
+    metadata_observer: object | None = None,
 ) -> object:
     """Return a genuine aiortc MediaStreamTrack when aiortc is installed."""
     try:
@@ -63,6 +64,7 @@ def _build_real_aiortc_track(
             pipeline,
             decode_frame=decode_frame,
             encode_frame=encode_frame,
+            metadata_observer=metadata_observer,
         )
 
     class _AiortcLiveShiftVideoTrack(VideoStreamTrack):
@@ -73,7 +75,15 @@ def _build_real_aiortc_track(
             source_av_frame = await source_track.recv()
             media_frame = await decode_frame(source_av_frame)
             transformed = await pipeline.video_frame(media_frame)
-            return await encode_frame(transformed, source_av_frame)
+            returned = await encode_frame(transformed, source_av_frame)
+            if metadata_observer is not None:
+                width = getattr(returned, "width", None)
+                height = getattr(returned, "height", None)
+                if width is not None and height is not None:
+                    metadata_observer.record_delivered_video_metadata(
+                        DeliveredVideoMetadata(int(width), int(height))
+                    )
+            return returned
 
     return _AiortcLiveShiftVideoTrack()
 
@@ -85,6 +95,7 @@ def attach_video_track(
     *,
     decode_frame: DecodeVideoFrame,
     encode_frame: EncodeVideoFrame,
+    metadata_observer: object | None = None,
 ) -> object:
     """Attach a transformed outbound video track to an aiortc peer."""
     track = _build_real_aiortc_track(
@@ -92,6 +103,7 @@ def attach_video_track(
         pipeline,
         decode_frame=decode_frame,
         encode_frame=encode_frame,
+        metadata_observer=metadata_observer,
     )
     peer.addTrack(track)
     return track
