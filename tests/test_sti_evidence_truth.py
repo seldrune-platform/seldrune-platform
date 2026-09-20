@@ -16,6 +16,7 @@ def test_face_execution_code_is_not_reported_as_production_verified(tmp_path, mo
     assert face["production_live_session_verified"] is False
     assert face["mobile_hd_output_verified"] is False
     assert face["voice_hd_output_verified"] is False
+    assert face["production_evidence_status"] == "pending-evidence"
     assert set(telemetry["evidence_levels"]) == {
         "verified",
         "implemented",
