@@ -85,3 +85,14 @@ A zero exit status requires verified live delivery, mobile HD output and HD voic
 output. Valid but incomplete evidence prints `"status": "partial"` and exits with
 status 2. Missing, malformed, unauthorized or hash-mismatched evidence fails without
 promoting the Owner Console gates.
+
+## Production session recorder
+
+The runtime-facing `FaceProductionRecorder` accepts measured returned-frame latency,
+session duration, output dimensions and optional audio duration/sample rate. It computes
+p95 latency, hashes the exact verification receipt and atomically writes the production
+evidence JSON. It refuses empty sessions, missing receipts, invalid measurements,
+unauthorized identities and sessions without verified synthetic-media disclosure.
+
+The recorder does not fabricate camera, resolution, latency or audio measurements. The
+WebRTC/mobile transport must provide those values from the actual delivered session.
