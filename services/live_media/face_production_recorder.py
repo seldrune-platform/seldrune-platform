@@ -54,7 +54,10 @@ class FaceProductionRecorder:
         self._latencies_ms.append(latency_ms)
 
     def record_audio_duration(self, duration_seconds: float) -> None:
-        if self._audio_sample_rate_hz is None:
+        if (
+            self._audio_sample_rate_hz is None
+            and self._delivered_audio_metadata is None
+        ):
             raise ValueError("audio sample rate is required before recording audio")
         if not math.isfinite(duration_seconds) or duration_seconds <= 0:
             raise ValueError("audio duration must be positive")
@@ -62,7 +65,10 @@ class FaceProductionRecorder:
 
     def record_returned_audio_timestamp(self, timestamp_ms: int) -> None:
         """Measure delivered audio duration from monotonic media timestamps."""
-        if self._audio_sample_rate_hz is None:
+        if (
+            self._audio_sample_rate_hz is None
+            and self._delivered_audio_metadata is None
+        ):
             raise ValueError("audio sample rate is required before recording audio")
         if timestamp_ms < 0:
             raise ValueError("audio timestamp must be non-negative")
@@ -86,9 +92,11 @@ class FaceProductionRecorder:
             raise ValueError("production session returned no transformed frames")
         ordered = sorted(self._latencies_ms)
         percentile_index = max(0, math.ceil(len(ordered) * 0.95) - 1)
-        audio_duration = (
-            self._audio_duration_seconds if self._audio_sample_rate_hz is not None else None
+        has_audio_format = (
+            self._audio_sample_rate_hz is not None
+            or self._delivered_audio_metadata is not None
         )
+        audio_duration = self._audio_duration_seconds if has_audio_format else None
         output_width = (
             self._delivered_video_metadata.width
             if self._delivered_video_metadata is not None
