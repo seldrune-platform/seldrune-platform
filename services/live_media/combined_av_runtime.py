@@ -49,6 +49,7 @@ def attach_reference_av_tracks(
     video_track: object,
     audio_track: object,
     pipeline: LivePipeline,
+    metadata_observer: object | None = None,
 ) -> tuple[object, object]:
     """Attach transformed video and audio tracks backed by one sync state."""
     if not pipeline.face_profile_id or not pipeline.voice_profile_id:
@@ -59,6 +60,7 @@ def attach_reference_av_tracks(
         pipeline,
         decode_frame=decode_av_video_frame,
         encode_frame=encode_av_video_frame,
+        metadata_observer=metadata_observer,
     )
     returned_audio = attach_audio_track(
         peer,
@@ -66,5 +68,6 @@ def attach_reference_av_tracks(
         pipeline,
         decode_frame=decode_av_audio_frame,
         encode_frame=encode_av_audio_frame,
+        metadata_observer=metadata_observer,
     )
     return returned_video, returned_audio
