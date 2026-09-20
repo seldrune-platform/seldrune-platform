@@ -69,3 +69,19 @@ written as verified evidence.
 
 This collector does not run inference or calculate identity similarity. Those values
 must come from the real GPU inference and benchmark stages.
+
+## Production delivery verification
+
+After a real live session writes production measurements, bind them to the verified
+Face receipt and evaluate the product gates with:
+
+```bash
+python -m services.live_media.face_production_verify \
+  --evidence /evidence/face-production.json \
+  --receipt /evidence/face-verification.json
+```
+
+A zero exit status requires verified live delivery, mobile HD output and HD voice
+output. Valid but incomplete evidence prints `"status": "partial"` and exits with
+status 2. Missing, malformed, unauthorized or hash-mismatched evidence fails without
+promoting the Owner Console gates.
