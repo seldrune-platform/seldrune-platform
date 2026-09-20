@@ -19,6 +19,7 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
         raise RuntimeError("aiortc, PyAV, and NumPy are required") from exc
 
     from .av_return_evidence import capture_av_return_evidence
+    from .client_receipt import ClientVideoReceipt, record_client_video_receipt
     from .combined_av_runtime import (
         attach_reference_av_tracks,
         build_reference_av_pipeline,
@@ -130,8 +131,15 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
                             if frame.pts is not None:
                                 sent_at = video_source.sent_at_by_pts.pop(frame.pts, None)
                                 if sent_at is not None:
+                                    latency_ms = (monotonic() - sent_at) * 1000
                                     receiver_observations.record_video_return_latency(
-                                        (monotonic() - sent_at) * 1000
+                                        latency_ms
+                                    )
+                                    # Controlled proof only: exercise the same validated
+                                    # client-receipt contract used by production telemetry.
+                                    record_client_video_receipt(
+                                        receiver_observations,
+                                        ClientVideoReceipt(latency_ms=latency_ms),
                                     )
                             if receiver_observations.video_frames >= video_target_frames:
                                 break
