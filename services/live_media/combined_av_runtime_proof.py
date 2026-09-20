@@ -24,6 +24,7 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
     )
     from .face_onnx_loader import load_face_onnx
     from .gpu_runtime_proof import _load_tensor
+    from .receiver_observation import observe_received_audio, observe_received_video
 
     session, loaded = load_face_onnx(
         args.model, expected_sha256=args.sha256, prefer_cuda=True
@@ -133,6 +134,8 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
             asyncio.gather(returned_video, returned_audio),
             timeout=args.timeout,
         )
+        video_observation = observe_received_video(video_frame)
+        audio_observation = observe_received_audio(audio_frame)
         video = video_frame.to_ndarray(format="rgb24")
         audio = audio_frame.to_ndarray()
         if video.shape != (256, 256, 3) or not np.isfinite(video).all():
@@ -149,6 +152,15 @@ async def run_proof(args: argparse.Namespace) -> dict[str, object]:
                 "providers": list(loaded.providers),
                 "video_shape": list(video.shape),
                 "audio_sample_rate": audio_frame.sample_rate,
+                "client_received_video": {
+                    "width": video_observation.width,
+                    "height": video_observation.height,
+                    "timestamp_ms": video_observation.timestamp_ms,
+                },
+                "client_received_audio": {
+                    "sample_rate_hz": audio_observation.sample_rate_hz,
+                    "timestamp_ms": audio_observation.timestamp_ms,
+                },
             }
         )
         if not evidence.verified:
