@@ -37,6 +37,7 @@ class FaceProductionRecorder:
         self._authorization_verified = authorization_verified
         self._synthetic_media_indicator_verified = synthetic_media_indicator_verified
         self._latencies_ms: list[float] = []
+        self._client_return_latencies_ms: list[float] = []
         self._audio_duration_seconds = 0.0
         self._last_audio_timestamp_ms: int | None = None
         self._delivered_video_metadata: DeliveredVideoMetadata | None = None
@@ -52,6 +53,12 @@ class FaceProductionRecorder:
         if not math.isfinite(latency_ms) or latency_ms <= 0:
             raise ValueError("returned-frame latency must be positive")
         self._latencies_ms.append(latency_ms)
+
+    def record_client_received_frame(self, latency_ms: float) -> None:
+        """Record end-to-end latency only after the client receives a video frame."""
+        if not math.isfinite(latency_ms) or latency_ms <= 0:
+            raise ValueError("client-received frame latency must be positive")
+        self._client_return_latencies_ms.append(latency_ms)
 
     def record_audio_duration(self, duration_seconds: float) -> None:
         if (
@@ -91,7 +98,13 @@ class FaceProductionRecorder:
         if not self._latencies_ms:
             raise ValueError("production session returned no transformed frames")
         ordered = sorted(self._latencies_ms)
+        client_ordered = sorted(self._client_return_latencies_ms)
         percentile_index = max(0, math.ceil(len(ordered) * 0.95) - 1)
+        client_percentile_index = (
+            max(0, math.ceil(len(client_ordered) * 0.95) - 1)
+            if client_ordered
+            else None
+        )
         has_audio_format = (
             self._audio_sample_rate_hz is not None
             or self._delivered_audio_metadata is not None
@@ -124,6 +137,12 @@ class FaceProductionRecorder:
             audio_duration_seconds=audio_duration,
             authorization_verified=self._authorization_verified,
             synthetic_media_indicator_verified=self._synthetic_media_indicator_verified,
+            client_frames_received=len(client_ordered) if client_ordered else None,
+            client_p95_return_latency_ms=(
+                client_ordered[client_percentile_index]
+                if client_percentile_index is not None
+                else None
+            ),
         )
         evidence.validate()
         target = Path(output_path)
