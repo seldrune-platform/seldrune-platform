@@ -26,6 +26,8 @@ class FaceProductionEvidence:
     audio_duration_seconds: float | None
     authorization_verified: bool
     synthetic_media_indicator_verified: bool
+    client_frames_received: int | None = None
+    client_p95_return_latency_ms: float | None = None
 
     def validate(self) -> None:
         if not self.run_id.strip():
@@ -38,6 +40,16 @@ class FaceProductionEvidence:
             raise ValueError("production session duration must be positive")
         if not math.isfinite(self.p95_latency_ms) or self.p95_latency_ms <= 0:
             raise ValueError("production p95 latency must be positive")
+        client_values = (self.client_frames_received, self.client_p95_return_latency_ms)
+        if (client_values[0] is None) != (client_values[1] is None):
+            raise ValueError("client receipt evidence must include frames and latency together")
+        if self.client_frames_received is not None and self.client_frames_received < 1:
+            raise ValueError("client-received frame count must be positive")
+        if self.client_p95_return_latency_ms is not None and (
+            not math.isfinite(self.client_p95_return_latency_ms)
+            or self.client_p95_return_latency_ms <= 0
+        ):
+            raise ValueError("client-received p95 latency must be positive")
         if self.output_width < 1 or self.output_height < 1:
             raise ValueError("production output dimensions must be positive")
         audio_values = (self.audio_sample_rate_hz, self.audio_duration_seconds)
@@ -69,6 +81,10 @@ def evaluate_production_gates(evidence: FaceProductionEvidence) -> FaceProductio
         evidence.frames_returned >= 30
         and evidence.session_duration_seconds >= 1.0
         and evidence.p95_latency_ms <= 150.0
+        and evidence.client_frames_received is not None
+        and evidence.client_frames_received >= 30
+        and evidence.client_p95_return_latency_ms is not None
+        and evidence.client_p95_return_latency_ms <= 150.0
     )
     mobile_hd = live_session and evidence.output_width >= 1280 and evidence.output_height >= 720
     voice_hd = (
