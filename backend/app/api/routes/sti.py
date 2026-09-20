@@ -90,6 +90,7 @@ def sti_telemetry() -> dict[str, object]:
             "continuous_stream_execution": "implemented",
             "onnx_cuda_backend": "implemented",
             "liveshift_onnx_adapter": "implemented",
+            "production_evidence_recorder": "implemented",
             "production_evidence_verifier": "implemented",
             "gpu_training_completed": True,
             "checkpoint_verified": True,
