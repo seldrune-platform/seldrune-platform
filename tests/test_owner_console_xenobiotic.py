@@ -102,3 +102,20 @@ def test_xenobiotic_v9_temporal_pulse_tracks_only_observed_state(client) -> None
     assert "Temporal Pulse" in stylesheet.text
     assert ".xeno-temporal-pulse" in stylesheet.text
     assert "prefers-reduced-motion" in stylesheet.text
+
+
+def test_xenobiotic_v10_reality_checksum_hashes_measured_channels(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V10" in script.text
+    assert "REALITY CHECKSUM" in script.text
+    assert "xeno-reality-checksum" in script.text
+    for source_id in ("pending", "sti-running", "sti-verified", "sti-failed", "ls-cuda", "ls-onnx"):
+        assert source_id in script.text
+    assert "2166136261" in script.text
+    assert "6 measured channels" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "Reality Checksum" in stylesheet.text
+    assert ".xeno-reality-checksum" in stylesheet.text
