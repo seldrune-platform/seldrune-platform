@@ -8,6 +8,7 @@ authorized/consensual source and target media.
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -77,6 +78,29 @@ class ReplicateFaceProvider:
         except httpx.HTTPError as exc:
             raise FaceProviderError("face provider request failed") from exc
 
-        if result.get("status") == "failed":
-            raise FaceProviderError(result.get("error") or "face provider failed")
+        if result.get("status") in {"starting", "processing"}:
+            result = self._poll_until_terminal(client_url=result.get("urls", {}).get("get"))
+
+        if result.get("status") in {"failed", "canceled"}:
+            raise FaceProviderError(result.get("error") or f"face provider {result.get('status')}")
         return result
+
+    def _poll_until_terminal(self, client_url: str | None) -> dict[str, Any]:
+        if not client_url:
+            raise FaceProviderError("face provider did not return a prediction status URL")
+
+        headers = {"Authorization": f"Bearer {self.token}"}
+        deadline = time.monotonic() + 120.0
+        try:
+            with httpx.Client(timeout=20.0) as client:
+                while time.monotonic() < deadline:
+                    response = client.get(client_url, headers=headers)
+                    response.raise_for_status()
+                    result = response.json()
+                    if result.get("status") in {"succeeded", "failed", "canceled"}:
+                        return result
+                    time.sleep(1.5)
+        except httpx.HTTPError as exc:
+            raise FaceProviderError("face provider status check failed") from exc
+
+        raise FaceProviderError("face provider prediction timed out")
