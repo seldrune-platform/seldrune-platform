@@ -6,6 +6,8 @@
   const status = document.querySelector('#seldrune-gpt-status');
   const model = document.querySelector('#seldrune-gpt-model');
   const newConversation = document.querySelector('#seldrune-gpt-new');
+  const chatButton = document.querySelector('#seldrune-gpt-chat');
+  const executeButton = document.querySelector('#seldrune-gpt-execute');
 
   function addMessage(label, text) {
     if (thread.querySelector('.empty')) thread.replaceChildren();
@@ -20,6 +22,13 @@
     card.append(body);
     thread.append(card);
     card.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  }
+
+  function setBusy(busy, message) {
+    input.disabled = busy;
+    chatButton.disabled = busy;
+    executeButton.disabled = busy;
+    if (message) status.textContent = message;
   }
 
   async function loadHistory() {
@@ -45,15 +54,61 @@
     }
   });
 
+  async function executeOrder(order, commandId = null, confirmed = false) {
+    return api('/gpt/operate', {
+      method: 'POST',
+      body: JSON.stringify({
+        order,
+        command_id: commandId,
+        confirm_sensitive_action: confirmed,
+        stop_on_failure: true,
+        max_steps: 50,
+        max_retries_per_step: 1,
+      }),
+    });
+  }
+
+  executeButton?.addEventListener('click', async () => {
+    const order = input.value.trim();
+    if (!order) return;
+    setBusy(true, 'Seldrune Operator is planning and executing…');
+    addMessage('Owner order', order);
+    input.value = '';
+    try {
+      let result = await executeOrder(order);
+      if (result.approval_required) {
+        const reasons = (result.risk_reasons || []).join(', ');
+        const approved = window.confirm(
+          `This order requires explicit owner confirmation: ${reasons}. Continue execution?`
+        );
+        if (!approved) {
+          addMessage('Seldrune Operator', `Paused for approval. Command ${result.command_id} remains unexecuted.`);
+          status.textContent = 'Execution paused by owner.';
+          return;
+        }
+        status.textContent = 'Owner confirmed. Executing governed command…';
+        result = await executeOrder(order, result.command_id, true);
+      }
+      const summary = `${result.status}: ${result.executed_steps || 0} executed, ${result.failed_steps || 0} failed, ${result.blocked_steps || 0} blocked. Command ${result.command_id}.`;
+      addMessage('Seldrune Operator', summary);
+      status.textContent = `Verified operator result · ${result.status} · evidence ${result.command_id}`;
+      window.dispatchEvent(new CustomEvent('seldrune:refresh'));
+    } catch (error) {
+      addMessage('System', `Operator request failed: ${error.message}`);
+      status.textContent = 'Operator request failed.';
+    } finally {
+      setBusy(false);
+      input.focus();
+    }
+  });
+
   loadHistory();
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
     const message = input.value.trim();
     if (!message) return;
-    input.disabled = true;
-    form.querySelector('button').disabled = true;
-    status.textContent = 'Seldrune GPT is reasoning…';
+    setBusy(true, 'Seldrune GPT is reasoning…');
     addMessage('You', message);
     input.value = '';
     try {
@@ -68,8 +123,7 @@
       addMessage('System', `GPT request failed: ${error.message}`);
       status.textContent = 'Request failed.';
     } finally {
-      input.disabled = false;
-      form.querySelector('button').disabled = false;
+      setBusy(false);
       input.focus();
     }
   });
