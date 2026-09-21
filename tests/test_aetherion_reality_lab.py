@@ -1,5 +1,6 @@
 import pytest
 
+from backend.app.api.routes.aetherion import reality_lab_demo
 from services.aetherion.qgpu_model import EvidenceLevel
 from services.aetherion.reality_lab import (
     CalibrationDecision,
@@ -76,3 +77,13 @@ def test_measurement_requires_content_addressed_evidence():
 
     with pytest.raises(ValueError, match="64 hexadecimal"):
         calibrate_experiment(_protocol(), (invalid,))
+
+
+def test_reality_lab_demo_endpoint_requires_independent_review():
+    payload = reality_lab_demo()
+
+    assert payload["decision"] == "eligible-for-independent-review"
+    assert payload["r_squared"] == 1.0
+    assert not payload["independently_replicated"]
+    assert not payload["causal_model_verified"]
+    assert not payload["physical_system_verified"]
