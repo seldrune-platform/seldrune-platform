@@ -41,7 +41,8 @@ def run_life_tick(
             "reports": [],
         }
 
-    step_limit = min(max_steps_per_command or policy.max_steps_per_command, policy.max_steps_per_command)
+    requested_step_limit = max_steps_per_command or policy.max_steps_per_command
+    step_limit = min(requested_step_limit, policy.max_steps_per_command)
     candidates = list(
         session.scalars(
             select(OrchestrationRun)
