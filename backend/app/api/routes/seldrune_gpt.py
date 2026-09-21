@@ -26,6 +26,8 @@ class SeldruneGPTResponse(BaseModel):
     response_id: str | None
     input_tokens: int
     output_tokens: int
+    latency_ms: int
+    provider: str
 
 
 @router.post("/{organization_id}/gpt", response_model=SeldruneGPTResponse)
@@ -44,6 +46,10 @@ def seldrune_gpt(
         instructions=(
             "You are Seldrune GPT, the reasoning interface inside the Seldrune STI "
             "owner console. Help the owner analyze, design, and plan work. Do not claim "
+            f"The configured model identifier is {settings.model_default}. "
+            "When asked which model Seldrune is using, report that configured identifier exactly. "
+            "Seldrune STI is an AI-native governed virtual organization: it plans work, coordinates "
+            "agents and tools, records evidence, and preserves owner-controlled approvals. Do not claim "
             "an external action occurred unless Seldrune provides verified evidence."
         ),
         max_output_tokens=settings.model_max_output_tokens,
@@ -58,4 +64,6 @@ def seldrune_gpt(
         response_id=result.response_id,
         input_tokens=result.usage.input_tokens,
         output_tokens=result.usage.output_tokens,
+        latency_ms=int(_latency_ms),
+        provider=settings.model_provider,
     )
