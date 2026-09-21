@@ -50,3 +50,19 @@ def test_xenobiotic_v6_attention_vector_uses_measured_counters(client) -> None:
     assert ".xeno-attention-field" in stylesheet.text
 
 # V6 PR validation pulse.
+
+
+def test_xenobiotic_v7_reality_constellation_uses_measured_state(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V7" in script.text
+    assert "REALITY CONSTELLATION" in script.text
+    assert "xeno-reality-constellation" in script.text
+    for source_id in ("pending", "sti-running", "sti-verified", "ls-cuda", "ls-onnx"):
+        assert source_id in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "Verified Reality Constellation" in stylesheet.text
+    assert ".xeno-reality-node" in stylesheet.text
+    assert "prefers-reduced-motion" in stylesheet.text
