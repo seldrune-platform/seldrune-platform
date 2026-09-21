@@ -23,11 +23,11 @@ def upgrade() -> None:
         sa.Column("cycle_count", sa.Integer(), nullable=False),
         sa.Column("commands_advanced", sa.Integer(), nullable=False),
         sa.Column("last_error", sa.Text(), nullable=True),
-        sa.Column("started_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("last_seen_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(\n            "started_at", sa.DateTime(timezone=True),\n            server_default=sa.func.now(), nullable=False,\n        ),
+        sa.Column(\n            "last_seen_at", sa.DateTime(timezone=True),\n            server_default=sa.func.now(), nullable=False,\n        ),
     )
-    op.create_index("ix_life_worker_heartbeats_organization_id", "life_worker_heartbeats", ["organization_id"])
-    op.create_index("ix_life_worker_heartbeats_last_seen_at", "life_worker_heartbeats", ["last_seen_at"])
+    op.create_index(\n        "ix_life_worker_heartbeats_organization_id",\n        "life_worker_heartbeats", ["organization_id"],\n    )
+    op.create_index(\n        "ix_life_worker_heartbeats_last_seen_at",\n        "life_worker_heartbeats", ["last_seen_at"],\n    )
 
 
 def downgrade() -> None:
