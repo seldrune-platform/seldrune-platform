@@ -48,3 +48,5 @@ def test_xenobiotic_v6_attention_vector_uses_measured_counters(client) -> None:
     assert stylesheet.status_code == 200
     assert "V6" in stylesheet.text
     assert ".xeno-attention-field" in stylesheet.text
+
+# V6 PR validation pulse.
