@@ -1,0 +1,45 @@
+/* Seldrune Xenobiotic Console — alien interface layer */
+:root{
+ --xeno-cyan:#62f7ff;--xeno-violet:#9d63ff;--xeno-magenta:#ff5fe1;
+ --xeno-void:#02040b;--xeno-glass:rgba(7,13,31,.76);
+}
+body{
+ background:
+ radial-gradient(circle at 50% 8%,rgba(76,56,180,.28),transparent 27%),
+ radial-gradient(circle at 86% 36%,rgba(0,220,255,.11),transparent 24%),
+ radial-gradient(circle at 12% 65%,rgba(255,63,214,.08),transparent 24%),
+ linear-gradient(155deg,#01030a,#050817 48%,#020611)!important;
+}
+body::after{opacity:.08!important;filter:hue-rotate(115deg) drop-shadow(0 0 38px rgba(98,247,255,.45))!important}
+.app-shell::before{
+ background-image:linear-gradient(rgba(98,247,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(157,99,255,.045) 1px,transparent 1px)!important;
+ background-size:54px 54px!important;transform:perspective(700px) rotateX(1deg)
+}
+aside{background:linear-gradient(180deg,rgba(3,6,18,.96),rgba(6,4,19,.94))!important;border-right:1px solid rgba(98,247,255,.22)!important}
+.brand>span{border-radius:42% 58% 55% 45%/55% 42% 58% 45%!important;border-color:rgba(98,247,255,.58)!important;background:radial-gradient(circle,rgba(157,99,255,.35),rgba(4,9,25,.8))!important;animation:xenoMorph 8s ease-in-out infinite}
+.brand>span::before{border-radius:inherit!important;background:#05091b!important}
+nav a{clip-path:polygon(0 0,92% 0,100% 50%,92% 100%,0 100%,5% 50%);margin:5px 0}
+nav a:hover,nav a.active{border-color:rgba(98,247,255,.34)!important;background:linear-gradient(90deg,rgba(157,99,255,.3),rgba(20,224,255,.12))!important;box-shadow:inset 0 0 22px rgba(157,99,255,.1),0 0 25px rgba(98,247,255,.08)!important}
+.eyebrow{color:var(--xeno-cyan)!important;letter-spacing:.16em;text-shadow:0 0 18px rgba(98,247,255,.35)!important}
+header h1{background:linear-gradient(90deg,#fff,var(--xeno-cyan),#d8c7ff);-webkit-background-clip:text;background-clip:text;color:transparent!important}
+.panel,.metrics article,.command-card,.runtime-status,.login-card,dialog{
+ position:relative;background:linear-gradient(145deg,rgba(8,15,37,.82),rgba(8,5,25,.72))!important;
+ border:1px solid rgba(98,247,255,.18)!important;box-shadow:0 22px 80px rgba(0,0,0,.34),inset 0 0 28px rgba(157,99,255,.035)!important;
+ backdrop-filter:blur(22px) saturate(145%)!important;
+}
+.panel::before,.metrics article::before{
+ content:"";position:absolute;inset:-1px;pointer-events:none;clip-path:polygon(0 0,22px 0,0 22px,0 100%,100% 100%,100% calc(100% - 22px),calc(100% - 22px) 100%);
+ border:1px solid rgba(157,99,255,.38);opacity:.75
+}
+.panel:hover,.metrics article:hover,.command-card:hover,.agent-scorecard:hover{border-color:rgba(98,247,255,.42)!important;box-shadow:0 28px 90px rgba(0,0,0,.42),0 0 32px rgba(98,247,255,.09),inset 0 0 35px rgba(157,99,255,.06)!important}
+.metrics strong{color:#f5fbff!important;text-shadow:0 0 18px rgba(98,247,255,.32)!important}
+button{background:linear-gradient(110deg,rgba(86,42,189,.94),rgba(20,153,201,.92))!important;border:1px solid rgba(98,247,255,.42)!important;box-shadow:0 0 24px rgba(75,97,255,.14),inset 0 0 12px rgba(255,255,255,.06)!important;clip-path:polygon(9px 0,calc(100% - 9px) 0,100% 50%,calc(100% - 9px) 100%,9px 100%,0 50%)}
+button:hover{filter:brightness(1.18)!important;box-shadow:0 0 30px rgba(98,247,255,.2),0 0 54px rgba(157,99,255,.1)!important}
+.ghost{background:rgba(6,12,30,.66)!important}
+.command textarea,.login-card input,.governance-policy input,.audit-tools select{background:rgba(2,6,18,.72)!important;border-color:rgba(98,247,255,.22)!important}
+.command textarea:focus,.login-card input:focus,.governance-policy input:focus,.audit-tools select:focus{outline:1px solid var(--xeno-cyan)!important;box-shadow:0 0 0 4px rgba(98,247,255,.06),0 0 28px rgba(157,99,255,.08)!important}
+.runtime-status::after{background:linear-gradient(90deg,transparent,var(--xeno-violet),var(--xeno-cyan),transparent)!important}
+.treasury-track span{background:linear-gradient(90deg,var(--xeno-violet),var(--xeno-cyan),var(--xeno-magenta))!important}
+#toast{background:rgba(4,7,22,.96)!important;border-color:rgba(98,247,255,.28)!important}
+@keyframes xenoMorph{0%,100%{border-radius:42% 58% 55% 45%/55% 42% 58% 45%;transform:rotate(0)}50%{border-radius:57% 43% 38% 62%/42% 61% 39% 58%;transform:rotate(4deg)}}
+@media(prefers-reduced-motion:reduce){.brand>span{animation:none}}
