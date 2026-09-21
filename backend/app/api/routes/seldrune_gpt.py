@@ -112,3 +112,43 @@ def seldrune_gpt(
         latency_ms=int(_latency_ms),
         provider=settings.model_provider,
     )
+
+
+@router.get("/{organization_id}/gpt/history", response_model=list[SeldruneGPTHistoryMessage])
+def seldrune_gpt_history(
+    organization_id: UUID,
+    _membership: AgentsRunDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> list[SeldruneGPTHistoryMessage]:
+    messages = list(
+        session.scalars(
+            select(SeldruneGPTMessage)
+            .where(
+                SeldruneGPTMessage.organization_id == organization_id,
+                SeldruneGPTMessage.user_id == current_user.id,
+            )
+            .order_by(SeldruneGPTMessage.created_at.asc())
+            .limit(100)
+        )
+    )
+    return [
+        SeldruneGPTHistoryMessage(role=item.role, content=item.content, model=item.model)
+        for item in messages
+    ]
+
+
+@router.delete("/{organization_id}/gpt/history", status_code=204)
+def clear_seldrune_gpt_history(
+    organization_id: UUID,
+    _membership: AgentsRunDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> None:
+    session.execute(
+        delete(SeldruneGPTMessage).where(
+            SeldruneGPTMessage.organization_id == organization_id,
+            SeldruneGPTMessage.user_id == current_user.id,
+        )
+    )
+    session.commit()
