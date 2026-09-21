@@ -158,3 +158,24 @@ def test_xenobiotic_v12_convergence_beacon_uses_measured_execution_state(client)
     assert ".xeno-convergence-beacon" in stylesheet.text
     assert "@keyframes xeno-converge" in stylesheet.text
     assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v13_execution_gravity_uses_measured_workload(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V13" in script.text
+    assert "EXECUTION GRAVITY" in script.text
+    assert "xeno-execution-gravity" in script.text
+    for source_id in ("pending", "sti-running", "sti-failed", "sti-verified"):
+        assert source_id in script.text
+    for pull in ("DECISION", "EXECUTION", "FAILURE", "VERIFIED", "ZERO"):
+        assert pull in script.text
+    assert "--xeno-gravity" in script.text
+    assert "MutationObserver" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V13" in stylesheet.text
+    assert ".xeno-execution-gravity" in stylesheet.text
+    assert "@keyframes xeno-gravity-orbit" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
