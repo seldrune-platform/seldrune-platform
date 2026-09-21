@@ -12,7 +12,7 @@ from backend.app.api.routes.billing import router as billing_router
 from backend.app.api.routes.console import router as console_router
 from backend.app.api.routes.email_verification import router as email_verification_router
 from backend.app.api.routes.executive_brief import router as executive_brief_router
-from backend.app.api.routes.knowledge import router as knowledge_router
+from backend.app.api.routes.knowledge import router as knowledge_router\nfrom backend.app.api.routes.life import router as life_router
 from backend.app.api.routes.membership_admin import router as membership_admin_router
 from backend.app.api.routes.mfa import router as mfa_router
 from backend.app.api.routes.orchestrations import router as orchestrations_router
@@ -64,7 +64,7 @@ def create_app() -> FastAPI:
         owner_commands_router,
         runtime_router,
         tools_router,
-        knowledge_router,
+        knowledge_router,\n        life_router,
         secret_references_router,
         security_events_router,
         research_router,
