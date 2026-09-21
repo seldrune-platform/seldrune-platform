@@ -221,3 +221,25 @@ def test_xenobiotic_v15_command_singularity_uses_measured_pressure(client) -> No
     assert ".xeno-command-singularity" in stylesheet.text
     assert "@keyframes xeno-singularity" in stylesheet.text
     assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v16_operational_phase_space_maps_measured_state(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V16" in script.text
+    assert "OPERATIONAL PHASE SPACE" in script.text
+    assert "xeno-phase-space" in script.text
+    for source_id in ("pending", "sti-running", "sti-failed", "sti-verified"):
+        assert source_id in script.text
+    for zone in ("QUIET", "DECISION", "EXECUTION", "VERIFIED", "RISK"):
+        assert zone in script.text
+    assert "--xeno-phase-x" in script.text
+    assert "--xeno-phase-y" in script.text
+    assert "MutationObserver" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V16" in stylesheet.text
+    assert ".xeno-phase-space" in stylesheet.text
+    assert "@keyframes xeno-phase-pulse" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
