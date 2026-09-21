@@ -10,8 +10,8 @@ from backend.app.models.governance_policy import GovernancePolicy
 from backend.app.models.orchestration import OrchestrationRun
 from backend.app.services.audit import record_audit
 from backend.app.services.autonomous_execution import execute_orchestration_autonomously
-from backend.app.services.orchestrator import refresh_orchestration_status
 from backend.app.services.life_lease import acquire_life_lease, release_life_lease
+from backend.app.services.orchestrator import refresh_orchestration_status
 
 
 _TERMINAL = {"completed", "failed", "cancelled"}
@@ -70,39 +70,41 @@ def run_life_tick(
         ):
             lease_skips += 1
             continue
-        before = run.status
-        execution = execute_orchestration_autonomously(
-            session,
-            run=run,
-            actor_user_id=actor_user_id,
-            stop_on_failure=True,
-            max_steps=step_limit,
-            max_retries_per_step=max_retries_per_step,
-        )
-        refresh_orchestration_status(session, run)
-        report = {
-            "run_id": str(run.id),
-            "objective": run.objective,
-            "before_status": before,
-            "after_status": run.status,
-            "execution": execution,
-        }
-        reports.append(report)
-        record_audit(
-            session,
-            organization_id=organization_id,
-            actor_user_id=actor_user_id,
-            action="seldrune.life.tick",
-            resource_type="orchestration",
-            resource_id=str(run.id),
-            details=report,
-        )
-        session.commit()
-        release_life_lease(
-            session,
-            orchestration_run_id=run.id,
-            worker_id=worker_id,
-        )
+        try:
+            before = run.status
+            execution = execute_orchestration_autonomously(
+                session,
+                run=run,
+                actor_user_id=actor_user_id,
+                stop_on_failure=True,
+                max_steps=step_limit,
+                max_retries_per_step=max_retries_per_step,
+            )
+            refresh_orchestration_status(session, run)
+            report = {
+                "run_id": str(run.id),
+                "objective": run.objective,
+                "before_status": before,
+                "after_status": run.status,
+                "execution": execution,
+            }
+            reports.append(report)
+            record_audit(
+                session,
+                organization_id=organization_id,
+                actor_user_id=actor_user_id,
+                action="seldrune.life.tick",
+                resource_type="orchestration",
+                resource_id=str(run.id),
+                details=report,
+            )
+            session.commit()
+        finally:
+            release_life_lease(
+                session,
+                orchestration_run_id=run.id,
+                worker_id=worker_id,
+            )
 
     return {
         "mode": "life-tick-v1",
