@@ -22,6 +22,6 @@ def test_gpt_operator_remains_truth_gated():
 
 def test_tab_controller_keeps_one_explicit_workspace():
     js = (WEB / "console-tabs.js").read_text()
-    assert '"gpt":["seldrune-gpt"]' in js
+    assert 'gpt:["seldrune-gpt"]' in js
     assert 'classList.remove("console-tab-active")' in js
     assert 'localStorage.setItem("seldrune.console.tab",selected)' in js
