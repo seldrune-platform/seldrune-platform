@@ -60,7 +60,10 @@ def seldrune_gpt(
         )
     )
     history.reverse()
-    context_lines = [f"{item.role}: {item.content}" for item in history]\n    while sum(len(line) for line in context_lines) > 24000 and context_lines:\n        context_lines.pop(0)\n    context = "\\n".join(context_lines)
+    context_lines = [f"{item.role}: {item.content}" for item in history]
+    while sum(len(line) for line in context_lines) > 24000 and context_lines:
+        context_lines.pop(0)
+    context = "\\n".join(context_lines)
     input_text = payload.message
     if context:
         input_text = f"Recent conversation:\\n{context}\\n\\nUser: {payload.message}"
