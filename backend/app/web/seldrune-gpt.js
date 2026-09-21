@@ -37,7 +37,7 @@
       });
       model.textContent = result.model || 'OpenAI';
       addMessage('Seldrune GPT', result.response || '(No text returned)');
-      status.textContent = `Usage: ${result.input_tokens || 0} input · ${result.output_tokens || 0} output tokens`;
+      status.textContent = `${result.provider || 'openai'} · ${result.model || 'model'} · ${result.latency_ms || 0} ms · ${result.input_tokens || 0} input · ${result.output_tokens || 0} output tokens`;
     } catch (error) {
       addMessage('System', `GPT request failed: ${error.message}`);
       status.textContent = 'Request failed.';
