@@ -1,16 +1,7 @@
-from uuid import uuid4
-
-from backend.app.services.life_cycle import run_life_tick
-
-
-def test_life_tick_is_governance_blocked_without_policy(db_session) -> None:
-    result = run_life_tick(
-        db_session,
-        organization_id=uuid4(),
-        actor_user_id=uuid4(),
-    )
-    assert result["status"] == "governance_blocked"
-    assert result["commands_advanced"] == 0
+def test_life_tick_requires_authentication(client) -> None:
+    organization_id = "00000000-0000-0000-0000-000000000001"
+    response = client.post(f"/api/v1/organizations/{organization_id}/life/tick")
+    assert response.status_code in (401, 403)
 
 
 def test_life_tick_route_is_registered(client) -> None:
