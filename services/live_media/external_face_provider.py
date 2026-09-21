@@ -25,7 +25,7 @@ class ReplicateFaceProvider:
     def __init__(self, token: str | None = None, version: str | None = None,
                  target_key: str | None = None, source_key: str | None = None) -> None:
         self.token = token or os.getenv("REPLICATE_API_TOKEN")
-        self.version = version or os.getenv("SELDRUNE_FACE_REPLICATE_VERSION")
+        self.version = version or os.getenv("SELDRUNE_FACE_REPLICATE_VERSION", "codeplugtech/face-swap:278a81e7ebb22db98bcba54de985d22cc1abeead2754eb1f2af717247be69b34")
         self.target_key = target_key or os.getenv("SELDRUNE_FACE_TARGET_KEY", "input_image")
         self.source_key = source_key or os.getenv("SELDRUNE_FACE_SOURCE_KEY", "swap_image")
         if not self.token:
