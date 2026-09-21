@@ -8,6 +8,12 @@ from .reality_compiler import (
     RealityObjective,
     compile_reality,
 )
+from .reality_lab import (
+    CalibrationReceipt,
+    ExperimentProtocol,
+    Measurement,
+    calibrate_experiment,
+)
 from .reality_twin import (
     CausalLink,
     Guardrail,
@@ -21,7 +27,7 @@ from .reality_twin import (
 
 def _payload(receipt: RealityCompileReceipt) -> dict[str, object]:
     return {
-        "compiler": "aetherion-reality-compiler-v0.2",
+        "compiler": "aetherion-reality-compiler-v0.3",
         "status": "experimental",
         "objective_id": receipt.objective_id,
         "selected_candidate_id": receipt.selected_candidate_id,
@@ -67,6 +73,26 @@ def _twin_payload(receipt: TwinReceipt) -> dict[str, object]:
     }
 
 
+def _lab_payload(receipt: CalibrationReceipt) -> dict[str, object]:
+    return {
+        "laboratory": "aetherion-reality-lab-v0.1",
+        "status": "experimental",
+        "protocol_id": receipt.protocol_id,
+        "decision": receipt.decision.value,
+        "observation_count": receipt.observation_count,
+        "slope": receipt.slope,
+        "intercept": receipt.intercept,
+        "r_squared": receipt.r_squared,
+        "slope_within_bounds": receipt.slope_within_bounds,
+        "evidence_artifacts": list(receipt.evidence_artifacts),
+        "report_sha256": receipt.report_sha256,
+        "evidence": receipt.evidence.value,
+        "independently_replicated": receipt.independently_replicated,
+        "causal_model_verified": receipt.causal_model_verified,
+        "physical_system_verified": receipt.physical_system_verified,
+    }
+
+
 def build_reality_payload(
     objective: RealityObjective,
     candidates: tuple[InventionCandidate, ...],
@@ -80,6 +106,13 @@ def build_twin_payload(
     scenario: TwinScenario,
 ) -> dict[str, object]:
     return _twin_payload(simulate_twin(variables, links, scenario))
+
+
+def build_calibration_payload(
+    protocol: ExperimentProtocol,
+    measurements: tuple[Measurement, ...],
+) -> dict[str, object]:
+    return _lab_payload(calibrate_experiment(protocol, measurements))
 
 
 def build_demo_reality_payload() -> dict[str, object]:
@@ -149,3 +182,28 @@ def build_demo_twin_payload() -> dict[str, object]:
         ),
     )
     return build_twin_payload(variables, links, scenario)
+
+
+def build_demo_lab_payload() -> dict[str, object]:
+    protocol = ExperimentProtocol(
+        protocol_id="thermal-efficiency-calibration-v1",
+        source_variable="temperature_delta",
+        target_variable="efficiency_delta",
+        input_unit="kelvin",
+        output_unit="ratio",
+        minimum_observations=4,
+        minimum_r_squared=0.95,
+        slope_lower_bound=0.004,
+        slope_upper_bound=0.008,
+        safety_notes=("Stop if any declared thermal guardrail is reached.",),
+    )
+    measurements = tuple(
+        Measurement(
+            measurement_id=f"demo-run-{index}",
+            input_value=float(index),
+            output_value=0.006 * index,
+            evidence_sha256=f"{index:064x}",
+        )
+        for index in range(1, 5)
+    )
+    return build_calibration_payload(protocol, measurements)
