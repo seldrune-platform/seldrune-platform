@@ -84,3 +84,21 @@ def test_xenobiotic_v8_owner_command_lens_is_measured_and_navigable(client) -> N
     assert "Owner Command Lens" in stylesheet.text
     assert '[data-attention="decision"]' in stylesheet.text
     assert '[data-attention="execution"]' in stylesheet.text
+
+
+def test_xenobiotic_v9_temporal_pulse_tracks_only_observed_state(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V9" in script.text
+    assert "TEMPORAL PULSE" in script.text
+    assert "xeno-temporal-pulse" in script.text
+    for source_id in ("pending", "sti-running", "sti-verified", "sti-failed"):
+        assert source_id in script.text
+    assert "history.splice(5)" in script.text
+    assert "MutationObserver" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "Temporal Pulse" in stylesheet.text
+    assert ".xeno-temporal-pulse" in stylesheet.text
+    assert "prefers-reduced-motion" in stylesheet.text
