@@ -16,7 +16,7 @@ def test_owner_console_exposes_dedicated_tabs():
 def test_gpt_operator_remains_truth_gated():
     html = (WEB / "index.html").read_text()
     assert 'id="seldrune-gpt-execute"' in html
-    assert "require explicit owner confirmation" in html
+    assert "require fresh confirmation" in html
     assert 'id="seldrune-gpt-model"' in html
 
 
