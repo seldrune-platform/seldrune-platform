@@ -4,6 +4,7 @@ from backend.app.models.audit import AuditLog
 from backend.app.models.email_verification_token import EmailVerificationToken
 from backend.app.models.governance_policy import GovernancePolicy
 from backend.app.models.knowledge import KnowledgeEntry
+from backend.app.models.life_lease import LifeLease
 from backend.app.models.login_failure import LoginFailure
 from backend.app.models.membership import Membership
 from backend.app.models.memory import MemoryItem
@@ -46,6 +47,7 @@ __all__ = [
     "EmailVerificationToken",
     "GovernancePolicy",
     "KnowledgeEntry",
+    "LifeLease",
     "LoginFailure",
     "Membership",
     "MemoryItem",
