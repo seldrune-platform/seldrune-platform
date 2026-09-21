@@ -9,6 +9,7 @@ from backend.app.api.dependencies import CurrentUserDep, SessionDep, require_org
 from backend.app.api.routes.orchestrations import _get_run, _to_public
 from backend.app.core.rbac import Permission, Role
 from backend.app.core.tasking import TaskStatus
+from backend.app.models.life_worker_heartbeat import LifeWorkerHeartbeat
 from backend.app.models.membership import Membership
 from backend.app.models.orchestration import OrchestrationRun
 from backend.app.models.task import Task
@@ -66,6 +67,25 @@ def life_heartbeat(
     failed = task_counts.get(TaskStatus.FAILED.value, 0)
     verified = task_counts.get(TaskStatus.SUCCEEDED.value, 0)
     latest = runs[0] if runs else None
+    now = datetime.now(UTC)
+    worker = session.scalar(
+        select(LifeWorkerHeartbeat).order_by(LifeWorkerHeartbeat.last_seen_at.desc()).limit(1)
+    )
+    worker_age_seconds = None
+    worker_health = "missing"
+    if worker is not None:
+        last_seen = worker.last_seen_at
+        if last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=UTC)
+        worker_age_seconds = max(0.0, (now - last_seen).total_seconds())
+        stale_after = 120.0
+        worker_health = (
+            "stopped"
+            if worker.status == "stopped"
+            else "stale"
+            if worker_age_seconds > stale_after
+            else "alive"
+        )
     return {
         "alive": True,
         "source": "durable-database-state",
@@ -82,6 +102,20 @@ def life_heartbeat(
             "verified_tasks": verified,
             "failed_tasks": failed,
         },
+        "worker": (
+            {
+                "worker_id": worker.worker_id,
+                "status": worker.status,
+                "health": worker_health,
+                "last_seen_at": worker.last_seen_at,
+                "age_seconds": worker_age_seconds,
+                "cycle_count": worker.cycle_count,
+                "commands_advanced": worker.commands_advanced,
+                "last_error": worker.last_error,
+            }
+            if worker
+            else {"health": "missing"}
+        ),
         "latest_command": (
             {
                 "id": str(latest.id),
@@ -130,9 +164,9 @@ def life_pulse(
         details={
             "before_status": before,
             "after_status": run.status,
-            "executed_steps": result.executed_steps,
-            "failed_steps": result.failed_steps,
-            "halted_reason": result.halted_reason,
+            "executed_steps": result.get("executed_steps", []),
+            "failed_steps": result.get("failed_steps", []),
+            "halted_reason": result.get("halted_reason"),
         },
     )
     session.commit()
@@ -142,7 +176,7 @@ def life_pulse(
         "pulse": {
             "before_status": before,
             "after_status": run.status,
-            "execution": result.model_dump(mode="json"),
+            "execution": result,
         },
         "run": _to_public(session, run).model_dump(mode="json"),
     }
