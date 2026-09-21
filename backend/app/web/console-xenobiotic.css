@@ -43,3 +43,19 @@ button:hover{filter:brightness(1.18)!important;box-shadow:0 0 30px rgba(98,247,2
 #toast{background:rgba(4,7,22,.96)!important;border-color:rgba(98,247,255,.28)!important}
 @keyframes xenoMorph{0%,100%{border-radius:42% 58% 55% 45%/55% 42% 58% 45%;transform:rotate(0)}50%{border-radius:57% 43% 38% 62%/42% 61% 39% 58%;transform:rotate(4deg)}}
 @media(prefers-reduced-motion:reduce){.brand>span{animation:none}}
+
+/* V2 spatial cognition */
+.xeno-core{position:fixed;z-index:-1;left:58%;top:17vh;width:min(30vw,430px);aspect-ratio:1;pointer-events:none;opacity:.34;transform:translateX(calc(var(--xeno-scroll,0)*-8vw));transition:transform .25s linear}
+.xeno-core b,.xeno-core i{position:absolute;inset:18%;border:1px solid rgba(98,247,255,.28);border-radius:50%;box-shadow:0 0 42px rgba(98,247,255,.08),inset 0 0 32px rgba(157,99,255,.09);animation:xenoOrbit 18s linear infinite}
+.xeno-core i:nth-child(2){inset:28%;border-color:rgba(255,95,225,.28);animation-duration:13s;animation-direction:reverse}
+.xeno-core i:nth-child(3){inset:38%;border-style:dashed;animation-duration:8s}
+.xeno-core b{inset:44%;border:0;background:radial-gradient(circle,#dffcff 0 8%,#63f7ff 9% 17%,rgba(157,99,255,.5) 31%,transparent 70%);filter:blur(.2px);animation:xenoHeart 2.8s ease-in-out infinite}
+.xeno-core i::after{content:"";position:absolute;width:7px;height:7px;border-radius:50%;top:7%;left:18%;background:#8cffff;box-shadow:0 0 16px #62f7ff}
+.xeno-materialize{animation:xenoMaterialize .7s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--xeno-delay)}
+nav a.xeno-selected{filter:brightness(1.22);text-shadow:0 0 13px rgba(98,247,255,.6)}
+.section-head h2,.panel h2{letter-spacing:.015em}
+@keyframes xenoOrbit{to{transform:rotate(360deg)}}
+@keyframes xenoHeart{0%,100%{transform:scale(.88);opacity:.55}50%{transform:scale(1.12);opacity:1}}
+@keyframes xenoMaterialize{0%{opacity:0;transform:translateY(18px) scale(.985);filter:blur(7px)}100%{opacity:1;transform:none;filter:none}}
+@media(max-width:900px){.xeno-core{left:56%;top:24vh;width:72vw;opacity:.16}}
+@media(prefers-reduced-motion:reduce){.xeno-core *,.xeno-materialize{animation:none!important}}
