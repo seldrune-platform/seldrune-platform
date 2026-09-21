@@ -33,12 +33,39 @@ OwnerOperatorDep = Annotated[
 
 
 _OPERATOR_RISK_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("destructive_change", re.compile(r"\b(delete|erase|wipe|drop|destroy|terminate|revoke)\b", re.I)),
-    ("financial_commitment", re.compile(r"\b(pay|purchase|buy|subscribe|spend|transfer|refund|invoice)\b", re.I)),
-    ("external_communication", re.compile(r"\b(send|email|message|publish|post|invite|notify)\b", re.I)),
-    ("credential_or_access_change", re.compile(r"\b(password|credential|secret|api[ -]?key|token|mfa|permission|access)\b", re.I)),
-    ("production_change", re.compile(r"\b(deploy|release|merge|push to main|production)\b", re.I)),
-    ("legal_or_people_commitment", re.compile(r"\b(sign|contract|hire|fire|terminate employment|legal filing)\b", re.I)),
+    (
+        "destructive_change",
+        re.compile(r"\b(delete|erase|wipe|drop|destroy|terminate|revoke)\b", re.I),
+    ),
+    (
+        "financial_commitment",
+        re.compile(
+            r"\b(pay|purchase|buy|subscribe|spend|transfer|refund|invoice)\b",
+            re.I,
+        ),
+    ),
+    (
+        "external_communication",
+        re.compile(r"\b(send|email|message|publish|post|invite|notify)\b", re.I),
+    ),
+    (
+        "credential_or_access_change",
+        re.compile(
+            r"\b(password|credential|secret|api[ -]?key|token|mfa|permission|access)\b",
+            re.I,
+        ),
+    ),
+    (
+        "production_change",
+        re.compile(r"\b(deploy|release|merge|push to main|production)\b", re.I),
+    ),
+    (
+        "legal_or_people_commitment",
+        re.compile(
+            r"\b(sign|contract|hire|fire|terminate employment|legal filing)\b",
+            re.I,
+        ),
+    ),
 )
 
 
