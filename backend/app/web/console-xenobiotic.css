@@ -77,3 +77,13 @@ nav a.xeno-selected{filter:brightness(1.22);text-shadow:0 0 13px rgba(98,247,255
 .xeno-nexus[data-state="active"] .xeno-radial-core{box-shadow:0 0 52px rgba(98,247,255,.26),inset 0 0 38px rgba(157,99,255,.2);animation-duration:4s}.xeno-nexus[data-state="active"]{border-color:rgba(98,247,255,.34)}
 .xeno-nexus[data-state="alert"]{border-color:rgba(255,95,135,.46);box-shadow:inset 0 0 80px rgba(255,30,100,.04),0 25px 90px rgba(0,0,0,.35)}.xeno-nexus[data-state="alert"] .xeno-radial-core{border-color:rgba(255,95,135,.65);box-shadow:0 0 54px rgba(255,60,130,.2),inset 0 0 32px rgba(157,99,255,.18)}.xeno-nexus[data-state="alert"] .xeno-radial-core b{color:#ffdce8;text-shadow:0 0 16px rgba(255,95,135,.8)}
 @media(max-width:750px){.xeno-sense-rail{grid-template-columns:repeat(2,1fr);bottom:48px}.xeno-nexus{min-height:570px}.xeno-nexus-status{bottom:10px}}
+
+/* V5 — adaptive intent geometry */
+.xeno-mode{position:absolute;z-index:5;right:20px;top:18px;padding:7px 12px;border:1px solid rgba(98,247,255,.15);background:rgba(3,7,22,.72);font-size:8px;letter-spacing:.14em;color:#647f98;clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%)}.xeno-mode b{margin-left:7px;color:#bffaff;font-size:9px}
+.xeno-radial button.xeno-priority{filter:brightness(1.3);transform:scale(1.08);border-color:rgba(191,250,255,.72)!important;box-shadow:0 0 26px rgba(98,247,255,.25)!important}
+.app-shell[data-xeno-mode="incident"] .xeno-nexus{background:radial-gradient(circle at 50% 54%,rgba(255,45,105,.16),transparent 25%),linear-gradient(145deg,rgba(20,5,19,.86),rgba(8,5,25,.7))}
+.app-shell[data-xeno-mode="decision"] .xeno-nexus{background:radial-gradient(circle at 50% 54%,rgba(255,193,73,.12),transparent 25%),linear-gradient(145deg,rgba(18,12,20,.84),rgba(8,5,25,.7))}
+.app-shell[data-xeno-mode="forge"] .xeno-nexus{background:radial-gradient(circle at 50% 54%,rgba(98,247,255,.19),transparent 26%),linear-gradient(145deg,rgba(3,15,29,.84),rgba(8,5,25,.7))}
+.app-shell[data-xeno-mode="face"] .xeno-nexus{background:radial-gradient(circle at 50% 54%,rgba(255,95,225,.15),transparent 26%),linear-gradient(145deg,rgba(18,5,30,.84),rgba(5,8,27,.7))}
+.app-shell[data-xeno-mode="liveshift"] .xeno-nexus{background:radial-gradient(circle at 50% 54%,rgba(74,255,181,.14),transparent 26%),linear-gradient(145deg,rgba(3,19,24,.84),rgba(7,5,27,.7))}
+@media(max-width:650px){.xeno-mode{position:relative;display:table;margin:10px auto 0;right:auto;top:auto}}
