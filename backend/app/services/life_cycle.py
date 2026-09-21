@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from backend.app.models.orchestration import OrchestrationRun
 from backend.app.services.audit import record_audit
 from backend.app.services.autonomous_execution import execute_orchestration_autonomously
 from backend.app.services.orchestrator import refresh_orchestration_status
+from backend.app.services.life_lease import acquire_life_lease, release_life_lease
 
 
 _TERMINAL = {"completed", "failed", "cancelled"}
@@ -58,7 +59,17 @@ def run_life_tick(
     ][:max_commands]
 
     reports: list[dict[str, Any]] = []
+    worker_id = f"life-tick:{uuid4()}"
+    lease_skips = 0
     for run in eligible:
+        if not acquire_life_lease(
+            session,
+            orchestration_run_id=run.id,
+            organization_id=organization_id,
+            worker_id=worker_id,
+        ):
+            lease_skips += 1
+            continue
         before = run.status
         execution = execute_orchestration_autonomously(
             session,
@@ -87,12 +98,19 @@ def run_life_tick(
             details=report,
         )
         session.commit()
+        release_life_lease(
+            session,
+            orchestration_run_id=run.id,
+            worker_id=worker_id,
+        )
 
     return {
         "mode": "life-tick-v1",
         "status": "advanced" if reports else "idle",
         "commands_considered": len(eligible),
         "commands_advanced": len(reports),
+        "lease_skips": lease_skips,
+        "worker_id": worker_id,
         "max_commands": max_commands,
         "max_steps_per_command": step_limit,
         "max_retries_per_step": max_retries_per_step,
