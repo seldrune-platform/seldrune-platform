@@ -336,3 +336,33 @@ def test_xenobiotic_v20_decision_event_horizon_uses_measured_pressure(client) ->
     assert ".xeno-decision-horizon" in stylesheet.text
     assert "@keyframes xeno-event-horizon" in stylesheet.text
     assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v21_autonomy_aperture_uses_measured_capacity(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V21" in script.text
+    assert "AUTONOMY APERTURE" in script.text
+    assert "xeno-autonomy-aperture" in script.text
+    source_ids = (
+        "pending",
+        "action-approvals",
+        "sti-running",
+        "sti-verified",
+        "sti-failed",
+        "ls-cuda",
+        "ls-onnx",
+    )
+    for source_id in source_ids:
+        assert source_id in script.text
+    for state in ("GUARDED", "LOCKED", "OPEN", "WIDENING", "CALIBRATING"):
+        assert state in script.text
+    assert "--xeno-autonomy" in script.text
+    assert "MutationObserver" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V21" in stylesheet.text
+    assert ".xeno-autonomy-aperture" in stylesheet.text
+    assert "@keyframes xeno-aperture-iris" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
