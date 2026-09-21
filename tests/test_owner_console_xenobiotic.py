@@ -199,3 +199,25 @@ def test_xenobiotic_v14_verification_lattice_uses_measured_trust_channels(client
     assert ".xeno-verification-lattice" in stylesheet.text
     assert "@keyframes xeno-lattice-pulse" in stylesheet.text
     assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v15_command_singularity_uses_measured_pressure(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V15" in script.text
+    assert "COMMAND SINGULARITY" in script.text
+    assert "xeno-command-singularity" in script.text
+    for source_id in ("pending", "sti-running", "sti-failed"):
+        assert source_id in script.text
+    for state in ("dormant", "decision", "execution", "critical"):
+        assert state in script.text
+    assert "--xeno-pressure" in script.text
+    assert "MutationObserver" in script.text
+    assert "prefers-reduced-motion: reduce" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V15" in stylesheet.text
+    assert ".xeno-command-singularity" in stylesheet.text
+    assert "@keyframes xeno-singularity" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
