@@ -1,5 +1,6 @@
 import pytest
 
+from backend.app.api.routes.aetherion import reality_twin_demo
 from services.aetherion.qgpu_model import EvidenceLevel
 from services.aetherion.reality_twin import (
     CausalLink,
@@ -71,3 +72,12 @@ def test_twin_rejects_unknown_variables_and_unbounded_steps():
     too_long = TwinScenario("too-long", "output", 257, ())
     with pytest.raises(ValueError, match="between 1 and 256"):
         simulate_twin(_variables(), (), too_long)
+
+
+def test_twin_demo_endpoint_preserves_truth_boundary():
+    payload = reality_twin_demo()
+
+    assert payload["status"] == "experimental"
+    assert payload["trajectory"]
+    assert not payload["causal_model_verified"]
+    assert not payload["physical_system_verified"]
