@@ -264,3 +264,24 @@ def test_xenobiotic_v17_mission_coherence_uses_measured_alignment(client) -> Non
     assert ".xeno-mission-coherence" in stylesheet.text
     assert "@keyframes xeno-coherence-pulse" in stylesheet.text
     assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v18_reality_horizon_uses_measured_distance(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V18" in script.text
+    assert "REALITY HORIZON" in script.text
+    assert "xeno-reality-horizon" in script.text
+    for source_id in ("pending", "sti-running", "sti-verified", "sti-failed"):
+        assert source_id in script.text
+    for state in ("CLEAR", "NEAR", "APPROACH", "FAR", "BREACH"):
+        assert state in script.text
+    assert "--xeno-horizon" in script.text
+    assert "MutationObserver" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V18" in stylesheet.text
+    assert ".xeno-reality-horizon" in stylesheet.text
+    assert "@keyframes xeno-horizon-wave" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
