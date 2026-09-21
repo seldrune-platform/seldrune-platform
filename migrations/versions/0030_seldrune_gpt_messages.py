@@ -23,12 +23,21 @@ def upgrade() -> None:
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("model", sa.String(length=128), nullable=True),
         sa.Column("response_id", sa.String(length=255), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_seldrune_gpt_messages_organization_id", "seldrune_gpt_messages", ["organization_id"])
+    op.create_index(
+        "ix_seldrune_gpt_messages_organization_id",
+        "seldrune_gpt_messages",
+        ["organization_id"],
+    )
     op.create_index("ix_seldrune_gpt_messages_user_id", "seldrune_gpt_messages", ["user_id"])
     op.create_index("ix_seldrune_gpt_messages_created_at", "seldrune_gpt_messages", ["created_at"])
 
