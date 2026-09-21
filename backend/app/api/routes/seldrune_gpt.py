@@ -2,13 +2,15 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from pydantic import BaseModel, Field
 
-from backend.app.api.dependencies import CurrentUserDep, require_org_permission
+from backend.app.api.dependencies import CurrentUserDep, SessionDep, require_org_permission
 from backend.app.core.config import settings
 from backend.app.core.modeling import ModelProvider, ModelRequest
 from backend.app.core.rbac import Permission
 from backend.app.models.membership import Membership
+from backend.app.models.seldrune_gpt_message import SeldruneGPTMessage
 from backend.app.services.model_gateway import ModelGateway, ModelGatewayError
 
 router = APIRouter(prefix="/organizations", tags=["seldrune-gpt"])
@@ -35,14 +37,31 @@ def seldrune_gpt(
     organization_id: UUID,
     payload: SeldruneGPTRequest,
     _membership: AgentsRunDep,
-    _current_user: CurrentUserDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
 ) -> SeldruneGPTResponse:
     if settings.model_provider != "openai":
         raise HTTPException(status_code=503, detail="OpenAI model provider is not enabled")
+    history = list(
+        session.scalars(
+            select(SeldruneGPTMessage)
+            .where(
+                SeldruneGPTMessage.organization_id == organization_id,
+                SeldruneGPTMessage.user_id == current_user.id,
+            )
+            .order_by(SeldruneGPTMessage.created_at.desc())
+            .limit(12)
+        )
+    )
+    history.reverse()
+    context = "\\n".join(f"{item.role}: {item.content}" for item in history)
+    input_text = payload.message
+    if context:
+        input_text = f"Recent conversation:\\n{context}\\n\\nUser: {payload.message}"
     request = ModelRequest(
         provider=ModelProvider.OPENAI,
         model=settings.model_default,
-        input_text=payload.message,
+        input_text=input_text,
         instructions=(
             "You are Seldrune GPT, the reasoning interface inside the Seldrune STI "
             "owner console. Help the owner analyze, design, and plan work. Do not claim "
@@ -59,6 +78,25 @@ def seldrune_gpt(
         result, _latency_ms = ModelGateway(settings).generate(request)
     except ModelGatewayError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    session.add(
+        SeldruneGPTMessage(
+            organization_id=organization_id,
+            user_id=current_user.id,
+            role="user",
+            content=payload.message,
+        )
+    )
+    session.add(
+        SeldruneGPTMessage(
+            organization_id=organization_id,
+            user_id=current_user.id,
+            role="assistant",
+            content=result.output_text,
+            model=result.model,
+            response_id=result.response_id,
+        )
+    )
+    session.commit()
     return SeldruneGPTResponse(
         model=result.model,
         response=result.output_text,
