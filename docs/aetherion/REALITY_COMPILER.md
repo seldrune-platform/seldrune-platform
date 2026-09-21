@@ -1,4 +1,4 @@
-# Aetherion Reality Compiler v0.2
+# Aetherion Reality Compiler v0.3
 
 The Reality Compiler is an executable, truth-gated design-search layer inside
 Seldrune STI. It turns an explicit objective, constraints, success metrics, and
@@ -8,7 +8,7 @@ that the caller declares.
 
 ## Current executable boundary
 
-Version 0.2 can:
+Version 0.3 can:
 
 - validate bounded objectives and normalized candidate data;
 - reject candidates that miss declared constraints or cross risk thresholds;
@@ -16,7 +16,10 @@ Version 0.2 can:
 - select reproducible prototype steps;
 - propagate interventions through a bounded numeric causal model;
 - enforce simulation guardrails and record every model assumption;
-- issue SHA-256 evidence receipts for compilation and simulation;
+- define falsifiable laboratory protocols with units and safety notes;
+- fit measured observations, calculate R², and enforce slope acceptance bounds;
+- require content-addressed evidence for every submitted observation;
+- issue SHA-256 evidence receipts for compilation, simulation, and calibration;
 - expose results through the Aetherion API and Owner Console.
 
 It does **not** autonomously discover new physics, prove that a declared causal
@@ -30,6 +33,8 @@ physical, and real-world verification flags set to `false`.
 - `POST /api/v1/aetherion/reality-compiler/compile` evaluates a candidate set.
 - `GET /api/v1/aetherion/reality-compiler/digital-twin` returns a twin demo.
 - `POST /api/v1/aetherion/reality-compiler/simulate` runs a bounded twin scenario.
+- `GET /api/v1/aetherion/reality-compiler/reality-lab` returns a lab demo.
+- `POST /api/v1/aetherion/reality-compiler/calibrate` evaluates observations.
 
 ## Digital twin limits
 
@@ -40,6 +45,17 @@ frame, and verification flags are included in the deterministic receipt.
 
 The simulator is a hypothesis engine. Its coefficients must later be calibrated
 against measured data before anyone can claim the causal model is verified.
+
+## Reality Lab gate
+
+Reality Lab accepts a protocol and up to 10,000 finite observations. Each
+observation must reference a SHA-256 evidence artifact. It computes a linear
+fit, slope, intercept, and R², then returns one of three decisions:
+`insufficient-data`, `rejected`, or `eligible-for-independent-review`.
+
+Eligibility is not verification. The receipt always keeps independent
+replication, causal-model verification, and physical-system verification false.
+A later authorized process must validate evidence provenance and replication.
 
 ## Evidence progression
 
