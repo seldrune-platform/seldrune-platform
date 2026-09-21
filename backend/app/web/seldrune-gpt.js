@@ -5,6 +5,7 @@
   const thread = document.querySelector('#seldrune-gpt-thread');
   const status = document.querySelector('#seldrune-gpt-status');
   const model = document.querySelector('#seldrune-gpt-model');
+  const newConversation = document.querySelector('#seldrune-gpt-new');
 
   function addMessage(label, text) {
     if (thread.querySelector('.empty')) thread.replaceChildren();
@@ -20,6 +21,31 @@
     thread.append(card);
     card.scrollIntoView({behavior: 'smooth', block: 'nearest'});
   }
+
+  async function loadHistory() {
+    try {
+      const messages = await api('/gpt/history');
+      if (!messages.length) return;
+      thread.replaceChildren();
+      messages.forEach(item => addMessage(item.role === 'assistant' ? 'Seldrune GPT' : 'You', item.content));
+      status.textContent = `Restored ${messages.length} saved messages.`;
+    } catch (error) {
+      status.textContent = `History unavailable: ${error.message}`;
+    }
+  }
+
+  newConversation?.addEventListener('click', async () => {
+    if (!window.confirm('Start a new Seldrune GPT conversation and clear saved context?')) return;
+    try {
+      await api('/gpt/history', {method: 'DELETE'});
+      thread.innerHTML = '<div class="empty">New conversation started.</div>';
+      status.textContent = 'Saved GPT context cleared.';
+    } catch (error) {
+      status.textContent = `Could not clear history: ${error.message}`;
+    }
+  });
+
+  loadHistory();
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
