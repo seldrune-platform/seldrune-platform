@@ -66,3 +66,21 @@ def test_xenobiotic_v7_reality_constellation_uses_measured_state(client) -> None
     assert "Verified Reality Constellation" in stylesheet.text
     assert ".xeno-reality-node" in stylesheet.text
     assert "prefers-reduced-motion" in stylesheet.text
+
+
+def test_xenobiotic_v8_owner_command_lens_is_measured_and_navigable(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V8" in script.text
+    assert "COMMAND LENS" in script.text
+    assert "xeno-command-lens" in script.text
+    for target in ("action-inbox", "command", "sti-runtime", "liveshift-mission"):
+        assert f'data-lens="{target}"' in script.text
+    assert 'document.getElementById("pending")' in script.text
+    assert 'document.getElementById("sti-running")' in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "Owner Command Lens" in stylesheet.text
+    assert '[data-attention="decision"]' in stylesheet.text
+    assert '[data-attention="execution"]' in stylesheet.text
