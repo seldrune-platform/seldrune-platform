@@ -138,3 +138,23 @@ def test_xenobiotic_v11_anomaly_compass_uses_measured_exceptions(client) -> None
     assert ".xeno-anomaly-compass" in stylesheet.text
     assert "@keyframes xeno-compass-scan" in stylesheet.text
     assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v12_convergence_beacon_uses_measured_execution_state(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V12" in script.text
+    assert "CONVERGENCE BEACON" in script.text
+    assert "xeno-convergence-beacon" in script.text
+    for source_id in ("sti-failed", "sti-running", "sti-verified", "ls-cuda", "ls-onnx"):
+        assert source_id in script.text
+    for state in ("QUIET", "FORMING", "CONVERGED", "DIVERGENCE"):
+        assert state in script.text
+    assert "MutationObserver" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V12" in stylesheet.text
+    assert ".xeno-convergence-beacon" in stylesheet.text
+    assert "@keyframes xeno-converge" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
