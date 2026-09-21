@@ -119,3 +119,22 @@ def test_xenobiotic_v10_reality_checksum_hashes_measured_channels(client) -> Non
     assert stylesheet.status_code == 200
     assert "Reality Checksum" in stylesheet.text
     assert ".xeno-reality-checksum" in stylesheet.text
+
+
+def test_xenobiotic_v11_anomaly_compass_uses_measured_exceptions(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V11" in script.text
+    assert "ANOMALY COMPASS" in script.text
+    assert "xeno-anomaly-compass" in script.text
+    for source_id in ("incident-critical", "sti-failed", "pending"):
+        assert source_id in script.text
+    assert "MutationObserver" in script.text
+    assert "prefers-reduced-motion: reduce" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V11" in stylesheet.text
+    assert ".xeno-anomaly-compass" in stylesheet.text
+    assert "@keyframes xeno-compass-scan" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
