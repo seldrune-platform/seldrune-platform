@@ -307,3 +307,25 @@ def test_xenobiotic_v19_causal_wake_uses_measured_momentum(client) -> None:
     assert ".xeno-causal-wake" in stylesheet.text
     assert "@keyframes xeno-causal-stream" in stylesheet.text
     assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v20_decision_event_horizon_uses_measured_pressure(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V20" in script.text
+    assert "DECISION EVENT HORIZON" in script.text
+    assert "xeno-decision-horizon" in script.text
+    for source_id in ("pending", "action-approvals", "incident-critical", "sti-failed", "sti-running"):
+        assert source_id in script.text
+    for state in ("QUIET", "WATCH", "DECIDE", "FAILURE", "CRITICAL"):
+        assert state in script.text
+    assert "--xeno-decision-pressure" in script.text
+    assert "scrollIntoView" in script.text
+    assert "MutationObserver" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V20" in stylesheet.text
+    assert ".xeno-decision-horizon" in stylesheet.text
+    assert "@keyframes xeno-event-horizon" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
