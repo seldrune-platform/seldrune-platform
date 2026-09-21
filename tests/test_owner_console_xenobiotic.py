@@ -179,3 +179,23 @@ def test_xenobiotic_v13_execution_gravity_uses_measured_workload(client) -> None
     assert ".xeno-execution-gravity" in stylesheet.text
     assert "@keyframes xeno-gravity-orbit" in stylesheet.text
     assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v14_verification_lattice_uses_measured_trust_channels(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V14" in script.text
+    assert "VERIFICATION LATTICE" in script.text
+    assert "xeno-verification-lattice" in script.text
+    for source_id in ("sti-verified", "sti-failed", "ls-cuda", "ls-onnx"):
+        assert source_id in script.text
+    for state in ("sealed", "partial", "open"):
+        assert state in script.text
+    assert "MutationObserver" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V14" in stylesheet.text
+    assert ".xeno-verification-lattice" in stylesheet.text
+    assert "@keyframes xeno-lattice-pulse" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
