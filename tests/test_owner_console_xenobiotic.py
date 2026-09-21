@@ -31,3 +31,22 @@ def test_xenobiotic_interface_preserves_measured_state_language(client) -> None:
     assert "CORE <b>ONLINE</b>" in script.text
     assert "fake" not in script.text.lower()
     assert "simulated" not in script.text.lower()
+
+
+def test_xenobiotic_v6_attention_vector_uses_measured_counters(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "ATTENTION VECTOR" in script.text
+    assert "xeno-attention-field" in script.text
+    assert 'read("incident-critical")' in script.text
+    assert 'read("pending")' in script.text
+    assert 'read("sti-running")' in script.text
+    assert 'read("sti-failed")' in script.text
+    assert "no elevated measured counters" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V6" in stylesheet.text
+    assert ".xeno-attention-field" in stylesheet.text
+
+# V6 PR validation pulse.
