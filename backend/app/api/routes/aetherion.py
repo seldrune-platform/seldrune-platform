@@ -6,12 +6,15 @@ from pydantic import BaseModel
 from services.aetherion.evidence_api import build_evidence_payload
 from services.aetherion.qir import QIROp, QIROpcode, QIRProgram
 from services.aetherion.reality_api import (
+    build_calibration_payload,
+    build_demo_lab_payload,
     build_demo_reality_payload,
     build_demo_twin_payload,
     build_reality_payload,
     build_twin_payload,
 )
 from services.aetherion.reality_compiler import InventionCandidate, RealityObjective
+from services.aetherion.reality_lab import ExperimentProtocol, Measurement
 from services.aetherion.reality_twin import (
     CausalLink,
     Guardrail,
@@ -60,6 +63,53 @@ class RealityCandidateRequest(BaseModel):
 class RealityCompileRequest(BaseModel):
     objective: RealityObjectiveRequest
     candidates: tuple[RealityCandidateRequest, ...]
+
+
+class ExperimentProtocolRequest(BaseModel):
+    protocol_id: str
+    source_variable: str
+    target_variable: str
+    input_unit: str
+    output_unit: str
+    minimum_observations: int
+    minimum_r_squared: float
+    slope_lower_bound: float
+    slope_upper_bound: float
+    safety_notes: tuple[str, ...]
+
+    def to_domain(self) -> ExperimentProtocol:
+        return ExperimentProtocol(
+            protocol_id=self.protocol_id,
+            source_variable=self.source_variable,
+            target_variable=self.target_variable,
+            input_unit=self.input_unit,
+            output_unit=self.output_unit,
+            minimum_observations=self.minimum_observations,
+            minimum_r_squared=self.minimum_r_squared,
+            slope_lower_bound=self.slope_lower_bound,
+            slope_upper_bound=self.slope_upper_bound,
+            safety_notes=self.safety_notes,
+        )
+
+
+class MeasurementRequest(BaseModel):
+    measurement_id: str
+    input_value: float
+    output_value: float
+    evidence_sha256: str
+
+    def to_domain(self) -> Measurement:
+        return Measurement(
+            self.measurement_id,
+            self.input_value,
+            self.output_value,
+            self.evidence_sha256,
+        )
+
+
+class LabCalibrationRequest(BaseModel):
+    protocol: ExperimentProtocolRequest
+    measurements: tuple[MeasurementRequest, ...]
 
 
 class TwinVariableRequest(BaseModel):
@@ -174,4 +224,17 @@ def reality_twin_simulate(request: TwinSimulationRequest) -> dict[str, object]:
         tuple(item.to_domain() for item in request.variables),
         tuple(item.to_domain() for item in request.links),
         request.scenario.to_domain(),
+    )
+
+
+@router.get("/reality-compiler/reality-lab")
+def reality_lab_demo() -> dict[str, object]:
+    return build_demo_lab_payload()
+
+
+@router.post("/reality-compiler/calibrate")
+def reality_lab_calibrate(request: LabCalibrationRequest) -> dict[str, object]:
+    return build_calibration_payload(
+        request.protocol.to_domain(),
+        tuple(item.to_domain() for item in request.measurements),
     )
