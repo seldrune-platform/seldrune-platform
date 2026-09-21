@@ -1,12 +1,9 @@
-from types import SimpleNamespace
-from unittest.mock import patch
-
-from backend.app.core.config import settings
-from backend.app.core.modeling import ModelResult, ModelUsage
-
-
 def test_seldrune_gpt_requires_auth(client):
-    response = client.post("/api/v1/organizations/00000000-0000-0000-0000-000000000001/gpt", json={"message": "hello"})
+    organization_id = "00000000-0000-0000-0000-000000000001"
+    response = client.post(
+        f"/api/v1/organizations/{organization_id}/gpt",
+        json={"message": "hello"},
+    )
     assert response.status_code in {401, 403}
 
 
