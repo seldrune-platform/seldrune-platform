@@ -75,8 +75,21 @@ class ReplicateFaceProvider:
                 response = client.post(self.API, json=payload, headers=headers)
                 response.raise_for_status()
                 result = response.json()
-        except httpx.HTTPError as exc:
-            raise FaceProviderError("face provider request failed") from exc
+        except httpx.HTTPStatusError as exc:
+            detail = ""
+            try:
+                body = exc.response.json()
+                detail = str(body.get("detail") or body.get("error") or "")
+            except (ValueError, AttributeError):
+                detail = exc.response.text[:300]
+            message = f"face provider rejected request ({exc.response.status_code})"
+            if detail:
+                message = f"{message}: {detail}"
+            raise FaceProviderError(message) from exc
+        except httpx.RequestError as exc:
+            raise FaceProviderError(
+                f"face provider network request failed: {type(exc).__name__}"
+            ) from exc
 
         if result.get("status") in {"starting", "processing"}:
             result = self._poll_until_terminal(client_url=result.get("urls", {}).get("get"))
