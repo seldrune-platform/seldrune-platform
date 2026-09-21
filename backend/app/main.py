@@ -27,6 +27,7 @@ from backend.app.api.routes.research import router as research_router
 from backend.app.api.routes.runtime import router as runtime_router
 from backend.app.api.routes.secret_references import router as secret_references_router
 from backend.app.api.routes.security_events import router as security_events_router
+from backend.app.api.routes.seldrune_gpt import router as seldrune_gpt_router
 from backend.app.api.routes.sense import router as sense_router
 from backend.app.api.routes.status import router as status_router
 from backend.app.api.routes.sti import router as sti_router
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
         liveshift_face_router,
         secret_references_router,
         security_events_router,
+        seldrune_gpt_router,
         research_router,
         webhooks_router,
         audit_router,
