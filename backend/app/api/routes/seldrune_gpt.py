@@ -2,7 +2,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from pydantic import BaseModel, Field
 
 from backend.app.api.dependencies import CurrentUserDep, SessionDep, require_org_permission
@@ -20,6 +20,12 @@ AgentsRunDep = Annotated[Membership, Depends(run_dependency)]
 
 class SeldruneGPTRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20000)
+
+
+class SeldruneGPTHistoryMessage(BaseModel):
+    role: str
+    content: str
+    model: str | None = None
 
 
 class SeldruneGPTResponse(BaseModel):
@@ -54,7 +60,7 @@ def seldrune_gpt(
         )
     )
     history.reverse()
-    context = "\\n".join(f"{item.role}: {item.content}" for item in history)
+    context_lines = [f"{item.role}: {item.content}" for item in history]\n    while sum(len(line) for line in context_lines) > 24000 and context_lines:\n        context_lines.pop(0)\n    context = "\\n".join(context_lines)
     input_text = payload.message
     if context:
         input_text = f"Recent conversation:\\n{context}\\n\\nUser: {payload.message}"
