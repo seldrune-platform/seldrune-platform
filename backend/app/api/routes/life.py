@@ -10,7 +10,7 @@ from backend.app.api.routes.orchestrations import _get_run, _to_public
 from backend.app.core.rbac import Permission, Role
 from backend.app.core.tasking import TaskStatus
 from backend.app.models.membership import Membership
-from backend.app.models.orchestration import OrchestrationRun, OrchestrationStep
+from backend.app.models.orchestration import OrchestrationRun
 from backend.app.models.task import Task
 from backend.app.schemas.orchestration import AutonomousExecutionRequest
 from backend.app.services.audit import record_audit
