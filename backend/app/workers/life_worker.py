@@ -64,7 +64,7 @@ def main() -> None:
     cycle_count = 0
     commands_advanced = 0
     with SessionLocal() as session:
-        record_worker_heartbeat(session, worker_id=worker_id, status="starting", cycle_count=0, commands_advanced=0)
+        record_worker_heartbeat(\n            session,\n            worker_id=worker_id,\n            status="starting",\n            cycle_count=0,\n            commands_advanced=0,\n        )
     logger.info("Seldrune life worker started: %s", worker_id)
     while not stop_event.is_set():
         try:
@@ -72,15 +72,15 @@ def main() -> None:
             cycle_count += 1
             commands_advanced += result["commands_advanced"]
             with SessionLocal() as session:
-                record_worker_heartbeat(session, worker_id=worker_id, status="running", cycle_count=cycle_count, commands_advanced=commands_advanced)
+                record_worker_heartbeat(\n                    session,\n                    worker_id=worker_id,\n                    status="running",\n                    cycle_count=cycle_count,\n                    commands_advanced=commands_advanced,\n                )
             logger.info("life worker cycle: %s", result)
         except Exception as exc:
             with SessionLocal() as session:
-                record_worker_heartbeat(session, worker_id=worker_id, status="error", cycle_count=cycle_count, commands_advanced=commands_advanced, last_error=str(exc)[:2000])
+                record_worker_heartbeat(\n                    session,\n                    worker_id=worker_id,\n                    status="error",\n                    cycle_count=cycle_count,\n                    commands_advanced=commands_advanced,\n                    last_error=str(exc)[:2000],\n                )
             logger.exception("life worker cycle failed")
         stop_event.wait(settings.life_worker_interval_seconds)
     with SessionLocal() as session:
-        record_worker_heartbeat(session, worker_id=worker_id, status="stopped", cycle_count=cycle_count, commands_advanced=commands_advanced)
+        record_worker_heartbeat(\n            session,\n            worker_id=worker_id,\n            status="stopped",\n            cycle_count=cycle_count,\n            commands_advanced=commands_advanced,\n        )
     logger.info("Seldrune life worker stopped")
 
 
