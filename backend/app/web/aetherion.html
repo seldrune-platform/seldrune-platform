@@ -20,14 +20,14 @@ architecture. Its executable software ranks explicit invention hypotheses,
 rejects constraint failures, produces prototype steps and preserves the
 boundary between simulation and physical proof.</p>
 <div class="specs">
-<span>Reality Compiler v0.2</span><span>Q-IR Runtime v3</span>
+<span>Reality Compiler v0.3</span><span>Q-IR Runtime v3</span>
 <span>Deterministic receipts</span><span>Evidence-gated</span>
 </div>
 </section>
 <section class="grid">
 <div class="card featured">
 <span class="tag">EXECUTABLE</span>
-<h2>Reality Compiler v0.2</h2>
+<h2>Reality Compiler v0.3</h2>
 <p>Bounded objectives become scored candidate futures, explicit rejection
 reasons, a selected prototype plan and an immutable evidence receipt.</p>
 </div>
@@ -36,6 +36,12 @@ reasons, a selected prototype plan and an immutable evidence receipt.</p>
 <h2>Counterfactual futures</h2>
 <p>Declared interventions propagate through bounded state variables while
 guardrails, assumptions and trajectory frames remain inspectable.</p>
+</div>
+<div class="card">
+<span class="tag">REALITY LAB</span>
+<h2>Falsify the model</h2>
+<p>Measured observations are fitted against declared acceptance bounds and
+linked to content-addressed evidence before independent review.</p>
 </div>
 <div class="card">
 <span class="tag">TRUTH GATE</span>
@@ -78,6 +84,11 @@ physical QGPU hardware and real-world invention success: unverified.</p>
 <p id="twin-detail">Querying the bounded causal simulation endpoint.</p>
 </div>
 <div class="card">
+<span class="tag">LIVE REALITY LAB</span>
+<h2 id="lab-title">Calibration loading…</h2>
+<p id="lab-detail">Querying the experimental calibration gate.</p>
+</div>
+<div class="card">
 <span class="tag">LIVE RUNTIME</span>
 <h2 id="runtime-title">Runtime evidence loading…</h2>
 <p id="runtime-detail">Querying the Aetherion evidence endpoint.</p>
@@ -104,6 +115,15 @@ fetch("/api/v1/aetherion/reality-compiler/digital-twin").then(r=>r.json()).then(
   " · Physical model: "+(data.physical_system_verified?"verified":"unverified");
 }).catch(()=>{
  document.getElementById("twin-title").textContent="Digital twin unavailable";
+});
+fetch("/api/v1/aetherion/reality-compiler/reality-lab").then(r=>r.json()).then(data=>{
+ document.getElementById("lab-title").textContent=data.decision;
+ document.getElementById("lab-detail").textContent=
+  "Observations: "+data.observation_count+" · R²: "+data.r_squared+
+  " · Independent replication: "+
+  (data.independently_replicated?"verified":"required");
+}).catch(()=>{
+ document.getElementById("lab-title").textContent="Reality Lab unavailable";
 });
 fetch("/api/v1/aetherion/evidence").then(r=>r.json()).then(data=>{
  const h=data.health||{}; const rt=data.runtime||{};
