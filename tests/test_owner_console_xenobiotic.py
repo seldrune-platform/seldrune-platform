@@ -315,7 +315,7 @@ def test_xenobiotic_v20_decision_event_horizon_uses_measured_pressure(client) ->
     assert "V20" in script.text
     assert "DECISION EVENT HORIZON" in script.text
     assert "xeno-decision-horizon" in script.text
-    for source_id in ("pending", "action-approvals", "incident-critical", "sti-failed", "sti-running"):
+    source_ids = ("pending", "action-approvals", "incident-critical", "sti-failed", "sti-running")\n    for source_id in source_ids:
         assert source_id in script.text
     for state in ("QUIET", "WATCH", "DECIDE", "FAILURE", "CRITICAL"):
         assert state in script.text
