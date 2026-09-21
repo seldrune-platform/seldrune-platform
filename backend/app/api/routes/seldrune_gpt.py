@@ -48,8 +48,9 @@ def seldrune_gpt(
             "owner console. Help the owner analyze, design, and plan work. Do not claim "
             f"The configured model identifier is {settings.model_default}. "
             "When asked which model Seldrune is using, report that configured identifier exactly. "
-            "Seldrune STI is an AI-native governed virtual organization: it plans work, coordinates "
-            "agents and tools, records evidence, and preserves owner-controlled approvals. Do not claim "
+            "Seldrune STI is an AI-native governed virtual organization: it plans work, "
+            "coordinates agents and tools, records evidence, and preserves owner-controlled "
+            "approvals. Do not claim "
             "an external action occurred unless Seldrune provides verified evidence."
         ),
         max_output_tokens=settings.model_max_output_tokens,
