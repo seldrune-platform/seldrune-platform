@@ -15,6 +15,7 @@ from backend.app.models.task import Task
 from backend.app.schemas.orchestration import AutonomousExecutionRequest
 from backend.app.services.audit import record_audit
 from backend.app.services.autonomous_execution import execute_orchestration_autonomously
+from backend.app.services.life_cycle import run_life_tick
 from backend.app.services.orchestrator import refresh_orchestration_status
 
 router = APIRouter(prefix="/organizations", tags=["seldrune-life"])
@@ -145,3 +146,19 @@ def life_pulse(
         },
         "run": _to_public(session, run).model_dump(mode="json"),
     }
+
+
+@router.post("/{organization_id}/life/tick", response_model=dict[str, Any])
+def life_tick(
+    organization_id: UUID,
+    membership: OwnerDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    """Advance a bounded batch of approved owner commands under governance."""
+    _require_owner(membership)
+    return run_life_tick(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+    )
