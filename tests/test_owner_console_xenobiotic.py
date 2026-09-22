@@ -1,8 +1,8 @@
-def test_owner_console_serves_xenobiotic_interface(client) -> None:
+def test_xenobiotic_engineering_assets_are_not_loaded_into_owner_portal(client) -> None:
     page = client.get("/console")
     assert page.status_code == 200
-    assert "/console-assets/console-xenobiotic.css" in page.text
-    assert "/console-assets/console-xenobiotic.js" in page.text
+    assert "/console-assets/console-xenobiotic.css" not in page.text
+    assert "/console-assets/console-xenobiotic.js" not in page.text
 
     stylesheet = client.get("/console-assets/console-xenobiotic.css")
     assert stylesheet.status_code == 200
