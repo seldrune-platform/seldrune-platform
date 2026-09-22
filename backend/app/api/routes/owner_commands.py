@@ -42,6 +42,7 @@ from backend.app.services.owner_dashboard import build_decision_brief, build_own
 from backend.app.services.playbook_engine import consolidate_playbooks
 from backend.app.services.playbook_guidance import build_playbook_guidance
 from backend.app.services.playbook_overlay import merge_playbook
+from backend.app.services.tool_bootstrap import ensure_configured_external_tools
 from backend.app.services.portfolio_governor import (
     evaluate_project_execution,
     reserve_project_budget,
@@ -344,6 +345,11 @@ def create_owner_command(
         objective=payload.objective,
     )
     adaptive_guidance = merge_playbook(adaptive_guidance, playbook_guidance)
+    ensure_configured_external_tools(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+    )
     active_tools = list(
         session.scalars(
             select(ToolDefinition).where(
