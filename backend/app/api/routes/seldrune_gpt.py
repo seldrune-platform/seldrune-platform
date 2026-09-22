@@ -26,6 +26,7 @@ from backend.app.schemas.orchestration import AutonomousExecutionRequest, Orches
 from backend.app.services.audit import record_audit
 from backend.app.services.external_actions import default_external_action_catalog
 from backend.app.services.model_gateway import ModelGateway, ModelGatewayError
+from backend.app.services.owner_action_compiler import required_external_tool_actions
 from backend.app.services.tool_bootstrap import (
     configured_external_tool_status,
     ensure_configured_external_tools,
@@ -81,80 +82,13 @@ def _operator_risk_reasons(order: str) -> list[str]:
     return [name for name, pattern in _OPERATOR_RISK_PATTERNS if pattern.search(order)]
 
 
-_TOOL_INTENT_PATTERNS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
-    (
-        "gmail",
-        "send-message",
-        re.compile(
-            r"\b(send|notify|email|mail)\b.{0,80}"
-            r"\b(email|mail|gmail|owner|recipient|client|customer|team)\b",
-            re.I,
-        ),
-    ),
-    (
-        "github",
-        "create-issue",
-        re.compile(
-            r"\b(create|open|file)\b.{0,80}\b(issue|bug)\b",
-            re.I,
-        ),
-    ),
-    (
-        "github",
-        "comment",
-        re.compile(
-            r"\b(comment|reply)\b.{0,80}\b(issue|pull request|pr)\b",
-            re.I,
-        ),
-    ),
-    (
-        "github",
-        "create-pull-request",
-        re.compile(
-            r"\b(create|open)\b.{0,80}\b(pull request|pr)\b",
-            re.I,
-        ),
-    ),
-    (
-        "github",
-        "merge-pull-request",
-        re.compile(
-            r"\bmerge\b.{0,80}\b(pull request|pr)\b"
-            r"|\b(pull request|pr)\b.{0,80}\bmerge\b",
-            re.I,
-        ),
-    ),
-    (
-        "github",
-        "dispatch-workflow",
-        re.compile(
-            r"\b(dispatch|trigger|run)\b.{0,80}\b(workflow|github action)\b",
-            re.I,
-        ),
-    ),
-)
-
-
-def _required_external_tool_actions(order: str) -> list[tuple[str, str]]:
-    required = {
-        (provider, action_name)
-        for provider, action_name, pattern in _TOOL_INTENT_PATTERNS
-        if pattern.search(order)
-    }
-    deploy_requested = re.search(r"\b(deploy|redeploy)\b", order, re.I)
-    github_workflow = re.search(r"\b(workflow|github action)\b", order, re.I)
-    if deploy_requested and not github_workflow:
-        required.add(("render", "deploy-service"))
-    return sorted(required)
-
-
 def _missing_external_tools(
     session: SessionDep,
     *,
     organization_id: UUID,
     order: str,
 ) -> tuple[list[str], list[str]]:
-    required = _required_external_tool_actions(order)
+    required = required_external_tool_actions(order)
     if not required:
         return [], []
 
@@ -553,7 +487,7 @@ def operate_seldrune_gpt(
             raise HTTPException(status_code=409, detail="Order does not match the pending command")
         run_id = run.id
 
-    required_actions = set(_required_external_tool_actions(payload.order))
+    required_actions = set(required_external_tool_actions(payload.order))
     planned_actions = _planned_external_tool_actions(
         session,
         organization_id=organization_id,
