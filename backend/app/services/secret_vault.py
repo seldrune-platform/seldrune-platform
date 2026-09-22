@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-import os
 import re
 
 from backend.app.core.secrets import SecretProvider, SecretStatus
 from backend.app.models.secret_reference import SecretReference
+from backend.app.services.secret_resolution import (
+    SecretResolutionError,
+    resolve_secret as resolve_managed_secret,
+)
 
 _ENV_NAME = re.compile(r"^[A-Z][A-Z0-9_]{2,239}$")
 
@@ -23,9 +26,7 @@ def resolve_secret(reference: SecretReference) -> str:
         raise SecretVaultError("Secret reference is disabled")
     provider = SecretProvider(reference.provider)
     validate_secret_locator(provider.value, reference.locator)
-    if provider is SecretProvider.ENV:
-        value = os.getenv(reference.locator)
-        if not value:
-            raise SecretVaultError("Referenced environment secret is not available")
-        return value
-    raise SecretVaultError(f"Unsupported secret provider: {reference.provider}")
+    try:
+        return resolve_managed_secret(reference)
+    except SecretResolutionError as exc:
+        raise SecretVaultError(str(exc)) from exc
