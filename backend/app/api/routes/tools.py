@@ -23,6 +23,10 @@ from backend.app.schemas.tooling import (
 )
 from backend.app.services.audit import record_audit
 from backend.app.services.external_actions import default_external_action_catalog
+from backend.app.services.tool_bootstrap import (
+    configured_external_tool_status,
+    ensure_configured_external_tools,
+)
 from backend.app.services.tool_gateway import (
     ToolGatewayError,
     allowed_internal_actions,
@@ -69,6 +73,40 @@ def _get_run(session: SessionDep, organization_id: UUID, run_id: UUID) -> ToolRu
 
 def _gateway_conflict(exc: ToolGatewayError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
+@router.get(
+    "/{organization_id}/tool-bootstrap/status",
+    response_model=dict[str, Any],
+)
+def get_tool_bootstrap_status(
+    organization_id: UUID,
+    _membership: ToolsRunDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    return configured_external_tool_status(
+        session,
+        organization_id=organization_id,
+    )
+
+
+@router.post(
+    "/{organization_id}/tool-bootstrap",
+    response_model=dict[str, Any],
+)
+def bootstrap_tools(
+    organization_id: UUID,
+    _membership: ToolsManageDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    result = ensure_configured_external_tools(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+    )
+    session.commit()
+    return result
 
 
 @router.get(
