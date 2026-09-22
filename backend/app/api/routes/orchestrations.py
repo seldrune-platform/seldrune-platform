@@ -101,6 +101,8 @@ def create_orchestration(
                 step.capabilities,
                 step.priority,
                 step.requires_approval,
+                step.tool_slug,
+                step.tool_input if step.tool_slug else None,
             )
             for step in payload.plan
         ]
