@@ -173,9 +173,10 @@ def test_operator_compiles_missing_ready_email_tool_deterministically(
     assert brief.status_code == 200
     command = brief.json()
     assert command["progress"] == {"completed": 1, "total": 1}
-    assert command["steps"][0]["output"]["execution_type"] == "tool"
+    assert command["steps"][0]["execution_type"] == "tool"
+    assert command["steps"][0]["tool_slug"] == "gmail-send-message"
     assert (
-        command["steps"][0]["output"]["evidence"]["receipt_id"]
+        command["steps"][0]["evidence"]["receipt_id"]
         == "gmail:msg-compiled-1"
     )
 
@@ -355,8 +356,10 @@ def test_merge_pr_order_is_one_tool_step_then_executes_after_confirmation(
 
     brief = client.get(body["evidence_url"], headers=headers).json()
     assert brief["progress"] == {"completed": 1, "total": 1}
+    assert brief["steps"][0]["execution_type"] == "tool"
+    assert brief["steps"][0]["tool_slug"] == "github-merge-pull-request"
     assert (
-        brief["steps"][0]["output"]["evidence"]["receipt_id"]
+        brief["steps"][0]["evidence"]["receipt_id"]
         == "github-merge:merge-sha-233"
     )
 
