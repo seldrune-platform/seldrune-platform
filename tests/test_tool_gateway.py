@@ -238,3 +238,23 @@ def test_default_external_adapter_catalog_is_exposed(client: TestClient) -> None
     assert ("github", "dispatch-workflow") in adapters
     assert ("render", "deploy-service") in adapters
     assert adapters[("gmail", "send-message")]["credential_required"] is True
+
+
+def test_builtin_adapter_enforces_minimum_risk(client: TestClient) -> None:
+    headers, organization_id = register_owner(client)
+    response = client.post(
+        f"/api/v1/organizations/{organization_id}/tools",
+        headers=headers,
+        json={
+            "name": "Dispatch Production Workflow",
+            "slug": "dispatch-production-workflow",
+            "provider": "github",
+            "action_name": "dispatch-workflow",
+            "risk_level": "low",
+            "approval_mode": "never",
+        },
+    )
+    assert response.status_code == 201
+    tool = response.json()
+    assert tool["risk_level"] == "high"
+    assert tool["approval_mode"] == "always"
