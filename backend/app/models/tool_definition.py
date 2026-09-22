@@ -28,6 +28,9 @@ class ToolDefinition(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     provider: Mapped[str] = mapped_column(String(40), nullable=False, default="internal")
     action_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    credential_reference_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("secret_references.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active", index=True)
     risk_level: Mapped[str] = mapped_column(String(32), nullable=False, default="low")
     approval_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="never")
