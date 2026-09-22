@@ -1,7 +1,6 @@
 from tests.test_autonomous_execution import client as _client  # noqa: F401
-from backend.app.core.modeling import ModelProvider
 from backend.app.core.orchestration import PlannedStep
-from backend.app.services import external_actions, tool_gateway
+from backend.app.services import tool_gateway
 from backend.app.services.live_planner import PlanResult
 from tests.test_autonomous_execution import register_owner
 
