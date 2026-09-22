@@ -18,7 +18,9 @@ from backend.app.core.config import settings
 from backend.app.core.modeling import ModelProvider, ModelRequest
 from backend.app.core.rbac import Permission, Role
 from backend.app.models.membership import Membership
+from backend.app.models.orchestration import OrchestrationStep
 from backend.app.models.seldrune_gpt_message import SeldruneGPTMessage
+from backend.app.models.task import Task
 from backend.app.models.tool_definition import ToolDefinition
 from backend.app.schemas.orchestration import AutonomousExecutionRequest, OrchestrationCreate
 from backend.app.services.audit import record_audit
@@ -171,6 +173,40 @@ def _missing_external_tools(
         }
     )
     return missing_tools, env_locators
+
+
+def _planned_external_tool_actions(
+    session: SessionDep,
+    *,
+    organization_id: UUID,
+    run_id: UUID,
+) -> set[tuple[str, str]]:
+    tool_slugs: set[str] = set()
+    tasks = session.scalars(
+        select(Task)
+        .join(OrchestrationStep, OrchestrationStep.task_id == Task.id)
+        .where(
+            OrchestrationStep.orchestration_run_id == run_id,
+            Task.organization_id == organization_id,
+        )
+    )
+    for task in tasks:
+        request = (task.input_data or {}).get("tool_request")
+        if isinstance(request, dict):
+            slug = request.get("slug")
+            if isinstance(slug, str) and slug:
+                tool_slugs.add(slug)
+    if not tool_slugs:
+        return set()
+    return {
+        (tool.provider, tool.action_name)
+        for tool in session.scalars(
+            select(ToolDefinition).where(
+                ToolDefinition.organization_id == organization_id,
+                ToolDefinition.slug.in_(tool_slugs),
+            )
+        )
+    }
 
 
 def _require_owner_role(membership: Membership) -> None:
@@ -443,9 +479,56 @@ def operate_seldrune_gpt(
             raise HTTPException(status_code=409, detail="Order does not match the pending command")
         run_id = run.id
 
+    required_actions = set(_required_external_tool_actions(payload.order))
+    planned_actions = _planned_external_tool_actions(
+        session,
+        organization_id=organization_id,
+        run_id=run_id,
+    )
+    missing_planned = sorted(required_actions - planned_actions)
     evidence_url = (
         f"/api/v1/organizations/{organization_id}/owner-commands/{run_id}/brief"
     )
+    if missing_planned:
+        missing_planned_tools = [
+            f"{provider}:{action_name}"
+            for provider, action_name in missing_planned
+        ]
+        record_audit(
+            session,
+            organization_id=organization_id,
+            actor_user_id=current_user.id,
+            action="seldrune_gpt.operator_required_tool_not_planned",
+            resource_type="orchestration",
+            resource_id=str(run_id),
+            details={"missing_tools": missing_planned_tools},
+        )
+        session.add(
+            SeldruneGPTMessage(
+                organization_id=organization_id,
+                user_id=current_user.id,
+                role="assistant",
+                content=(
+                    "Operator stopped before execution because the plan did not include "
+                    "required external tools: "
+                    + ", ".join(missing_planned_tools)
+                ),
+                model=settings.model_default,
+            )
+        )
+        session.commit()
+        run = _get_run(session, organization_id, run_id)
+        return SeldruneGPTOperatorResponse(
+            status="failed",
+            command_id=run_id,
+            objective=payload.order,
+            approval_required=False,
+            risk_reasons=risk_reasons,
+            run_status=run.status,
+            halted_reason="required_external_tool_not_planned",
+            evidence_url=evidence_url,
+            missing_tools=missing_planned_tools,
+        )
     if risk_reasons and not payload.confirm_sensitive_action:
         record_audit(
             session,
