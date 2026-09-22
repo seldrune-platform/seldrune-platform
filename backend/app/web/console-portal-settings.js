@@ -1,0 +1,175 @@
+(() => {
+  const DEFAULTS = {
+    theme: "nebula",
+    density: "comfortable",
+    motion: "system",
+    descriptions: "on",
+    defaultWorkspace: "home",
+  };
+
+  const KEYS = {
+    theme: "seldrune.portal.theme",
+    density: "seldrune.portal.density",
+    motion: "seldrune.portal.motion",
+    descriptions: "seldrune.portal.descriptions",
+    defaultWorkspace: "seldrune.portal.defaultWorkspace",
+  };
+
+  function readPreference(name) {
+    return localStorage.getItem(KEYS[name]) || DEFAULTS[name];
+  }
+
+  function applyPreferences() {
+    const root = document.documentElement;
+    root.dataset.portalTheme = readPreference("theme");
+    root.dataset.portalDensity = readPreference("density");
+    root.dataset.portalMotion = readPreference("motion");
+    root.dataset.portalDescriptions = readPreference("descriptions");
+  }
+
+  function persist(name, value) {
+    localStorage.setItem(KEYS[name], value);
+    applyPreferences();
+  }
+
+  function initSettings() {
+    applyPreferences();
+
+    const host = document.getElementById("portal-settings-content");
+    if (!host || host.dataset.initialized === "true") return;
+    host.dataset.initialized = "true";
+
+    const workspaceOptions = (window.seldrunePortal?.workspaces || [
+      {id: "home", label: "Home"},
+      {id: "operator", label: "Operator"},
+      {id: "operations", label: "Operations"},
+      {id: "media", label: "Media"},
+      {id: "intelligence", label: "Intelligence"},
+      {id: "tools", label: "Tools"},
+      {id: "settings", label: "Settings"},
+    ])
+      .map(item => `<option value="${item.id}">${item.label}</option>`)
+      .join("");
+
+    host.innerHTML = `
+      <div class="portal-settings-grid">
+        <label class="portal-setting-card">
+          <span>Visual atmosphere</span>
+          <small>Choose the portal surface without changing application behavior.</small>
+          <select id="portal-theme-setting">
+            <option value="nebula">Nebula</option>
+            <option value="aurora">Aurora</option>
+            <option value="void">Void</option>
+          </select>
+        </label>
+
+        <label class="portal-setting-card">
+          <span>Interface density</span>
+          <small>Comfortable favors presentation; compact fits more controls on screen.</small>
+          <select id="portal-density-setting">
+            <option value="comfortable">Comfortable</option>
+            <option value="compact">Compact</option>
+          </select>
+        </label>
+
+        <label class="portal-setting-card">
+          <span>Motion</span>
+          <small>Respect system preference, keep full motion, or reduce all portal animation.</small>
+          <select id="portal-motion-setting">
+            <option value="system">Follow device</option>
+            <option value="full">Full</option>
+            <option value="reduced">Reduced</option>
+          </select>
+        </label>
+
+        <label class="portal-setting-card">
+          <span>Default workspace</span>
+          <small>The workspace opened first when no explicit portal link is requested.</small>
+          <select id="portal-default-setting">${workspaceOptions}</select>
+        </label>
+
+        <label class="portal-setting-card portal-setting-toggle">
+          <div>
+            <span>Workspace descriptions</span>
+            <small>Show explanatory text below each portal heading.</small>
+          </div>
+          <input id="portal-descriptions-setting" type="checkbox">
+        </label>
+
+        <article class="portal-setting-card">
+          <span>Engineering boundary</span>
+          <small>
+            Internal version/evolution contracts remain backend-only. They are not part of
+            normal owner navigation and do not determine portal layout.
+          </small>
+          <strong>Owner portal mode · Active</strong>
+        </article>
+      </div>
+
+      <div class="portal-settings-actions">
+        <button id="portal-settings-save" type="button">Save portal settings</button>
+        <button id="portal-settings-reset" type="button" class="ghost">
+          Reset portal settings
+        </button>
+      </div>
+      <p id="portal-settings-status" class="policy-status">
+        Preferences are stored in this browser only.
+      </p>`;
+
+    const theme = document.getElementById("portal-theme-setting");
+    const density = document.getElementById("portal-density-setting");
+    const motion = document.getElementById("portal-motion-setting");
+    const defaultWorkspace = document.getElementById("portal-default-setting");
+    const descriptions = document.getElementById("portal-descriptions-setting");
+    const status = document.getElementById("portal-settings-status");
+
+    const syncControls = () => {
+      theme.value = readPreference("theme");
+      density.value = readPreference("density");
+      motion.value = readPreference("motion");
+      defaultWorkspace.value = readPreference("defaultWorkspace");
+      descriptions.checked = readPreference("descriptions") === "on";
+    };
+    syncControls();
+
+    [theme, density, motion].forEach(control => {
+      control.addEventListener("change", () => {
+        const name = control === theme
+          ? "theme"
+          : control === density
+            ? "density"
+            : "motion";
+        persist(name, control.value);
+      });
+    });
+
+    descriptions.addEventListener("change", () => {
+      persist("descriptions", descriptions.checked ? "on" : "off");
+    });
+
+    document.getElementById("portal-settings-save")?.addEventListener("click", () => {
+      persist("theme", theme.value);
+      persist("density", density.value);
+      persist("motion", motion.value);
+      persist("descriptions", descriptions.checked ? "on" : "off");
+      localStorage.setItem(KEYS.defaultWorkspace, defaultWorkspace.value);
+      status.textContent = "Portal settings saved for this browser.";
+    });
+
+    document.getElementById("portal-settings-reset")?.addEventListener("click", () => {
+      Object.values(KEYS).forEach(key => localStorage.removeItem(key));
+      applyPreferences();
+      syncControls();
+      status.textContent = "Portal settings reset to defaults.";
+    });
+  }
+
+  applyPreferences();
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initSettings, {once: true});
+  } else {
+    initSettings();
+  }
+  document.addEventListener("seldrune:portal-ready", initSettings);
+})();
