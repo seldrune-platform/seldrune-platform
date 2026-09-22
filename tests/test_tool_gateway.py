@@ -8,6 +8,7 @@ from backend.app import models  # noqa: F401
 from backend.app.db.base import Base
 from backend.app.db.session import get_db
 from backend.app.main import app
+from backend.app.services.tool_gateway import register_external_action
 
 
 @pytest.fixture
@@ -63,6 +64,7 @@ def create_tool(
     action_name: str,
     risk_level: str = "low",
     approval_mode: str = "never",
+    provider: str = "internal",
 ) -> dict:
     response = client.post(
         f"/api/v1/organizations/{organization_id}/tools",
@@ -70,6 +72,7 @@ def create_tool(
         json={
             "name": slug.replace("-", " ").title(),
             "slug": slug,
+            "provider": provider,
             "action_name": action_name,
             "risk_level": risk_level,
             "approval_mode": approval_mode,
@@ -145,3 +148,73 @@ def test_unknown_internal_action_is_rejected(client: TestClient) -> None:
         },
     )
     assert response.status_code == 422
+
+
+def test_external_provider_requires_registered_adapter(client: TestClient) -> None:
+    headers, organization_id = register_owner(client)
+    tool = create_tool(
+        client,
+        headers,
+        organization_id,
+        slug="missing-adapter",
+        provider="example",
+        action_name="send",
+    )
+    response = client.post(
+        f"/api/v1/organizations/{organization_id}/tool-runs",
+        headers=headers,
+        json={"tool_id": tool["id"], "input_data": {"message": "hello"}},
+    )
+    assert response.status_code == 409
+    assert "adapter is not registered" in response.json()["detail"]
+
+
+def test_external_provider_requires_execution_receipt(client: TestClient) -> None:
+    register_external_action("example-no-evidence", "send", lambda payload: {"sent": True})
+    headers, organization_id = register_owner(client)
+    tool = create_tool(
+        client,
+        headers,
+        organization_id,
+        slug="no-evidence",
+        provider="example-no-evidence",
+        action_name="send",
+    )
+    response = client.post(
+        f"/api/v1/organizations/{organization_id}/tool-runs",
+        headers=headers,
+        json={"tool_id": tool["id"], "input_data": {"message": "hello"}},
+    )
+    assert response.status_code == 201
+    run = response.json()
+    assert run["status"] == "failed"
+    assert "receipt_id" in run["error_message"]
+
+
+def test_external_provider_succeeds_with_execution_receipt(client: TestClient) -> None:
+    register_external_action(
+        "example-evidence",
+        "send",
+        lambda payload: {
+            "sent": True,
+            "evidence": {"receipt_id": "provider-message-123"},
+        },
+    )
+    headers, organization_id = register_owner(client)
+    tool = create_tool(
+        client,
+        headers,
+        organization_id,
+        slug="evidence-backed",
+        provider="example-evidence",
+        action_name="send",
+    )
+    response = client.post(
+        f"/api/v1/organizations/{organization_id}/tool-runs",
+        headers=headers,
+        json={"tool_id": tool["id"], "input_data": {"message": "hello"}},
+    )
+    assert response.status_code == 201
+    run = response.json()
+    assert run["status"] == "succeeded"
+    assert run["output_data"]["evidence"]["receipt_id"] == "provider-message-123"
