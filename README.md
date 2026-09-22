@@ -4,12 +4,16 @@ Core platform for the **Seldrune AI-native virtual organization**.
 
 Seldrune is a reusable operating layer for governed AI work across research, software engineering, automation, ventures, talent, managed operations, and future products.
 
-## Current milestone — Seldrune v1.3
+## Current milestone — Seldrune v1.4
 
 The platform has progressed beyond the original foundation milestone and now includes production-oriented organization, agent, security, governance, audit, billing, orchestration, and deployment-integrity capabilities.
 
 Current platform capabilities include:
 
+- governed external action runtime with deterministic owner-action compilation, provider receipts, bootstrap/preflight, and runtime defaults
+- Seldrune Face v0.2 authorized frame/stream execution components with evidence-gated production claims
+- Aetherion Reality Compiler v0.2 with bounded digital-twin simulation and truth-gated evidence boundaries
+- explicit V22–V100 technical evolution contracts and an evidence-driven V100 owner-console control deck
 - organization identity, membership administration, RBAC, invitations, tenant isolation, email verification, and account recovery
 - rotating refresh sessions, server-side logout/session revocation, login throttling, TOTP MFA, and one-time MFA recovery codes
 - security-event monitoring with owner attention integration
