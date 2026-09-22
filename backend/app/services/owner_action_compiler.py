@@ -237,6 +237,17 @@ def _missing_required_fields(
     return sorted(missing)
 
 
+_DIRECT_ACTION_ORDER = re.compile(
+    r"^\\s*(?:"
+    r"merge\\b|deploy\\b|redeploy\\b|send\\b|email\\b|mail\\b|notify\\b|"
+    r"create\\s+(?:an?\\s+)?(?:issue|bug|pull request|pr)\\b|"
+    r"open\\s+(?:an?\\s+)?(?:issue|bug|pull request|pr)\\b|"
+    r"comment\\b|reply\\b|trigger\\b|dispatch\\b|run\\s+(?:the\\s+)?workflow\\b"
+    r")",
+    re.I,
+)
+
+
 def compile_required_external_action_steps(
     order: str,
     *,
@@ -294,10 +305,17 @@ def compile_required_external_action_steps(
             )
         )
 
-    return [
-        *planned_steps,
-        *added,
-    ], {
+    direct_action = bool(required_actions and _DIRECT_ACTION_ORDER.search(order))
+    unresolved_actions = bool(unresolved)
+    if direct_action and added and not unresolved_actions:
+        compiled_steps = added
+        mode = "direct-tool-plan"
+    else:
+        compiled_steps = [*planned_steps, *added]
+        mode = "append-missing-tools" if added else "planner-only"
+
+    return compiled_steps, {
+        "mode": mode,
         "required_actions": [
             f"{provider}:{action_name}"
             for provider, action_name in required_actions
