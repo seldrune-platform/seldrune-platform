@@ -170,7 +170,11 @@ def test_external_provider_requires_registered_adapter(client: TestClient) -> No
 
 
 def test_external_provider_requires_execution_receipt(client: TestClient) -> None:
-    register_external_action("example-no-evidence", "send", lambda payload: {"sent": True})
+    register_external_action(
+        "example-no-evidence",
+        "send",
+        lambda payload, credential: {"sent": True},
+    )
     headers, organization_id = register_owner(client)
     tool = create_tool(
         client,
@@ -195,7 +199,7 @@ def test_external_provider_succeeds_with_execution_receipt(client: TestClient) -
     register_external_action(
         "example-evidence",
         "send",
-        lambda payload: {
+        lambda payload, credential: {
             "sent": True,
             "evidence": {"receipt_id": "provider-message-123"},
         },
