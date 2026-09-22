@@ -6,6 +6,7 @@
   let runs = [];
   let bootstrapStatus = null;
   let providerPreflight = null;
+  let toolDefaults = [];
 
   function setStatus(message) {
     const element = byId('tool-control-status');
@@ -194,6 +195,13 @@
       meta.textContent =
         `${tool.slug} · ${tool.provider}:${tool.action_name} · ${tool.approval_mode}`;
       row.append(top, meta);
+      const defaults = toolDefaults.find(item => item.tool_slug === tool.slug);
+      if (defaults?.defaulted_fields?.length) {
+        const defaultInfo = document.createElement('small');
+        defaultInfo.textContent =
+          `Runtime defaults: ${defaults.defaulted_fields.join(', ')}`;
+        row.append(defaultInfo);
+      }
       root.append(row);
     });
     if (!tools.length) {
@@ -292,13 +300,15 @@
     if (!document.getElementById('tool-control') || !state?.org) return;
     setStatus('Loading governed action fabric…');
     try {
-      [adapters, secrets, tools, runs, bootstrapStatus] = await Promise.all([
-        api('/tool-adapters'),
-        api('/secret-references'),
-        api('/tools'),
-        api('/tool-runs'),
-        api('/tool-bootstrap/status'),
-      ]);
+      [adapters, secrets, tools, runs, bootstrapStatus, toolDefaults] =
+        await Promise.all([
+          api('/tool-adapters'),
+          api('/secret-references'),
+          api('/tools'),
+          api('/tool-runs'),
+          api('/tool-bootstrap/status'),
+          api('/tool-defaults'),
+        ]);
       renderBootstrapStatus();
       renderProviderPreflight();
       renderAdapters();
