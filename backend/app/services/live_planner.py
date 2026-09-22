@@ -88,7 +88,12 @@ def _json_payload(text: str) -> Any:
     return json.loads(stripped)
 
 
-def _validate_steps(payload: Any, expected_count: int | None) -> list[PlannedStep]:
+def _validate_steps(
+    payload: Any,
+    expected_count: int | None,
+    *,
+    allowed_tool_slugs: set[str] | None = None,
+) -> list[PlannedStep]:
     raw_steps = payload.get("steps") if isinstance(payload, dict) else None
     if not isinstance(raw_steps, list) or not 1 <= len(raw_steps) <= 8:
         raise ValueError("Planner must return between 1 and 8 steps")
@@ -104,13 +109,47 @@ def _validate_steps(payload: Any, expected_count: int | None) -> list[PlannedSte
         if not title or not objective or capability not in _ALLOWED_CAPABILITIES:
             raise ValueError(f"Invalid planner step {index + 1}")
         priority = max(0, min(100, int(raw.get("priority", 10))))
-        steps.append(PlannedStep(title[:200], objective, [capability], priority))
+        tool_slug_value = raw.get("tool_slug")
+        tool_slug = (
+            str(tool_slug_value).strip()
+            if isinstance(tool_slug_value, str) and tool_slug_value.strip()
+            else None
+        )
+        if tool_slug is not None and tool_slug not in (allowed_tool_slugs or set()):
+            raise ValueError(f"Planner selected unavailable tool: {tool_slug}")
+        tool_input: dict[str, Any] | None = None
+        if tool_slug is not None:
+            raw_tool_input = raw.get("tool_input_json")
+            if raw_tool_input in (None, ""):
+                tool_input = {}
+            elif not isinstance(raw_tool_input, str):
+                raise ValueError("tool_input_json must be a JSON string")
+            else:
+                decoded_tool_input = json.loads(raw_tool_input)
+                if not isinstance(decoded_tool_input, dict):
+                    raise ValueError("tool_input_json must decode to an object")
+                tool_input = decoded_tool_input
+        steps.append(
+            PlannedStep(
+                title[:200],
+                objective,
+                [capability],
+                priority,
+                False,
+                tool_slug,
+                tool_input,
+            )
+        )
     return steps
 
 
-def _plan_schema(expected_count: int | None) -> dict[str, Any]:
+def _plan_schema(
+    expected_count: int | None,
+    available_tool_slugs: set[str],
+) -> dict[str, Any]:
     minimum = expected_count or 1
     maximum = expected_count or 8
+    tool_values: list[str | None] = [None, *sorted(available_tool_slugs)]
     return {
         "type": "object",
         "properties": {
@@ -128,8 +167,20 @@ def _plan_schema(expected_count: int | None) -> dict[str, Any]:
                             "enum": list(_ALLOWED_CAPABILITIES),
                         },
                         "priority": {"type": "integer", "minimum": 0, "maximum": 100},
+                        "tool_slug": {
+                            "type": ["string", "null"],
+                            "enum": tool_values,
+                        },
+                        "tool_input_json": {"type": ["string", "null"]},
                     },
-                    "required": ["title", "objective", "capability", "priority"],
+                    "required": [
+                        "title",
+                        "objective",
+                        "capability",
+                        "priority",
+                        "tool_slug",
+                        "tool_input_json",
+                    ],
                     "additionalProperties": False,
                 },
             }
@@ -192,6 +243,9 @@ def _apply_adaptive_overlay(
                 step.objective,
                 list(step.required_capabilities),
                 min(100, step.priority + bump),
+                step.requires_approval,
+                step.tool_slug,
+                step.tool_input,
             )
         )
 
@@ -254,10 +308,34 @@ def _apply_adaptive_overlay(
     return adapted, adaptations
 
 
-def _planner_input(objective: str, guidance: dict[str, Any] | None) -> str:
+def _planner_input(
+    objective: str,
+    guidance: dict[str, Any] | None,
+    available_tools: list[dict[str, Any]] | None,
+) -> str:
     summary = _guidance_summary(guidance)
+    tool_catalog = [
+        {
+            "slug": str(tool.get("slug") or ""),
+            "description": str(tool.get("description") or ""),
+            "provider": str(tool.get("provider") or ""),
+            "action_name": str(tool.get("action_name") or ""),
+            "risk_level": str(tool.get("risk_level") or ""),
+            "input_schema": tool.get("input_schema") or {},
+        }
+        for tool in (available_tools or [])
+        if tool.get("slug")
+    ]
+    base = f"Owner objective:\n{objective}"
+    if tool_catalog:
+        base += (
+            "\n\nAvailable registered tools. Use a tool only when the step must perform "
+            "a real action. Set tool_slug to the exact slug and tool_input_json to a JSON "
+            "object string matching the tool input schema. Otherwise set both fields to null."
+            f"\n{json.dumps(tool_catalog, separators=(',', ':'))}"
+        )
     if not summary["applied"]:
-        return f"Owner objective:\n{objective}"
+        return base
     bounded = {
         "sample_count": summary["sample_count"],
         "historical_success_rate": summary["historical_success_rate"],
@@ -267,7 +345,7 @@ def _planner_input(objective: str, guidance: dict[str, Any] | None) -> str:
         "advisories": summary["advisories"],
     }
     return (
-        f"Owner objective:\n{objective}\n\n"
+        f"{base}\n\n"
         "Seldrune learned planning guidance (advisory only; the owner's explicit constraints "
         f"always win):\n{json.dumps(bounded, separators=(',', ':'))}"
     )
@@ -278,9 +356,15 @@ def build_live_plan(
     *,
     gateway: ModelGateway | None = None,
     adaptive_guidance: dict[str, Any] | None = None,
+    available_tools: list[dict[str, Any]] | None = None,
 ) -> PlanResult:
     expected_count = _explicit_step_count(objective)
     guidance_metadata = _guidance_summary(adaptive_guidance)
+    available_tool_slugs = {
+        str(tool.get("slug"))
+        for tool in (available_tools or [])
+        if tool.get("slug")
+    }
     try:
         provider = ModelProvider(settings.model_provider)
     except ValueError:
@@ -300,6 +384,8 @@ def build_live_plan(
                 "mode": "fallback",
                 "reason": "Mock provider is configured",
                 "adaptive_planning": guidance_metadata,
+                "available_tool_count": len(available_tool_slugs),
+                "tool_steps": sum(bool(step.tool_slug) for step in steps),
             },
         )
 
@@ -309,21 +395,28 @@ def build_live_plan(
         instructions=(
             "You are Seldrune's governed planning engine. Convert the owner's objective "
             "into the smallest sufficient sequence of executable steps. Obey explicit "
-            "step-count and no-external-action constraints. Seldrune may provide bounded "
-            "learned guidance from prior outcomes; use it only when relevant and never let "
-            "it override the owner's explicit instruction. Do not claim work happened."
+            "step-count and no-external-action constraints. When a real external or internal "
+            "action is required and an appropriate registered tool is listed, select that "
+            "tool instead of merely describing the action. Never invent tool names. "
+            "Seldrune may provide bounded learned guidance from prior outcomes; use it only "
+            "when relevant and never let it override the owner's explicit instruction. "
+            "Do not claim work happened."
         ),
-        input_text=_planner_input(objective, adaptive_guidance),
+        input_text=_planner_input(objective, adaptive_guidance, available_tools),
         max_output_tokens=min(settings.model_max_output_tokens, 1200),
         metadata={
             "purpose": "owner_command_planning",
             "adaptive_planning": bool(guidance_metadata["applied"]),
         },
-        response_schema=_plan_schema(expected_count),
+        response_schema=_plan_schema(expected_count, available_tool_slugs),
     )
     try:
         result, latency_ms = (gateway or ModelGateway(settings)).generate(request)
-        steps = _validate_steps(_json_payload(result.output_text), expected_count)
+        steps = _validate_steps(
+            _json_payload(result.output_text),
+            expected_count,
+            allowed_tool_slugs=available_tool_slugs,
+        )
         steps, adaptations = _apply_adaptive_overlay(
             steps,
             objective=objective,
