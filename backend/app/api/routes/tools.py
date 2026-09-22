@@ -136,7 +136,9 @@ def create_tool(
             "slug": tool.slug,
             "provider": tool.provider,
             "action_name": tool.action_name,
-            "credential_reference_id": str(tool.credential_reference_id) if tool.credential_reference_id else None,
+            "credential_reference_id": (
+                str(tool.credential_reference_id) if tool.credential_reference_id else None
+            ),
             "risk_level": tool.risk_level,
             "approval_mode": tool.approval_mode,
         },
