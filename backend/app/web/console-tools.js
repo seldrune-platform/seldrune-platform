@@ -4,6 +4,7 @@
   let secrets = [];
   let tools = [];
   let runs = [];
+  let bootstrapStatus = null;
 
   function setStatus(message) {
     const element = byId('tool-control-status');
@@ -28,6 +29,45 @@
   function currentAdapter() {
     const value = byId('tool-adapter-select')?.value || '';
     return adapters.find(item => `${item.provider}:${item.action_name}` === value) || null;
+  }
+
+  function renderBootstrapStatus() {
+    const root = byId('tool-provider-readiness');
+    if (!root) return;
+    root.replaceChildren();
+    const providers = bootstrapStatus?.providers || [];
+    if (!providers.length) {
+      clearAndMessage(root, 'No provider bootstrap metadata is available.');
+      return;
+    }
+    providers.forEach(provider => {
+      const card = document.createElement('article');
+      card.className = 'tool-readiness-card';
+      const top = document.createElement('div');
+      top.className = 'tool-row-top';
+      const name = document.createElement('strong');
+      name.textContent = provider.provider.toUpperCase();
+      top.append(
+        name,
+        createPill(provider.ready ? 'ready' : 'setup required', provider.ready ? '' : 'pending')
+      );
+      const meta = document.createElement('small');
+      const readyActions = provider.actions.filter(action => action.ready).length;
+      meta.textContent =
+        `${readyActions}/${provider.actions.length} actions ready · ${provider.credential_env_locator}`;
+      const detail = document.createElement('p');
+      if (provider.ready) {
+        detail.textContent = 'Credential resolves and all built-in actions are registered.';
+      } else if (provider.secret_available) {
+        detail.textContent =
+          'Credential is available. Activate configured providers to create missing tools.';
+      } else {
+        detail.textContent =
+          `Add ${provider.credential_env_locator} to the service environment, then activate.`;
+      }
+      card.append(top, meta, detail);
+      root.append(card);
+    });
   }
 
   function renderAdapters() {
@@ -208,12 +248,14 @@
     if (!document.getElementById('tool-control') || !state?.org) return;
     setStatus('Loading governed action fabric…');
     try {
-      [adapters, secrets, tools, runs] = await Promise.all([
+      [adapters, secrets, tools, runs, bootstrapStatus] = await Promise.all([
         api('/tool-adapters'),
         api('/secret-references'),
         api('/tools'),
         api('/tool-runs'),
+        api('/tool-bootstrap/status'),
       ]);
+      renderBootstrapStatus();
       renderAdapters();
       renderSecrets();
       renderTools();
@@ -227,6 +269,29 @@
   }
 
   byId('tool-control-refresh')?.addEventListener('click', loadToolControl);
+  byId('tool-auto-activate')?.addEventListener('click', async event => {
+    event.currentTarget.disabled = true;
+    try {
+      const result = await api('/tool-bootstrap', {
+        method: 'POST',
+        body: '{}',
+      });
+      const created = result.created_tools?.length || 0;
+      const missing = result.missing_env_locators || [];
+      if (created) {
+        toast(`Activated ${created} configured provider tool${created === 1 ? '' : 's'}`);
+      } else if (missing.length) {
+        toast(`Add provider secrets: ${missing.join(', ')}`);
+      } else {
+        toast('Configured provider tools are already active');
+      }
+      await loadToolControl();
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      event.currentTarget.disabled = false;
+    }
+  });
   byId('tool-adapter-select')?.addEventListener('change', refreshAdapterForm);
 
   byId('secret-reference-form')?.addEventListener('submit', async event => {
