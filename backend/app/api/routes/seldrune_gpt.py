@@ -19,9 +19,12 @@ from backend.app.core.modeling import ModelProvider, ModelRequest
 from backend.app.core.rbac import Permission, Role
 from backend.app.models.membership import Membership
 from backend.app.models.seldrune_gpt_message import SeldruneGPTMessage
+from backend.app.models.tool_definition import ToolDefinition
 from backend.app.schemas.orchestration import AutonomousExecutionRequest, OrchestrationCreate
 from backend.app.services.audit import record_audit
+from backend.app.services.external_actions import default_external_action_catalog
 from backend.app.services.model_gateway import ModelGateway, ModelGatewayError
+from backend.app.services.tool_bootstrap import ensure_configured_external_tools
 
 router = APIRouter(prefix="/organizations", tags=["seldrune-gpt"])
 run_dependency = require_org_permission(Permission.AGENTS_RUN)
@@ -65,6 +68,111 @@ def _operator_risk_reasons(order: str) -> list[str]:
     return [name for name, pattern in _OPERATOR_RISK_PATTERNS if pattern.search(order)]
 
 
+_TOOL_INTENT_PATTERNS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
+    (
+        "gmail",
+        "send-message",
+        re.compile(
+            r"\b(send|email|mail)\b.{0,80}\b(email|mail|gmail|message)\b"
+            r"|\b(email|mail|gmail)\b.{0,80}\b(send|message)\b",
+            re.I,
+        ),
+    ),
+    (
+        "github",
+        "create-issue",
+        re.compile(
+            r"\b(create|open|file)\b.{0,80}\b(issue|bug)\b",
+            re.I,
+        ),
+    ),
+    (
+        "github",
+        "comment",
+        re.compile(
+            r"\b(comment|reply)\b.{0,80}\b(issue|pull request|pr)\b",
+            re.I,
+        ),
+    ),
+    (
+        "github",
+        "create-pull-request",
+        re.compile(
+            r"\b(create|open)\b.{0,80}\b(pull request|pr)\b",
+            re.I,
+        ),
+    ),
+    (
+        "github",
+        "merge-pull-request",
+        re.compile(
+            r"\bmerge\b.{0,80}\b(pull request|pr)\b"
+            r"|\b(pull request|pr)\b.{0,80}\bmerge\b",
+            re.I,
+        ),
+    ),
+    (
+        "github",
+        "dispatch-workflow",
+        re.compile(
+            r"\b(dispatch|trigger|run)\b.{0,80}\b(workflow|github action)\b",
+            re.I,
+        ),
+    ),
+)
+
+
+def _required_external_tool_actions(order: str) -> list[tuple[str, str]]:
+    required = {
+        (provider, action_name)
+        for provider, action_name, pattern in _TOOL_INTENT_PATTERNS
+        if pattern.search(order)
+    }
+    deploy_requested = re.search(r"\b(deploy|redeploy)\b", order, re.I)
+    github_workflow = re.search(r"\b(workflow|github action)\b", order, re.I)
+    if deploy_requested and not github_workflow:
+        required.add(("render", "deploy-service"))
+    return sorted(required)
+
+
+def _missing_external_tools(
+    session: SessionDep,
+    *,
+    organization_id: UUID,
+    order: str,
+) -> tuple[list[str], list[str]]:
+    required = _required_external_tool_actions(order)
+    if not required:
+        return [], []
+
+    active = {
+        (tool.provider, tool.action_name)
+        for tool in session.scalars(
+            select(ToolDefinition).where(
+                ToolDefinition.organization_id == organization_id,
+                ToolDefinition.status == "active",
+            )
+        )
+    }
+    missing = [item for item in required if item not in active]
+    if not missing:
+        return [], []
+
+    catalog = {
+        (str(item["provider"]), str(item["action_name"])): item
+        for item in default_external_action_catalog()
+    }
+    missing_tools = [f"{provider}:{action_name}" for provider, action_name in missing]
+    env_locators = sorted(
+        {
+            str(catalog[item]["credential_env_locator"])
+            for item in missing
+            if item in catalog
+        }
+    )
+    return missing_tools, env_locators
+
+
 def _require_owner_role(membership: Membership) -> None:
     if membership.role != Role.OWNER.value:
         raise HTTPException(status_code=403, detail="Owner role required")
@@ -84,8 +192,14 @@ class SeldruneGPTOperatorRequest(BaseModel):
 
 
 class SeldruneGPTOperatorResponse(BaseModel):
-    status: Literal["completed", "partial", "approval_required", "failed"]
-    command_id: UUID
+    status: Literal[
+        "completed",
+        "partial",
+        "approval_required",
+        "configuration_required",
+        "failed",
+    ]
+    command_id: UUID | None = None
     objective: str
     approval_required: bool
     risk_reasons: list[str]
@@ -94,7 +208,9 @@ class SeldruneGPTOperatorResponse(BaseModel):
     failed_steps: int = 0
     blocked_steps: int = 0
     halted_reason: str | None = None
-    evidence_url: str
+    evidence_url: str | None = None
+    missing_tools: list[str] = Field(default_factory=list)
+    configuration_hints: list[str] = Field(default_factory=list)
     brief: dict | None = None
 
 
@@ -244,6 +360,59 @@ def operate_seldrune_gpt(
     session: SessionDep,
 ) -> SeldruneGPTOperatorResponse:
     _require_owner_role(membership)
+    ensure_configured_external_tools(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+    )
+    missing_tools, configuration_hints = _missing_external_tools(
+        session,
+        organization_id=organization_id,
+        order=payload.order,
+    )
+    if missing_tools:
+        record_audit(
+            session,
+            organization_id=organization_id,
+            actor_user_id=current_user.id,
+            action="seldrune_gpt.operator_configuration_required",
+            resource_type="organization",
+            resource_id=str(organization_id),
+            details={
+                "missing_tools": missing_tools,
+                "configuration_hints": configuration_hints,
+            },
+        )
+        session.add(
+            SeldruneGPTMessage(
+                organization_id=organization_id,
+                user_id=current_user.id,
+                role="assistant",
+                content=(
+                    "Operator configuration required. Missing executable tools: "
+                    + ", ".join(missing_tools)
+                    + (
+                        ". Configure: " + ", ".join(configuration_hints)
+                        if configuration_hints
+                        else ""
+                    )
+                ),
+                model=settings.model_default,
+            )
+        )
+        session.commit()
+        return SeldruneGPTOperatorResponse(
+            status="configuration_required",
+            command_id=None,
+            objective=payload.order,
+            approval_required=False,
+            risk_reasons=[],
+            run_status="not_started",
+            halted_reason="required_external_tool_unavailable",
+            missing_tools=missing_tools,
+            configuration_hints=configuration_hints,
+        )
+
     risk_reasons = _operator_risk_reasons(payload.order)
 
     if payload.command_id is None:
