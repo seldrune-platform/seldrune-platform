@@ -5,6 +5,7 @@
   let tools = [];
   let runs = [];
   let bootstrapStatus = null;
+  let providerPreflight = null;
 
   function setStatus(message) {
     const element = byId('tool-control-status');
@@ -66,6 +67,49 @@
           `Add ${provider.credential_env_locator} to the service environment, then activate.`;
       }
       card.append(top, meta, detail);
+      root.append(card);
+    });
+  }
+
+  function renderProviderPreflight() {
+    const root = byId('tool-provider-preflight-results');
+    if (!root) return;
+    root.replaceChildren();
+    const providers = providerPreflight?.providers || [];
+    if (!providers.length) {
+      clearAndMessage(
+        root,
+        'Remote provider access has not been verified in this session.'
+      );
+      return;
+    }
+    providers.forEach(provider => {
+      const card = document.createElement('article');
+      card.className = 'tool-readiness-card';
+      const top = document.createElement('div');
+      top.className = 'tool-row-top';
+      const name = document.createElement('strong');
+      name.textContent = `${provider.provider.toUpperCase()} remote access`;
+      top.append(
+        name,
+        createPill(
+          provider.status,
+          provider.verified ? '' : 'pending'
+        )
+      );
+      const detail = document.createElement('p');
+      detail.textContent = provider.detail || 'No provider detail returned.';
+      card.append(top, detail);
+
+      const identityEntries = Object.entries(provider.identity || {})
+        .filter(([, value]) => value !== null && value !== undefined && value !== '');
+      if (identityEntries.length) {
+        const identity = document.createElement('small');
+        identity.textContent = identityEntries
+          .map(([key, value]) => `${key}: ${value}`)
+          .join(' · ');
+        card.append(identity);
+      }
       root.append(card);
     });
   }
@@ -256,6 +300,7 @@
         api('/tool-bootstrap/status'),
       ]);
       renderBootstrapStatus();
+      renderProviderPreflight();
       renderAdapters();
       renderSecrets();
       renderTools();
@@ -269,6 +314,28 @@
   }
 
   byId('tool-control-refresh')?.addEventListener('click', loadToolControl);
+  byId('tool-provider-preflight')?.addEventListener('click', async event => {
+    event.currentTarget.disabled = true;
+    setStatus('Verifying remote provider access without taking external actions…');
+    try {
+      providerPreflight = await api('/tool-bootstrap/preflight', {
+        method: 'POST',
+        body: '{}',
+      });
+      renderProviderPreflight();
+      const verified = providerPreflight.verified || 0;
+      const total = providerPreflight.total || 0;
+      toast(`Verified ${verified}/${total} provider credentials`);
+      setStatus(
+        `Provider preflight complete · ${verified}/${total} remotely verified.`
+      );
+    } catch (error) {
+      toast(error.message);
+      setStatus(`Provider preflight failed: ${error.message}`);
+    } finally {
+      event.currentTarget.disabled = false;
+    }
+  });
   byId('tool-auto-activate')?.addEventListener('click', async event => {
     event.currentTarget.disabled = true;
     try {
