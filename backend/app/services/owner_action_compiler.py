@@ -248,6 +248,15 @@ _DIRECT_ACTION_ORDER = re.compile(
 )
 
 
+_CONFIG_HINT_BY_FIELD: dict[tuple[str, str], str] = {
+    ("github", "owner"): "SELDRUNE_GITHUB_DEFAULT_OWNER",
+    ("github", "repo"): "SELDRUNE_GITHUB_DEFAULT_REPO",
+    ("github", "ref"): "SELDRUNE_GITHUB_DEFAULT_REF",
+    ("github", "base"): "SELDRUNE_GITHUB_DEFAULT_REF",
+    ("render", "service_id"): "SELDRUNE_RENDER_DEFAULT_SERVICE_ID",
+}
+
+
 def compile_required_external_action_steps(
     order: str,
     *,
@@ -314,6 +323,17 @@ def compile_required_external_action_steps(
         compiled_steps = [*planned_steps, *added]
         mode = "append-missing-tools" if added else "planner-only"
 
+    configuration_hints: set[str] = set()
+    unresolved_user_fields: set[str] = set()
+    for item in unresolved:
+        provider = str(item["provider"])
+        for field in item["missing_fields"]:
+            hint = _CONFIG_HINT_BY_FIELD.get((provider, str(field)))
+            if hint:
+                configuration_hints.add(hint)
+            else:
+                unresolved_user_fields.add(str(field))
+
     return compiled_steps, {
         "mode": mode,
         "required_actions": [
@@ -322,4 +342,6 @@ def compile_required_external_action_steps(
         ],
         "added_tool_slugs": [step.tool_slug for step in added if step.tool_slug],
         "unresolved": unresolved,
+        "configuration_hints": sorted(configuration_hints),
+        "unresolved_user_fields": sorted(unresolved_user_fields),
     }
