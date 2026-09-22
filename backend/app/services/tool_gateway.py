@@ -16,6 +16,47 @@ class ToolGatewayError(RuntimeError):
     pass
 
 
+class ToolExecutionEvidenceError(ToolGatewayError):
+    """Raised when an external action does not return verifiable execution evidence."""
+
+
+_EXTERNAL_ACTIONS: dict[tuple[str, str], Callable[[dict[str, Any]], dict[str, Any]]] = {}
+
+
+def register_external_action(
+    provider: str,
+    action_name: str,
+    handler: Callable[[dict[str, Any]], dict[str, Any]],
+) -> None:
+    """Register a governed provider adapter at application startup."""
+    key = (provider.strip().lower(), action_name.strip())
+    if not key[0] or key[0] == "internal" or not key[1]:
+        raise ToolGatewayError("External action requires a non-internal provider and action name")
+    _EXTERNAL_ACTIONS[key] = handler
+
+
+def _resolve_action(tool: ToolDefinition) -> Callable[[dict[str, Any]], dict[str, Any]]:
+    if tool.provider == "internal":
+        action = _INTERNAL_ACTIONS.get(tool.action_name)
+    else:
+        action = _EXTERNAL_ACTIONS.get((tool.provider.lower(), tool.action_name))
+    if action is None:
+        raise ToolGatewayError(
+            f"Tool adapter is not registered: {tool.provider}:{tool.action_name}"
+        )
+    return action
+
+
+def _validate_external_evidence(tool: ToolDefinition, output: dict[str, Any]) -> None:
+    if tool.provider == "internal":
+        return
+    evidence = output.get("evidence") if isinstance(output, dict) else None
+    if not isinstance(evidence, dict) or not evidence.get("receipt_id"):
+        raise ToolExecutionEvidenceError(
+            "External action did not return execution evidence with receipt_id"
+        )
+
+
 def _echo(payload: dict[str, Any]) -> dict[str, Any]:
     return {"echo": payload}
 
@@ -62,10 +103,7 @@ def create_tool_run(
         raise ToolGatewayError("Tool does not belong to this organization")
     if tool.status != ToolStatus.ACTIVE.value:
         raise ToolGatewayError("Tool is disabled")
-    if tool.provider != "internal":
-        raise ToolGatewayError("Only internal tools are supported in v0.8")
-    if tool.action_name not in _INTERNAL_ACTIONS:
-        raise ToolGatewayError("Tool action is not allow-listed")
+    _resolve_action(tool)
 
     status = (
         ToolRunStatus.PENDING_APPROVAL
@@ -111,9 +149,7 @@ def execute_tool_run(
 ) -> ToolRun:
     if run.status != ToolRunStatus.APPROVED.value:
         raise ToolGatewayError("Tool run is not approved for execution")
-    action = _INTERNAL_ACTIONS.get(tool.action_name)
-    if action is None:
-        raise ToolGatewayError("Tool action is not allow-listed")
+    action = _resolve_action(tool)
 
     run.status = ToolRunStatus.RUNNING.value
     run.started_at = datetime.now(UTC)
@@ -121,6 +157,7 @@ def execute_tool_run(
 
     try:
         output = action(run.input_data)
+        _validate_external_evidence(tool, output)
     except ToolGatewayError as exc:
         run.status = ToolRunStatus.FAILED.value
         run.error_message = str(exc)
