@@ -343,7 +343,8 @@ def build_decision_brief(session: Session, run: OrchestrationRun) -> dict[str, A
         task = task_by_id.get(step.task_id)
         invocation = invocation_by_task.get(step.task_id)
         task_status = task.status if task else "missing"
-        output = (task.output_data or {}).get("text") if task else None
+        task_output = (task.output_data or {}) if task else {}
+        output = task_output.get("text")
         duration_ms = _duration_ms(task)
         tokens = invocation.total_tokens if invocation else 0
         cost = invocation.estimated_cost_usd if invocation else None
@@ -360,6 +361,12 @@ def build_decision_brief(session: Session, run: OrchestrationRun) -> dict[str, A
                 "agent_id": step.assigned_agent_id,
                 "agent_name": agent.name if agent else None,
                 "output": output if isinstance(output, str) else None,
+                "execution_type": task_output.get("execution_type"),
+                "tool_slug": task_output.get("tool_slug"),
+                "tool_id": task_output.get("tool_id"),
+                "tool_run_id": task_output.get("tool_run_id"),
+                "tool_output": task_output.get("tool_output"),
+                "evidence": task_output.get("evidence"),
                 "error": task.error_message if task else "Task record is missing",
                 "model": invocation.model if invocation else None,
                 "provider": invocation.provider if invocation else None,
