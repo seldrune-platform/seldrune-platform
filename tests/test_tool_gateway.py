@@ -242,6 +242,17 @@ def test_default_external_adapter_catalog_is_exposed(client: TestClient) -> None
 
 def test_builtin_adapter_enforces_minimum_risk(client: TestClient) -> None:
     headers, organization_id = register_owner(client)
+    reference = client.post(
+        f"/api/v1/organizations/{organization_id}/secret-references",
+        headers=headers,
+        json={
+            "name": "GitHub Token",
+            "slug": "github-token",
+            "provider": "env",
+            "locator": "GITHUB_TOOL_TOKEN",
+        },
+    )
+    assert reference.status_code == 201
     response = client.post(
         f"/api/v1/organizations/{organization_id}/tools",
         headers=headers,
@@ -250,6 +261,7 @@ def test_builtin_adapter_enforces_minimum_risk(client: TestClient) -> None:
             "slug": "dispatch-production-workflow",
             "provider": "github",
             "action_name": "dispatch-workflow",
+            "credential_reference_id": reference.json()["id"],
             "risk_level": "low",
             "approval_mode": "never",
         },
