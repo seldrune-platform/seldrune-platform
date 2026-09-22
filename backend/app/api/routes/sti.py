@@ -10,6 +10,8 @@ from services.live_media.face_production_io import load_production_gates
 from services.live_media.hardware_profiles import default_live_media_accelerator
 from services.live_media.readiness import check_readiness
 
+from backend.app.services.evolution_registry import evolution_payload
+
 router = APIRouter(prefix="/sti", tags=["seldrune-sti"])
 
 
@@ -131,3 +133,10 @@ def sti_telemetry() -> dict[str, object]:
             for item in recent
         ],
     }
+
+
+
+@router.get("/evolution")
+def sti_evolution() -> dict[str, object]:
+    """Explicit V22–V100 technical contracts and evidence-aware status."""
+    return evolution_payload()
