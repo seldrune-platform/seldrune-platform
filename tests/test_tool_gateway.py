@@ -235,6 +235,8 @@ def test_default_external_adapter_catalog_is_exposed(client: TestClient) -> None
     assert ("gmail", "send-message") in adapters
     assert ("github", "create-issue") in adapters
     assert ("github", "comment") in adapters
+    assert ("github", "create-pull-request") in adapters
+    assert ("github", "merge-pull-request") in adapters
     assert ("github", "dispatch-workflow") in adapters
     assert ("render", "deploy-service") in adapters
     assert adapters[("gmail", "send-message")]["credential_required"] is True
