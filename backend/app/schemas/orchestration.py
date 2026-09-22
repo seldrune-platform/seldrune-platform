@@ -11,7 +11,11 @@ class PlanStepInput(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
     priority: int = Field(default=0, ge=-100, le=100)
     requires_approval: bool = False
-    tool_slug: str | None = Field(default=None, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=100)
+    tool_slug: str | None = Field(
+        default=None,
+        pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        max_length=100,
+    )
     tool_input: dict[str, Any] = Field(default_factory=dict)
 
 
