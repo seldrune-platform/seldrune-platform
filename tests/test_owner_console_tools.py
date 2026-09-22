@@ -42,6 +42,7 @@ def test_tools_workspace_exposes_action_controls() -> None:
     assert "api('/tools')" in script
     assert "api('/tool-runs')" in script
     assert "api('/tool-bootstrap/status')" in script
+    assert "api('/tool-defaults')" in script
     assert "api('/tool-bootstrap/preflight'" in script
     assert "api('/tool-bootstrap'" in script
     assert "Approve & execute" in script
