@@ -502,40 +502,69 @@ def operate_seldrune_gpt(
             f"{provider}:{action_name}"
             for provider, action_name in missing_planned
         ]
+        unresolved_run = _get_run(session, organization_id, run_id)
+        planner_context = (unresolved_run.context or {}).get("planner") or {}
+        compiler_context = planner_context.get("deterministic_action_compiler") or {}
+        compiler_hints = list(compiler_context.get("configuration_hints") or [])
+        unresolved_user_fields = list(
+            compiler_context.get("unresolved_user_fields") or []
+        )
+        configuration_only = bool(compiler_hints) and not unresolved_user_fields
+        audit_action = (
+            "seldrune_gpt.operator_action_configuration_required"
+            if configuration_only
+            else "seldrune_gpt.operator_required_tool_not_planned"
+        )
         record_audit(
             session,
             organization_id=organization_id,
             actor_user_id=current_user.id,
-            action="seldrune_gpt.operator_required_tool_not_planned",
+            action=audit_action,
             resource_type="orchestration",
             resource_id=str(run_id),
-            details={"missing_tools": missing_planned_tools},
+            details={
+                "missing_tools": missing_planned_tools,
+                "configuration_hints": compiler_hints,
+                "unresolved_user_fields": unresolved_user_fields,
+            },
         )
+        if configuration_only:
+            message = (
+                "Operator configuration required before execution. Configure: "
+                + ", ".join(compiler_hints)
+            )
+            status_value = "configuration_required"
+            halted_reason = "required_external_action_configuration_missing"
+        else:
+            message = (
+                "Operator stopped before execution because required external action "
+                "inputs could not be resolved safely: "
+                + ", ".join(missing_planned_tools)
+            )
+            status_value = "failed"
+            halted_reason = "required_external_tool_not_planned"
         session.add(
             SeldruneGPTMessage(
                 organization_id=organization_id,
                 user_id=current_user.id,
                 role="assistant",
-                content=(
-                    "Operator stopped before execution because the plan did not include "
-                    "required external tools: "
-                    + ", ".join(missing_planned_tools)
-                ),
+                content=message,
                 model=settings.model_default,
             )
         )
         session.commit()
         run = _get_run(session, organization_id, run_id)
         return SeldruneGPTOperatorResponse(
-            status="failed",
+            status=status_value,
             command_id=run_id,
             objective=payload.order,
             approval_required=False,
             risk_reasons=risk_reasons,
             run_status=run.status,
-            halted_reason="required_external_tool_not_planned",
+            halted_reason=halted_reason,
             evidence_url=evidence_url,
             missing_tools=missing_planned_tools,
+            configuration_hints=compiler_hints,
         )
     if risk_reasons and not payload.confirm_sensitive_action:
         record_audit(
