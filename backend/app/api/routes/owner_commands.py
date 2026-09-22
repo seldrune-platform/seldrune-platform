@@ -13,11 +13,13 @@ from sqlalchemy.orm.attributes import flag_modified
 from backend.app.api.dependencies import CurrentUserDep, SessionDep, require_org_permission
 from backend.app.api.routes.orchestrations import _get_run, _to_public
 from backend.app.core.rbac import Permission, Role
+from backend.app.core.tools import ToolStatus
 from backend.app.models.audit import AuditLog
 from backend.app.models.governance_policy import GovernancePolicy
 from backend.app.models.membership import Membership
 from backend.app.models.organization_kernel import OrganizationProject
 from backend.app.models.orchestration import OrchestrationRun, OrchestrationStep
+from backend.app.models.tool_definition import ToolDefinition
 from backend.app.schemas.orchestration import (
     AutonomousExecutionRequest,
     AutonomousExecutionResponse,
@@ -342,9 +344,29 @@ def create_owner_command(
         objective=payload.objective,
     )
     adaptive_guidance = merge_playbook(adaptive_guidance, playbook_guidance)
+    active_tools = list(
+        session.scalars(
+            select(ToolDefinition).where(
+                ToolDefinition.organization_id == organization_id,
+                ToolDefinition.status == ToolStatus.ACTIVE.value,
+            )
+        )
+    )
+    tool_catalog = [
+        {
+            "slug": tool.slug,
+            "description": tool.description,
+            "provider": tool.provider,
+            "action_name": tool.action_name,
+            "risk_level": tool.risk_level,
+            "input_schema": tool.input_schema,
+        }
+        for tool in active_tools
+    ]
     planned = build_live_plan(
         payload.objective,
         adaptive_guidance=adaptive_guidance,
+        available_tools=tool_catalog,
     )
     context = {
         **payload.context,
