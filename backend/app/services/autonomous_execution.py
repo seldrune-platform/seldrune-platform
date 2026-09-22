@@ -186,6 +186,13 @@ def execute_orchestration_autonomously(
             .order_by(OrchestrationStep.sequence)
         )
     )
+    owner_command = (run.context or {}).get("owner_command") or {}
+    operator_context = (run.context or {}).get("seldrune_gpt_operator") or {}
+    standing_owner_authorization = (
+        bool(operator_context)
+        and owner_command.get("approval_status") == "approved"
+    )
+
     approvals_by_step = {
         approval.orchestration_step_id: approval
         for approval in session.scalars(
@@ -285,7 +292,7 @@ def execute_orchestration_autonomously(
             report["last_sequence"] = step.sequence
             break
 
-        if step.requires_approval:
+        if step.requires_approval and not standing_owner_authorization:
             approval = approvals_by_step.get(step.id)
             approval_status = approval.status if approval is not None else None
             if approval is None:
@@ -347,11 +354,22 @@ def execute_orchestration_autonomously(
             session.commit()
             break
 
-        if upstream:
-            task.input_data = {
-                **(task.input_data or {}),
-                "upstream_results": upstream,
+        execution_context = dict(task.input_data or {})
+        if standing_owner_authorization:
+            execution_context["owner_authorization"] = {
+                "status": "approved",
+                "scope": "routine_reversible_operations",
+                "approved_by": owner_command.get("approved_by") or str(actor_user_id),
+                "source": "seldrune_gpt_operator",
+                "instruction": (
+                    "Owner authorization is already verified for this governed execution. "
+                    "Do not request approval again for routine reversible work."
+                ),
             }
+        if upstream:
+            execution_context["upstream_results"] = upstream
+        if execution_context != (task.input_data or {}):
+            task.input_data = execution_context
             session.add(
                 TaskEvent(
                     organization_id=task.organization_id,

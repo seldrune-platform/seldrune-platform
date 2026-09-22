@@ -61,6 +61,7 @@ async function establishSession() {
   $('#owner-name').textContent =
     `${me.user.display_name} · ${membership.organization.name}`;
   showView('#console-view');
+  document.dispatchEvent(new CustomEvent('seldrune:console-ready'));
   await load();
 }
 

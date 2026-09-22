@@ -4,6 +4,8 @@ from backend.app.models.audit import AuditLog
 from backend.app.models.email_verification_token import EmailVerificationToken
 from backend.app.models.governance_policy import GovernancePolicy
 from backend.app.models.knowledge import KnowledgeEntry
+from backend.app.models.life_lease import LifeLease
+from backend.app.models.life_worker_heartbeat import LifeWorkerHeartbeat
 from backend.app.models.login_failure import LoginFailure
 from backend.app.models.membership import Membership
 from backend.app.models.memory import MemoryItem
@@ -31,6 +33,7 @@ from backend.app.models.research_source import ResearchSource
 from backend.app.models.revoked_access_token import RevokedAccessToken
 from backend.app.models.secret_reference import SecretReference
 from backend.app.models.security_event import SecurityEvent
+from backend.app.models.seldrune_gpt_message import SeldruneGPTMessage
 from backend.app.models.task import Task, TaskEvent
 from backend.app.models.tool_definition import ToolDefinition
 from backend.app.models.tool_run import ToolRun
@@ -46,6 +49,7 @@ __all__ = [
     "EmailVerificationToken",
     "GovernancePolicy",
     "KnowledgeEntry",
+    "LifeLease",
     "LoginFailure",
     "Membership",
     "MemoryItem",
@@ -67,6 +71,7 @@ __all__ = [
     "RevokedAccessToken",
     "SecretReference",
     "SecurityEvent",
+    "SeldruneGPTMessage",
     "Task",
     "TaskEvent",
     "ToolDefinition",
@@ -74,4 +79,5 @@ __all__ = [
     "User",
     "WebhookEndpoint",
     "WebhookEvent",
+    "LifeWorkerHeartbeat",
 ]

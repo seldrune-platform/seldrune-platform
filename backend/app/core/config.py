@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     owner_push_vapid_public_key: str | None = None
     owner_push_vapid_private_key: str | None = None
     owner_push_vapid_subject: str | None = None
+    life_worker_interval_seconds: float = 30.0
+    life_worker_max_commands: int = 5
+    life_worker_max_steps_per_command: int = 5
+    life_worker_max_retries_per_step: int = 1
 
     @model_validator(mode="after")
     def validate_settings(self) -> "Settings":
@@ -74,6 +78,14 @@ class Settings(BaseSettings):
             raise ValueError("SELDRUNE_KNOWLEDGE_RETRIEVAL_LIMIT must be between 1 and 25")
         if self.knowledge_context_max_chars < 500:
             raise ValueError("SELDRUNE_KNOWLEDGE_CONTEXT_MAX_CHARS must be at least 500")
+        if self.life_worker_interval_seconds < 1:
+            raise ValueError("SELDRUNE_LIFE_WORKER_INTERVAL_SECONDS must be at least 1")
+        if not 1 <= self.life_worker_max_commands <= 100:
+            raise ValueError("SELDRUNE_LIFE_WORKER_MAX_COMMANDS must be between 1 and 100")
+        if not 1 <= self.life_worker_max_steps_per_command <= 50:
+            raise ValueError("SELDRUNE_LIFE_WORKER_MAX_STEPS_PER_COMMAND must be between 1 and 50")
+        if not 0 <= self.life_worker_max_retries_per_step <= 2:
+            raise ValueError("SELDRUNE_LIFE_WORKER_MAX_RETRIES_PER_STEP must be between 0 and 2")
         configured = [
             bool(self.owner_push_vapid_public_key),
             bool(self.owner_push_vapid_private_key),

@@ -199,3 +199,206 @@ def test_xenobiotic_v14_verification_lattice_uses_measured_trust_channels(client
     assert ".xeno-verification-lattice" in stylesheet.text
     assert "@keyframes xeno-lattice-pulse" in stylesheet.text
     assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v15_command_singularity_uses_measured_pressure(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V15" in script.text
+    assert "COMMAND SINGULARITY" in script.text
+    assert "xeno-command-singularity" in script.text
+    for source_id in ("pending", "sti-running", "sti-failed"):
+        assert source_id in script.text
+    for state in ("dormant", "decision", "execution", "critical"):
+        assert state in script.text
+    assert "--xeno-pressure" in script.text
+    assert "MutationObserver" in script.text
+    assert "prefers-reduced-motion: reduce" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V15" in stylesheet.text
+    assert ".xeno-command-singularity" in stylesheet.text
+    assert "@keyframes xeno-singularity" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v16_operational_phase_space_maps_measured_state(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V16" in script.text
+    assert "OPERATIONAL PHASE SPACE" in script.text
+    assert "xeno-phase-space" in script.text
+    for source_id in ("pending", "sti-running", "sti-failed", "sti-verified"):
+        assert source_id in script.text
+    for zone in ("QUIET", "DECISION", "EXECUTION", "VERIFIED", "RISK"):
+        assert zone in script.text
+    assert "--xeno-phase-x" in script.text
+    assert "--xeno-phase-y" in script.text
+    assert "MutationObserver" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V16" in stylesheet.text
+    assert ".xeno-phase-space" in stylesheet.text
+    assert "@keyframes xeno-phase-pulse" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v17_mission_coherence_uses_measured_alignment(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V17" in script.text
+    assert "MISSION COHERENCE" in script.text
+    assert "xeno-mission-coherence" in script.text
+    for source_id in ("pending", "sti-running", "sti-verified", "sti-failed"):
+        assert source_id in script.text
+    for state in ("STABLE", "DRIFT", "ALIGNING", "COHERENT", "FRACTURED"):
+        assert state in script.text
+    assert "--xeno-coherence" in script.text
+    assert "MutationObserver" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V17" in stylesheet.text
+    assert ".xeno-mission-coherence" in stylesheet.text
+    assert "@keyframes xeno-coherence-pulse" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v18_reality_horizon_uses_measured_distance(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V18" in script.text
+    assert "REALITY HORIZON" in script.text
+    assert "xeno-reality-horizon" in script.text
+    for source_id in ("pending", "sti-running", "sti-verified", "sti-failed"):
+        assert source_id in script.text
+    for state in ("CLEAR", "NEAR", "APPROACH", "FAR", "BREACH"):
+        assert state in script.text
+    assert "--xeno-horizon" in script.text
+    assert "MutationObserver" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V18" in stylesheet.text
+    assert ".xeno-reality-horizon" in stylesheet.text
+    assert "@keyframes xeno-horizon-wave" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v19_causal_wake_uses_measured_momentum(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V19" in script.text
+    assert "CAUSAL WAKE" in script.text
+    assert "xeno-causal-wake" in script.text
+    for source_id in ("pending", "sti-running", "sti-verified", "sti-failed"):
+        assert source_id in script.text
+    for state in ("STILL", "BALANCED", "ADVANCE", "SURGE", "DRAG", "REVERSE"):
+        assert state in script.text
+    assert "--xeno-wake" in script.text
+    assert "--xeno-vector" in script.text
+    assert "MutationObserver" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V19" in stylesheet.text
+    assert ".xeno-causal-wake" in stylesheet.text
+    assert "@keyframes xeno-causal-stream" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v20_decision_event_horizon_uses_measured_pressure(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V20" in script.text
+    assert "DECISION EVENT HORIZON" in script.text
+    assert "xeno-decision-horizon" in script.text
+    source_ids = (
+        "pending",
+        "action-approvals",
+        "incident-critical",
+        "sti-failed",
+        "sti-running",
+    )
+    for source_id in source_ids:
+        assert source_id in script.text
+    for state in ("QUIET", "WATCH", "DECIDE", "FAILURE", "CRITICAL"):
+        assert state in script.text
+    assert "--xeno-decision-pressure" in script.text
+    assert "scrollIntoView" in script.text
+    assert "MutationObserver" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V20" in stylesheet.text
+    assert ".xeno-decision-horizon" in stylesheet.text
+    assert "@keyframes xeno-event-horizon" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v21_autonomy_aperture_uses_measured_capacity(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V21" in script.text
+    assert "AUTONOMY APERTURE" in script.text
+    assert "xeno-autonomy-aperture" in script.text
+    source_ids = (
+        "pending",
+        "action-approvals",
+        "sti-running",
+        "sti-verified",
+        "sti-failed",
+        "ls-cuda",
+        "ls-onnx",
+    )
+    for source_id in source_ids:
+        assert source_id in script.text
+    for state in ("GUARDED", "LOCKED", "OPEN", "WIDENING", "CALIBRATING"):
+        assert state in script.text
+    assert "--xeno-autonomy" in script.text
+    assert "MutationObserver" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V21" in stylesheet.text
+    assert ".xeno-autonomy-aperture" in stylesheet.text
+    assert "@keyframes xeno-aperture-iris" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
+
+
+def test_xenobiotic_v22_v100_evolution_matrix_uses_measured_telemetry(client) -> None:
+    script = client.get("/console-assets/console-xenobiotic.js")
+    assert script.status_code == 200
+    assert "V22–V100" in script.text
+    assert "EVOLUTION MATRIX" in script.text
+    assert "xeno-evolution-matrix" in script.text
+    assert "i+22" in script.text
+    assert "i/78" in script.text
+    assert "79 measured stages" in script.text
+    source_ids = (
+        "pending",
+        "action-approvals",
+        "incident-critical",
+        "sti-running",
+        "sti-verified",
+        "sti-failed",
+        "ls-cuda",
+        "ls-onnx",
+    )
+    for source_id in source_ids:
+        assert source_id in script.text
+    for state in ("dormant", "guarded", "aligned", "forming", "transcendent"):
+        assert state in script.text
+    assert "--xeno-stage" in script.text
+    assert "--xeno-evolution" in script.text
+    assert "MutationObserver" in script.text
+
+    stylesheet = client.get("/console-assets/console-xenobiotic.css")
+    assert stylesheet.status_code == 200
+    assert "V22–V100" in stylesheet.text
+    assert ".xeno-evolution-matrix" in stylesheet.text
+    assert ".xeno-evolution-cell" in stylesheet.text
+    assert "@keyframes xeno-evolution-breathe" in stylesheet.text
+    assert "prefers-reduced-motion:reduce" in stylesheet.text
