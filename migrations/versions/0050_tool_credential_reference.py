@@ -13,7 +13,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("tool_definitions", sa.Column("credential_reference_id", sa.Uuid(), nullable=True))
+    op.add_column(
+        "tool_definitions",
+        sa.Column("credential_reference_id", sa.Uuid(), nullable=True),
+    )
     op.create_index(
         op.f("ix_tool_definitions_credential_reference_id"),
         "tool_definitions",
@@ -36,5 +39,8 @@ def downgrade() -> None:
         "tool_definitions",
         type_="foreignkey",
     )
-    op.drop_index(op.f("ix_tool_definitions_credential_reference_id"), table_name="tool_definitions")
+    op.drop_index(
+        op.f("ix_tool_definitions_credential_reference_id"),
+        table_name="tool_definitions",
+    )
     op.drop_column("tool_definitions", "credential_reference_id")
