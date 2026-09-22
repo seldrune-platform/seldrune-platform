@@ -155,6 +155,11 @@ def create_tool(
         None,
     )
     if adapter is not None:
+        if payload.credential_reference_id is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Built-in external adapters require a credential reference",
+            )
         adapter_risk = str(adapter.get("risk_level") or ToolRisk.LOW.value)
         if risk_rank[adapter_risk] > risk_rank[risk_level]:
             risk_level = adapter_risk
