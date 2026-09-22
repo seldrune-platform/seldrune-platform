@@ -5,10 +5,21 @@ WEB = Path("backend/app/web")
 
 def test_owner_console_exposes_dedicated_tabs():
     html = (WEB / "index.html").read_text()
-    tabs = ("overview", "gpt", "runtime", "face", "liveshift", "actions", "governance", "commands")
+    tabs = (
+        "overview",
+        "gpt",
+        "runtime",
+        "face",
+        "liveshift",
+        "actions",
+        "tools",
+        "governance",
+        "commands",
+    )
     for tab in tabs:
         assert f'data-console-tab="{tab}"' in html
     assert 'data-console-tab="gpt" href="#seldrune-gpt">ChatGPT</a>' in html
+    assert 'data-console-tab="tools" href="#tool-control">Tools</a>' in html
     assert '/console-assets/console-tabs.css' in html
     assert '/console-assets/console-tabs.js' in html
 
