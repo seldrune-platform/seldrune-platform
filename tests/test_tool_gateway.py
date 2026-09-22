@@ -270,3 +270,22 @@ def test_builtin_adapter_enforces_minimum_risk(client: TestClient) -> None:
     tool = response.json()
     assert tool["risk_level"] == "high"
     assert tool["approval_mode"] == "always"
+
+
+def test_builtin_external_adapter_requires_credential_reference(
+    client: TestClient,
+) -> None:
+    headers, organization_id = register_owner(client)
+    response = client.post(
+        f"/api/v1/organizations/{organization_id}/tools",
+        headers=headers,
+        json={
+            "name": "Owner Gmail",
+            "slug": "owner-gmail",
+            "provider": "gmail",
+            "action_name": "send-message",
+            "risk_level": "medium",
+        },
+    )
+    assert response.status_code == 422
+    assert "require a credential reference" in response.json()["detail"]
