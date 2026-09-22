@@ -104,9 +104,9 @@ def test_safe_owner_order_executes_in_one_request(_client):  # noqa: F811
 
 
 def test_external_order_requires_ready_provider_tools(
-    _client,
+    _client,  # noqa: F811
     monkeypatch,
-):  # noqa: F811
+):
     client = _client
     for name in (
         "SELDRUNE_GMAIL_TOOL_CREDENTIAL",
@@ -137,9 +137,9 @@ def test_external_order_requires_ready_provider_tools(
 
 
 def test_operator_stops_when_planner_omits_required_ready_tool(
-    _client,
+    _client,  # noqa: F811
     monkeypatch,
-):  # noqa: F811
+):
     client = _client
     monkeypatch.setenv("SELDRUNE_GMAIL_TOOL_CREDENTIAL", "gmail-test-token")
     token, organization_id = register_owner(client)
@@ -160,9 +160,9 @@ def test_operator_stops_when_planner_omits_required_ready_tool(
 
 
 def test_operator_executes_required_planned_tool_with_receipt(
-    _client,
+    _client,  # noqa: F811
     monkeypatch,
-):  # noqa: F811
+):
     client = _client
     monkeypatch.setenv("SELDRUNE_GMAIL_TOOL_CREDENTIAL", "gmail-test-token")
 
