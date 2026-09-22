@@ -22,7 +22,9 @@ class ToolExecutionEvidenceError(ToolGatewayError):
     """Raised when an external action does not return verifiable execution evidence."""
 
 
-_EXTERNAL_ACTIONS: dict[tuple[str, str], Callable[[dict[str, Any], str | None], dict[str, Any]]] = {}
+_EXTERNAL_ACTIONS: dict[
+    tuple[str, str], Callable[[dict[str, Any], str | None], dict[str, Any]]
+] = {}
 
 
 def register_external_action(
