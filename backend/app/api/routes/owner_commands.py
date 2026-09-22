@@ -390,10 +390,20 @@ def create_owner_command(
         adaptive_guidance=adaptive_guidance,
         available_tools=tool_catalog,
     )
+    compiled_steps, action_compiler = compile_required_external_action_steps(
+        payload.objective,
+        available_tools=tool_catalog,
+        planned_steps=planned.steps,
+    )
+    planner_metadata = {
+        **planned.metadata,
+        "deterministic_action_compiler": action_compiler,
+        "tool_steps": sum(bool(step.tool_slug) for step in compiled_steps),
+    }
     context = {
         **payload.context,
         "owner_command": {"approval_status": "awaiting_approval", "approved_by": None},
-        "planner": planned.metadata,
+        "planner": planner_metadata,
         "operational_playbook": playbook_guidance,
     }
     run = create_orchestration_run(
@@ -402,7 +412,7 @@ def create_owner_command(
         created_by_user_id=current_user.id,
         objective=payload.objective,
         context=context,
-        plan=planned.steps,
+        plan=compiled_steps,
     )
     run.planner_version = planned.planner_version
     record_audit(
@@ -415,9 +425,9 @@ def create_owner_command(
         details={
             "approval_status": "awaiting_approval",
             "planner_version": planned.planner_version,
-            "planner": planned.metadata,
+            "planner": planner_metadata,
             "operational_playbook": playbook_guidance,
-            "step_count": len(planned.steps),
+            "step_count": len(compiled_steps),
         },
     )
     session.commit()
