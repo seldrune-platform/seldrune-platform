@@ -76,6 +76,29 @@
     input.value = '';
     try {
       let result = await executeOrder(order);
+      if (result.status === 'configuration_required') {
+        const missing = (result.missing_tools || []).join(', ');
+        const hints = (result.configuration_hints || []).join(', ');
+        addMessage(
+          'Seldrune Operator',
+          `Configuration required before execution. Missing: ${missing || 'provider tool'}`
+          + (hints ? `. Configure service secret(s): ${hints}.` : '.')
+        );
+        status.textContent = 'External action not started · provider configuration required.';
+        return;
+      }
+      if (
+        result.status === 'failed'
+        && result.halted_reason === 'required_external_tool_not_planned'
+      ) {
+        const missing = (result.missing_tools || []).join(', ');
+        addMessage(
+          'Seldrune Operator',
+          `Execution stopped before external action. Planner omitted required tool(s): ${missing}.`
+        );
+        status.textContent = `No external action performed · evidence ${result.command_id}`;
+        return;
+      }
       if (result.approval_required) {
         const reasons = (result.risk_reasons || []).join(', ');
         const approved = window.confirm(
