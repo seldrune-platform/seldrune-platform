@@ -10,6 +10,7 @@ from backend.app.core.rbac import Permission
 from backend.app.core.tools import ApprovalMode, ToolRisk, ToolRunStatus, ToolStatus
 from backend.app.models.agent import Agent
 from backend.app.models.membership import Membership
+from backend.app.models.secret_reference import SecretReference
 from backend.app.models.task import Task
 from backend.app.models.tool_definition import ToolDefinition
 from backend.app.models.tool_run import ToolRun
@@ -85,6 +86,18 @@ def create_tool(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"allowed_actions": allowed_internal_actions()},
         )
+    if payload.provider == "internal" and payload.credential_reference_id is not None:
+        raise HTTPException(status_code=422, detail="Internal tools cannot bind credentials")
+    if payload.credential_reference_id is not None:
+        credential_reference = session.scalar(
+            select(SecretReference).where(
+                SecretReference.id == payload.credential_reference_id,
+                SecretReference.organization_id == organization_id,
+                SecretReference.status == "active",
+            )
+        )
+        if credential_reference is None:
+            raise HTTPException(status_code=422, detail="Credential reference is unavailable")
     approval_mode = payload.approval_mode
     if payload.risk_level == ToolRisk.HIGH.value:
         approval_mode = ApprovalMode.ALWAYS.value
@@ -97,6 +110,7 @@ def create_tool(
         description=payload.description,
         provider=payload.provider,
         action_name=payload.action_name,
+        credential_reference_id=payload.credential_reference_id,
         status=ToolStatus.ACTIVE.value,
         risk_level=payload.risk_level,
         approval_mode=approval_mode,
@@ -122,6 +136,7 @@ def create_tool(
             "slug": tool.slug,
             "provider": tool.provider,
             "action_name": tool.action_name,
+            "credential_reference_id": str(tool.credential_reference_id) if tool.credential_reference_id else None,
             "risk_level": tool.risk_level,
             "approval_mode": tool.approval_mode,
         },
