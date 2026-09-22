@@ -311,6 +311,19 @@ def operate_seldrune_gpt(
             evidence_url=evidence_url,
         )
 
+    if risk_reasons and payload.confirm_sensitive_action:
+        confirmed_run = _get_run(session, organization_id, run_id)
+        operator_context = (confirmed_run.context or {}).get("seldrune_gpt_operator") or {}
+        confirmed_run.context = {
+            **(confirmed_run.context or {}),
+            "seldrune_gpt_operator": {
+                **operator_context,
+                "confirmed": True,
+                "confirmed_by": str(current_user.id),
+            },
+        }
+        session.commit()
+
     approve_owner_command(
         organization_id,
         run_id,
