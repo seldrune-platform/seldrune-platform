@@ -43,7 +43,10 @@ _ARCS = (
         50,
         59,
         "Reality Compiler",
-        "Aetherion hypothesis compilation, bounded digital twins, simulation, and evidence receipts.",
+        (
+            "Aetherion hypothesis compilation, bounded digital twins, "
+            "simulation, and evidence receipts."
+        ),
         "Simulation is clearly separated from measured real-world verification.",
         "implemented",
     ),
@@ -51,7 +54,10 @@ _ARCS = (
         60,
         69,
         "Self-Expansion",
-        "Capability discovery, sandbox construction, validation, skill promotion, and reusable playbooks.",
+        (
+            "Capability discovery, sandbox construction, validation, "
+            "skill promotion, and reusable playbooks."
+        ),
         "New capabilities must pass verification before registration and reuse.",
         "registered",
     ),
@@ -59,7 +65,10 @@ _ARCS = (
         70,
         79,
         "Resilience Mesh",
-        "Recovery orchestration, degraded-dependency handling, backup/restore evidence, and incident response.",
+        (
+            "Recovery orchestration, degraded-dependency handling, "
+            "backup/restore evidence, and incident response."
+        ),
         "Recovery objectives and restore evidence must be measured in production.",
         "registered",
     ),
@@ -67,7 +76,10 @@ _ARCS = (
         80,
         89,
         "Elastic Compute",
-        "Cost-aware cloud/GPU scheduling, workload placement, capacity control, and runtime telemetry.",
+        (
+            "Cost-aware cloud/GPU scheduling, workload placement, "
+            "capacity control, and runtime telemetry."
+        ),
         "Elastic execution must preserve budgets, tenant isolation, and evidence lineage.",
         "registered",
     ),
@@ -75,7 +87,10 @@ _ARCS = (
         90,
         99,
         "Universal Organization",
-        "Recursive organization synthesis, domain factories, vendor/human routing, and parallel delivery.",
+        (
+            "Recursive organization synthesis, domain factories, "
+            "vendor/human routing, and parallel delivery."
+        ),
         "Autonomy remains bounded by policy, budget, approvals, and evidence.",
         "registered",
     ),
@@ -83,7 +98,10 @@ _ARCS = (
         100,
         100,
         "Convergence",
-        "Unified owner intent, execution, verification, learning, deployment, and recovery control plane.",
+        (
+            "Unified owner intent, execution, verification, learning, "
+            "deployment, and recovery control plane."
+        ),
         "V100 is attained only when every prior arc is verified by production evidence.",
         "registered",
     ),
