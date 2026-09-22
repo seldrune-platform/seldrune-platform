@@ -1,4 +1,6 @@
+from backend.app.core.orchestration import PlannedStep
 from backend.app.services import tool_gateway, tool_input_defaults
+from backend.app.services.live_planner import PlanResult
 from tests.test_autonomous_execution import register_owner
 
 pytest_plugins = ["tests.test_autonomous_execution"]
@@ -255,3 +257,65 @@ def test_tool_defaults_endpoint_reports_resolvable_fields(
         "repo",
     ]
     assert defaults["render-deploy-service"]["defaulted_fields"] == ["service_id"]
+
+
+
+def test_owner_planner_schema_omits_runtime_defaulted_required_fields(
+    client,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("SELDRUNE_GITHUB_TOOL_TOKEN", "github-test-token")
+    monkeypatch.setattr(
+        tool_input_defaults.settings,
+        "github_default_owner",
+        "seldrune-platform",
+    )
+    monkeypatch.setattr(
+        tool_input_defaults.settings,
+        "github_default_repo",
+        "seldrune-platform",
+    )
+
+    observed = {}
+
+    def capture_plan(objective, *, adaptive_guidance, available_tools, **kwargs):
+        del objective, adaptive_guidance, kwargs
+        merge = next(
+            item
+            for item in available_tools
+            if item["slug"] == "github-merge-pull-request"
+        )
+        observed.update(merge)
+        return PlanResult(
+            steps=[
+                PlannedStep(
+                    "Merge requested pull request",
+                    "Merge PR 233 after owner confirmation.",
+                    ["engineering"],
+                    50,
+                    False,
+                    "github-merge-pull-request",
+                    {"pull_number": 233},
+                )
+            ],
+            planner_version="test-runtime-default-schema",
+            metadata={"mode": "test", "tool_steps": 1},
+        )
+
+    monkeypatch.setattr(
+        "backend.app.api.routes.owner_commands.build_live_plan",
+        capture_plan,
+    )
+
+    token, organization_id = register_owner(client)
+    headers = _headers(token)
+    _bootstrap(client, organization_id, headers)
+
+    response = client.post(
+        f"/api/v1/organizations/{organization_id}/owner-commands",
+        headers=headers,
+        json={"objective": "Merge PR 233"},
+    )
+    assert response.status_code == 201
+    assert observed["input_defaults"] == ["owner", "repo"]
+    assert observed["input_schema"]["required"] == ["pull_number"]
