@@ -80,6 +80,8 @@ class ToolPlannerGateway:
         schema = request.response_schema["properties"]["steps"]["items"]["properties"]
         assert "send-owner-email" in schema["tool_slug"]["enum"]
         assert "Available registered tools" in request.input_text
+        assert '"input_defaults":["to"]' in request.input_text
+        assert "never invent values for them" in request.input_text
         return (
             ModelResult(
                 provider=ModelProvider.OPENAI,
@@ -123,6 +125,7 @@ def test_live_planner_selects_only_registered_tool(monkeypatch) -> None:
                         "body": {"type": "string"},
                     },
                 },
+                "input_defaults": ["to"],
             }
         ],
     )
