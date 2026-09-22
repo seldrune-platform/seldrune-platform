@@ -152,20 +152,17 @@ def test_unknown_internal_action_is_rejected(client: TestClient) -> None:
 
 def test_external_provider_requires_registered_adapter(client: TestClient) -> None:
     headers, organization_id = register_owner(client)
-    tool = create_tool(
-        client,
-        headers,
-        organization_id,
-        slug="missing-adapter",
-        provider="example",
-        action_name="send",
-    )
     response = client.post(
-        f"/api/v1/organizations/{organization_id}/tool-runs",
+        f"/api/v1/organizations/{organization_id}/tools",
         headers=headers,
-        json={"tool_id": tool["id"], "input_data": {"message": "hello"}},
+        json={
+            "name": "Missing Adapter",
+            "slug": "missing-adapter",
+            "provider": "example",
+            "action_name": "send",
+        },
     )
-    assert response.status_code == 409
+    assert response.status_code == 422
     assert "adapter is not registered" in response.json()["detail"]
 
 
@@ -222,3 +219,22 @@ def test_external_provider_succeeds_with_execution_receipt(client: TestClient) -
     run = response.json()
     assert run["status"] == "succeeded"
     assert run["output_data"]["evidence"]["receipt_id"] == "provider-message-123"
+
+
+def test_default_external_adapter_catalog_is_exposed(client: TestClient) -> None:
+    headers, organization_id = register_owner(client)
+    response = client.get(
+        f"/api/v1/organizations/{organization_id}/tool-adapters",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    adapters = {
+        (item["provider"], item["action_name"]): item
+        for item in response.json()
+    }
+    assert ("gmail", "send-message") in adapters
+    assert ("github", "create-issue") in adapters
+    assert ("github", "comment") in adapters
+    assert ("github", "dispatch-workflow") in adapters
+    assert ("render", "deploy-service") in adapters
+    assert adapters[("gmail", "send-message")]["credential_required"] is True
