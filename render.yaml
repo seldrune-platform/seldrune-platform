@@ -20,6 +20,20 @@ services:
         value: gpt-5.6-sol
       - key: OPENAI_API_KEY
         sync: false
+      - key: SELDRUNE_GMAIL_TOOL_CREDENTIAL
+        sync: false
+      - key: SELDRUNE_GITHUB_TOOL_TOKEN
+        sync: false
+      - key: SELDRUNE_GITHUB_DEFAULT_OWNER
+        value: seldrune-platform
+      - key: SELDRUNE_GITHUB_DEFAULT_REPO
+        value: seldrune-platform
+      - key: SELDRUNE_GITHUB_DEFAULT_REF
+        value: main
+      - key: SELDRUNE_RENDER_API_KEY
+        sync: false
+      - key: SELDRUNE_RENDER_DEFAULT_SERVICE_ID
+        sync: false
       - key: SELDRUNE_OWNER_PUSH_VAPID_PUBLIC_KEY
         sync: false
   - type: worker
@@ -40,6 +54,20 @@ services:
       - key: SELDRUNE_MODEL_DEFAULT
         value: gpt-5.6-sol
       - key: OPENAI_API_KEY
+        sync: false
+      - key: SELDRUNE_GMAIL_TOOL_CREDENTIAL
+        sync: false
+      - key: SELDRUNE_GITHUB_TOOL_TOKEN
+        sync: false
+      - key: SELDRUNE_GITHUB_DEFAULT_OWNER
+        value: seldrune-platform
+      - key: SELDRUNE_GITHUB_DEFAULT_REPO
+        value: seldrune-platform
+      - key: SELDRUNE_GITHUB_DEFAULT_REF
+        value: main
+      - key: SELDRUNE_RENDER_API_KEY
+        sync: false
+      - key: SELDRUNE_RENDER_DEFAULT_SERVICE_ID
         sync: false
       - key: SELDRUNE_LIFE_WORKER_INTERVAL_SECONDS
         value: 30
