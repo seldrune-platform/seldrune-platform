@@ -64,6 +64,7 @@ def create_agent(
     name: str,
     slug: str,
     capabilities: list[str],
+    allowed_tool_slugs: list[str] | None = None,
 ) -> dict:
     response = client.post(
         f"/api/v1/organizations/{organization_id}/agents",
@@ -72,6 +73,7 @@ def create_agent(
             "name": name,
             "slug": slug,
             "capabilities": capabilities,
+            "allowed_tool_slugs": allowed_tool_slugs,
             "runtime_config": {
                 "provider": "mock",
                 "model": "mock-v1",
@@ -225,3 +227,172 @@ def test_runtime_budget_circuit_breaker_boundary() -> None:
         recorded_cost_usd=0.11,
         estimated_next_step_usd=0.05,
     )
+
+
+def test_autonomous_execution_uses_registered_tool_receipt(
+    client: TestClient,
+) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    create_agent(
+        client,
+        organization_id,
+        headers,
+        name="Tool Agent",
+        slug="tool-agent",
+        capabilities=["analysis"],
+        allowed_tool_slugs=["echo-action"],
+    )
+    tool = client.post(
+        f"/api/v1/organizations/{organization_id}/tools",
+        headers=headers,
+        json={
+            "name": "Echo Action",
+            "slug": "echo-action",
+            "provider": "internal",
+            "action_name": "echo",
+            "risk_level": "low",
+            "approval_mode": "never",
+        },
+    )
+    assert tool.status_code == 201
+
+    created = client.post(
+        f"/api/v1/organizations/{organization_id}/orchestrations",
+        headers=headers,
+        json={
+            "objective": "Execute a registered action",
+            "plan": [
+                {
+                    "title": "Execute echo action",
+                    "description": "Run the concrete registered echo action.",
+                    "capabilities": ["analysis"],
+                    "tool_slug": "echo-action",
+                    "tool_input": {"message": "hello from orchestration"},
+                }
+            ],
+        },
+    )
+    assert created.status_code == 201
+
+    execute = client.post(
+        f"/api/v1/organizations/{organization_id}/orchestrations/"
+        f"{created.json()['id']}/execute",
+        headers=headers,
+        json={},
+    )
+    assert execute.status_code == 200
+    body = execute.json()
+    assert body["execution"]["executed_steps"] == 1
+    assert body["run"]["status"] == "succeeded"
+
+    task_id = body["run"]["steps"][0]["task_id"]
+    task = client.get(
+        f"/api/v1/organizations/{organization_id}/tasks/{task_id}",
+        headers=headers,
+    ).json()
+    assert task["status"] == "succeeded"
+    assert task["output_data"]["execution_type"] == "tool"
+    assert task["output_data"]["tool_slug"] == "echo-action"
+    assert task["output_data"]["tool_output"] == {
+        "echo": {"message": "hello from orchestration"}
+    }
+    assert task["output_data"]["evidence"]["receipt_id"].startswith("tool-run:")
+
+    invocations = client.get(
+        f"/api/v1/organizations/{organization_id}/model-invocations",
+        headers=headers,
+    )
+    assert invocations.status_code == 200
+    assert invocations.json() == []
+
+
+def test_high_risk_tool_blocks_until_tool_run_is_approved(
+    client: TestClient,
+) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    create_agent(
+        client,
+        organization_id,
+        headers,
+        name="Governed Tool Agent",
+        slug="governed-tool-agent",
+        capabilities=["analysis"],
+        allowed_tool_slugs=["reviewed-echo"],
+    )
+    tool = client.post(
+        f"/api/v1/organizations/{organization_id}/tools",
+        headers=headers,
+        json={
+            "name": "Reviewed Echo",
+            "slug": "reviewed-echo",
+            "provider": "internal",
+            "action_name": "echo",
+            "risk_level": "high",
+            "approval_mode": "never",
+        },
+    )
+    assert tool.status_code == 201
+
+    created = client.post(
+        f"/api/v1/organizations/{organization_id}/orchestrations",
+        headers=headers,
+        json={
+            "objective": "Execute a reviewed registered action",
+            "plan": [
+                {
+                    "title": "Execute reviewed echo",
+                    "description": "Run the high-risk registered action.",
+                    "capabilities": ["analysis"],
+                    "tool_slug": "reviewed-echo",
+                    "tool_input": {"message": "review me"},
+                }
+            ],
+        },
+    )
+    assert created.status_code == 201
+    run_id = created.json()["id"]
+
+    blocked = client.post(
+        f"/api/v1/organizations/{organization_id}/orchestrations/{run_id}/execute",
+        headers=headers,
+        json={},
+    )
+    assert blocked.status_code == 200
+    blocked_body = blocked.json()
+    assert blocked_body["execution"]["executed_steps"] == 0
+    assert blocked_body["execution"]["approval_blocked_steps"] == 1
+    assert blocked_body["execution"]["halted_reason"] == "tool_approval_required"
+
+    tool_runs = client.get(
+        f"/api/v1/organizations/{organization_id}/tool-runs",
+        headers=headers,
+    )
+    assert tool_runs.status_code == 200
+    pending = tool_runs.json()[0]
+    assert pending["status"] == "pending_approval"
+
+    approved = client.post(
+        f"/api/v1/organizations/{organization_id}/tool-runs/{pending['id']}/approve",
+        headers=headers,
+        json={},
+    )
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "succeeded"
+
+    resumed = client.post(
+        f"/api/v1/organizations/{organization_id}/orchestrations/{run_id}/execute",
+        headers=headers,
+        json={},
+    )
+    assert resumed.status_code == 200
+    resumed_body = resumed.json()
+    assert resumed_body["execution"]["executed_steps"] == 1
+    assert resumed_body["run"]["status"] == "succeeded"
+
+    tool_runs_after = client.get(
+        f"/api/v1/organizations/{organization_id}/tool-runs",
+        headers=headers,
+    ).json()
+    assert len(tool_runs_after) == 1
