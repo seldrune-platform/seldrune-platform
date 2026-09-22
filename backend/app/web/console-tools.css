@@ -147,3 +147,41 @@
     grid-template-columns:1fr;
   }
 }
+
+
+.tool-head-actions{
+  display:flex;
+  gap:9px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+.tool-readiness{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+}
+
+.tool-readiness-card{
+  display:grid;
+  gap:7px;
+  padding:14px;
+  border:1px solid rgba(125,223,181,.15);
+  border-radius:14px;
+  background:rgba(8,27,20,.56);
+}
+
+.tool-readiness-card p{
+  margin:0;
+  color:var(--muted);
+  line-height:1.45;
+}
+
+@media(max-width:900px){
+  .tool-readiness{
+    grid-template-columns:1fr;
+  }
+  .tool-head-actions{
+    justify-content:flex-start;
+  }
+}
