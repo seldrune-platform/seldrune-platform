@@ -1,5 +1,3 @@
-import pytest
-
 from tests.test_autonomous_execution import register_owner
 
 pytest_plugins = ["tests.test_autonomous_execution"]
