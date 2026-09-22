@@ -9,6 +9,7 @@ class ToolDefinitionCreate(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=100)
     description: str | None = Field(default=None, max_length=2000)
+    provider: str = Field(default="internal", pattern=r"^[a-z0-9][a-z0-9_-]{1,39}$")
     action_name: str = Field(min_length=2, max_length=100)
     risk_level: str = Field(default="low", pattern=r"^(low|medium|high)$")
     approval_mode: str = Field(default="never", pattern=r"^(never|always)$")
