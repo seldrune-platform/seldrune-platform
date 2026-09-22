@@ -38,11 +38,11 @@ def test_sti_evolution_endpoint_exposes_all_version_contracts() -> None:
     assert payload["arcs"][-1]["name"] == "Convergence"
 
 
-def test_owner_console_loads_v100_evolution_control() -> None:
+def test_v100_evolution_control_remains_engineering_only() -> None:
     console = client.get("/console")
     assert console.status_code == 200
-    assert "/console-assets/console-v100.css" in console.text
-    assert "/console-assets/console-v100.js" in console.text
+    assert "/console-assets/console-v100.css" not in console.text
+    assert "/console-assets/console-v100.js" not in console.text
 
     script = client.get("/console-assets/console-v100.js")
     assert script.status_code == 200
