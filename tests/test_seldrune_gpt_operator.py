@@ -52,6 +52,39 @@ def test_gpt_operator_requires_auth(client):
     assert response.status_code in {401, 403}
 
 
+def test_gpt_capabilities_report_registered_tools_and_provider_readiness(
+    _client,
+    monkeypatch,
+):  # noqa: F811
+    client = _client
+    monkeypatch.setenv("SELDRUNE_GITHUB_TOOL_TOKEN", "github-test-token")
+    monkeypatch.delenv("SELDRUNE_GMAIL_TOOL_CREDENTIAL", raising=False)
+    monkeypatch.delenv("SELDRUNE_RENDER_API_KEY", raising=False)
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    bootstrap = client.post(
+        f"/api/v1/organizations/{organization_id}/tool-bootstrap",
+        headers=headers,
+        json={},
+    )
+    assert bootstrap.status_code == 200
+
+    response = client.get(
+        f"/api/v1/organizations/{organization_id}/gpt/capabilities",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider_readiness"]["github"] is True
+    assert body["provider_readiness"]["gmail"] is False
+    assert body["provider_readiness"]["render"] is False
+    assert "github-merge-pull-request" in body["registered_tools"]
+    assert "SELDRUNE_GITHUB_TOOL_TOKEN" not in body["configuration_hints"]
+    assert "SELDRUNE_GMAIL_TOOL_CREDENTIAL" in body["configuration_hints"]
+    assert "SELDRUNE_RENDER_API_KEY" in body["configuration_hints"]
+
+
 def test_safe_owner_order_executes_in_one_request(_client):  # noqa: F811
     client = _client
     token, organization_id = register_owner(client)
