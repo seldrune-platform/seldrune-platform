@@ -175,8 +175,15 @@ def execute_tool_run(
             output = action(run.input_data, credential)
         _validate_external_evidence(tool, output)
     except ToolGatewayError as exc:
+        error_message = str(exc)
+    except Exception as exc:
+        error_message = f"Tool adapter failed: {type(exc).__name__}"
+    else:
+        error_message = None
+
+    if error_message is not None:
         run.status = ToolRunStatus.FAILED.value
-        run.error_message = str(exc)
+        run.error_message = error_message
         run.completed_at = datetime.now(UTC)
         record_audit(
             session,
@@ -185,7 +192,7 @@ def execute_tool_run(
             action="tool.run.failed",
             resource_type="tool_run",
             resource_id=str(run.id),
-            details={"tool_id": str(tool.id), "error": str(exc)},
+            details={"tool_id": str(tool.id), "error": error_message},
         )
         session.commit()
         session.refresh(run)
