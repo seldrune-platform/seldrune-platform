@@ -7,9 +7,11 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from backend.app.core.tools import ApprovalMode, ToolRisk, ToolRunStatus, ToolStatus
+from backend.app.models.secret_reference import SecretReference
 from backend.app.models.tool_definition import ToolDefinition
 from backend.app.models.tool_run import ToolRun
 from backend.app.services.audit import record_audit
+from backend.app.services.secret_resolution import SecretResolutionError, resolve_secret
 
 
 class ToolGatewayError(RuntimeError):
@@ -20,13 +22,13 @@ class ToolExecutionEvidenceError(ToolGatewayError):
     """Raised when an external action does not return verifiable execution evidence."""
 
 
-_EXTERNAL_ACTIONS: dict[tuple[str, str], Callable[[dict[str, Any]], dict[str, Any]]] = {}
+_EXTERNAL_ACTIONS: dict[tuple[str, str], Callable[[dict[str, Any], str | None], dict[str, Any]]] = {}
 
 
 def register_external_action(
     provider: str,
     action_name: str,
-    handler: Callable[[dict[str, Any]], dict[str, Any]],
+    handler: Callable[[dict[str, Any], str | None], dict[str, Any]],
 ) -> None:
     """Register a governed provider adapter at application startup."""
     key = (provider.strip().lower(), action_name.strip())
@@ -35,7 +37,7 @@ def register_external_action(
     _EXTERNAL_ACTIONS[key] = handler
 
 
-def _resolve_action(tool: ToolDefinition) -> Callable[[dict[str, Any]], dict[str, Any]]:
+def _resolve_action(tool: ToolDefinition) -> Callable[..., dict[str, Any]]:
     if tool.provider == "internal":
         action = _INTERNAL_ACTIONS.get(tool.action_name)
     else:
@@ -156,7 +158,19 @@ def execute_tool_run(
     session.commit()
 
     try:
-        output = action(run.input_data)
+        if tool.provider == "internal":
+            output = action(run.input_data)
+        else:
+            credential: str | None = None
+            if tool.credential_reference_id is not None:
+                reference = session.get(SecretReference, tool.credential_reference_id)
+                if reference is None or reference.organization_id != run.organization_id:
+                    raise ToolGatewayError("Credential reference is unavailable")
+                try:
+                    credential = resolve_secret(reference)
+                except SecretResolutionError as exc:
+                    raise ToolGatewayError("Credential could not be resolved") from exc
+            output = action(run.input_data, credential)
         _validate_external_evidence(tool, output)
     except ToolGatewayError as exc:
         run.status = ToolRunStatus.FAILED.value
