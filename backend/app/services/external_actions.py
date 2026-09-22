@@ -170,6 +170,93 @@ def github_comment(
     }
 
 
+def github_create_pull_request(
+    payload: dict[str, Any],
+    credential: str | None,
+) -> dict[str, Any]:
+    token = _credential(credential, "GitHub")
+    owner = quote(_text(payload, "owner"), safe="")
+    repo = quote(_text(payload, "repo"), safe="")
+    title = _text(payload, "title")
+    head = _text(payload, "head")
+    base = _text(payload, "base")
+    request_body: dict[str, Any] = {
+        "title": title,
+        "head": head,
+        "base": base,
+        "draft": bool(payload.get("draft", False)),
+    }
+    body = _text(payload, "body", required=False)
+    if body:
+        request_body["body"] = body
+
+    response = httpx.post(
+        f"https://api.github.com/repos/{owner}/{repo}/pulls",
+        headers=_github_headers(token),
+        json=request_body,
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    data = _json_response(response, "GitHub")
+    pull_id = data.get("id")
+    if not pull_id:
+        raise ToolGatewayError("GitHub response did not include a pull request id")
+    return {
+        "pull_request_id": pull_id,
+        "number": data.get("number"),
+        "state": data.get("state"),
+        "html_url": data.get("html_url"),
+        "evidence": {
+            "receipt_id": f"github-pull:{pull_id}",
+            "provider": "github",
+        },
+    }
+
+
+def github_merge_pull_request(
+    payload: dict[str, Any],
+    credential: str | None,
+) -> dict[str, Any]:
+    token = _credential(credential, "GitHub")
+    owner = quote(_text(payload, "owner"), safe="")
+    repo = quote(_text(payload, "repo"), safe="")
+    pull_number = _integer(payload, "pull_number")
+    request_body: dict[str, Any] = {}
+
+    merge_method = payload.get("merge_method")
+    if merge_method is not None:
+        if merge_method not in {"merge", "squash", "rebase"}:
+            raise ToolGatewayError("merge_method must be merge, squash, or rebase")
+        request_body["merge_method"] = merge_method
+    for key in ("commit_title", "commit_message", "sha"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            request_body[key] = value.strip()
+
+    response = httpx.put(
+        f"https://api.github.com/repos/{owner}/{repo}/pulls/{pull_number}/merge",
+        headers=_github_headers(token),
+        json=request_body,
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    data = _json_response(response, "GitHub")
+    if data.get("merged") is not True:
+        raise ToolGatewayError(
+            str(data.get("message") or "GitHub did not merge the pull request")
+        )
+    merge_sha = data.get("sha")
+    receipt = merge_sha or str(pull_number)
+    return {
+        "pull_number": pull_number,
+        "merged": True,
+        "sha": merge_sha,
+        "message": data.get("message"),
+        "evidence": {
+            "receipt_id": f"github-merge:{receipt}",
+            "provider": "github",
+        },
+    }
+
+
 def github_dispatch_workflow(
     payload: dict[str, Any],
     credential: str | None,
@@ -327,6 +414,57 @@ DEFAULT_EXTERNAL_ACTION_CATALOG: tuple[dict[str, Any], ...] = (
     },
     {
         "provider": "github",
+        "action_name": "create-pull-request",
+        "name": "GitHub · Create pull request",
+        "default_tool_slug": "github-create-pull-request",
+        "credential_slug": "github-tool-token",
+        "credential_name": "GitHub tool token",
+        "credential_env_locator": "SELDRUNE_GITHUB_TOOL_TOKEN",
+        "description": "Create a pull request in an authorized GitHub repository.",
+        "risk_level": "medium",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"},
+                "repo": {"type": "string"},
+                "title": {"type": "string"},
+                "head": {"type": "string"},
+                "base": {"type": "string"},
+                "body": {"type": "string"},
+                "draft": {"type": "boolean"},
+            },
+            "required": ["owner", "repo", "title", "head", "base"],
+        },
+    },
+    {
+        "provider": "github",
+        "action_name": "merge-pull-request",
+        "name": "GitHub · Merge pull request",
+        "default_tool_slug": "github-merge-pull-request",
+        "credential_slug": "github-tool-token",
+        "credential_name": "GitHub tool token",
+        "credential_env_locator": "SELDRUNE_GITHUB_TOOL_TOKEN",
+        "description": "Merge an authorized GitHub pull request.",
+        "risk_level": "high",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"},
+                "repo": {"type": "string"},
+                "pull_number": {"type": "integer"},
+                "merge_method": {
+                    "type": "string",
+                    "enum": ["merge", "squash", "rebase"],
+                },
+                "commit_title": {"type": "string"},
+                "commit_message": {"type": "string"},
+                "sha": {"type": "string"},
+            },
+            "required": ["owner", "repo", "pull_number"],
+        },
+    },
+    {
+        "provider": "github",
         "action_name": "dispatch-workflow",
         "name": "GitHub · Dispatch workflow",
         "default_tool_slug": "github-dispatch-workflow",
@@ -374,6 +512,8 @@ def register_default_external_actions() -> None:
     register_external_action("gmail", "send-message", gmail_send_message)
     register_external_action("github", "create-issue", github_create_issue)
     register_external_action("github", "comment", github_comment)
+    register_external_action("github", "create-pull-request", github_create_pull_request)
+    register_external_action("github", "merge-pull-request", github_merge_pull_request)
     register_external_action("github", "dispatch-workflow", github_dispatch_workflow)
     register_external_action("render", "deploy-service", render_deploy_service)
 
