@@ -26,7 +26,10 @@ from backend.app.schemas.orchestration import AutonomousExecutionRequest, Orches
 from backend.app.services.audit import record_audit
 from backend.app.services.external_actions import default_external_action_catalog
 from backend.app.services.model_gateway import ModelGateway, ModelGatewayError
-from backend.app.services.tool_bootstrap import ensure_configured_external_tools
+from backend.app.services.tool_bootstrap import (
+    configured_external_tool_status,
+    ensure_configured_external_tools,
+)
 
 router = APIRouter(prefix="/organizations", tags=["seldrune-gpt"])
 run_dependency = require_org_permission(Permission.AGENTS_RUN)
@@ -264,6 +267,9 @@ class SeldruneGPTCapabilitiesResponse(BaseModel):
     supported_controls: list[str]
     approval_required_for: list[str]
     evidence: str
+    registered_tools: list[str] = Field(default_factory=list)
+    provider_readiness: dict[str, bool] = Field(default_factory=dict)
+    configuration_hints: list[str] = Field(default_factory=list)
 
 
 class SeldruneGPTHistoryMessage(BaseModel):
@@ -311,6 +317,33 @@ def seldrune_gpt(
     input_text = payload.message
     if context:
         input_text = f"Recent conversation:\\n{context}\\n\\nUser: {payload.message}"
+    active_tools = list(
+        session.scalars(
+            select(ToolDefinition).where(
+                ToolDefinition.organization_id == organization_id,
+                ToolDefinition.status == "active",
+            )
+        )
+    )
+    bootstrap = configured_external_tool_status(
+        session,
+        organization_id=organization_id,
+    )
+    registered_tool_slugs = sorted(tool.slug for tool in active_tools)
+    missing_provider_env = sorted(
+        {
+            provider["credential_env_locator"]
+            for provider in bootstrap["providers"]
+            if not provider["secret_available"]
+        }
+    )
+    tool_runtime_context = (
+        "Registered executable tool slugs: "
+        + (", ".join(registered_tool_slugs) if registered_tool_slugs else "none")
+        + ". Missing provider configuration: "
+        + (", ".join(missing_provider_env) if missing_provider_env else "none")
+        + "."
+    )
     request = ModelRequest(
         provider=ModelProvider.OPENAI,
         model=settings.model_default,
@@ -325,7 +358,8 @@ def seldrune_gpt(
             "approvals. When the owner asks you to perform work, explain that Execute order "
             "can run the instruction through Seldrune's governed operator. Never imply that "
             "chat text alone performed an action. Do not claim an external action occurred "
-            "unless Seldrune provides verified evidence."
+            "unless Seldrune provides verified evidence. "
+            + tool_runtime_context
         ),
         max_output_tokens=settings.model_max_output_tokens,
     )
@@ -370,9 +404,32 @@ def seldrune_gpt(
 def seldrune_gpt_capabilities(
     organization_id: UUID,
     membership: OwnerOperatorDep,
+    session: SessionDep,
 ) -> SeldruneGPTCapabilitiesResponse:
-    del organization_id
     _require_owner_role(membership)
+    tools = list(
+        session.scalars(
+            select(ToolDefinition).where(
+                ToolDefinition.organization_id == organization_id,
+                ToolDefinition.status == "active",
+            )
+        )
+    )
+    readiness = configured_external_tool_status(
+        session,
+        organization_id=organization_id,
+    )
+    provider_readiness = {
+        provider["provider"]: bool(provider["ready"])
+        for provider in readiness["providers"]
+    }
+    configuration_hints = sorted(
+        {
+            provider["credential_env_locator"]
+            for provider in readiness["providers"]
+            if not provider["secret_available"]
+        }
+    )
     return SeldruneGPTCapabilitiesResponse(
         mode="governed-owner-operator",
         execution=(
@@ -389,6 +446,9 @@ def seldrune_gpt_capabilities(
         ],
         approval_required_for=[name for name, _pattern in _OPERATOR_RISK_PATTERNS],
         evidence="Every order receives a durable command id, execution report, and audit trail.",
+        registered_tools=sorted(tool.slug for tool in tools),
+        provider_readiness=provider_readiness,
+        configuration_hints=configuration_hints,
     )
 
 
