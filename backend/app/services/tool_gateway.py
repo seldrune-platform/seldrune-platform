@@ -12,6 +12,7 @@ from backend.app.models.tool_definition import ToolDefinition
 from backend.app.models.tool_run import ToolRun
 from backend.app.services.audit import record_audit
 from backend.app.services.secret_resolution import SecretResolutionError, resolve_secret
+from backend.app.services.tool_input_defaults import apply_external_action_input_defaults
 
 
 class ToolGatewayError(RuntimeError):
@@ -122,6 +123,12 @@ def create_tool_run(
         if requires_approval(tool)
         else ToolRunStatus.APPROVED
     )
+    normalized_input, defaults_applied = apply_external_action_input_defaults(
+        session,
+        tool=tool,
+        requested_by_user_id=requested_by_user_id,
+        input_data=input_data,
+    )
     run = ToolRun(
         organization_id=organization_id,
         tool_id=tool.id,
@@ -129,7 +136,7 @@ def create_tool_run(
         agent_id=agent_id,
         requested_by_user_id=requested_by_user_id,
         status=status.value,
-        input_data=input_data,
+        input_data=normalized_input,
     )
     session.add(run)
     session.flush()
@@ -145,6 +152,7 @@ def create_tool_run(
             "agent_id": str(agent_id) if agent_id else None,
             "status": run.status,
             "risk_level": tool.risk_level,
+            "defaults_applied": defaults_applied,
         },
     )
     session.commit()
