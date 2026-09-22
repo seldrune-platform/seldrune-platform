@@ -63,6 +63,14 @@ _OPERATOR_RISK_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             re.I,
         ),
     ),
+    (
+        "repository_merge",
+        re.compile(
+            r"\bmerge\b.{0,80}\b(pull request|pr)\b"
+            r"|\b(pull request|pr)\b.{0,80}\bmerge\b",
+            re.I,
+        ),
+    ),
 )
 
 
