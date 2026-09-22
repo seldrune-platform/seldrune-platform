@@ -124,6 +124,103 @@ def test_github_comment_returns_provider_receipt(monkeypatch) -> None:
     assert output["evidence"]["receipt_id"] == "github-comment:3001"
 
 
+def test_github_create_pull_request_returns_provider_receipt(monkeypatch) -> None:
+    observed = {}
+
+    def fake_post(url, *, headers, json, timeout):
+        observed.update({"url": url, "headers": headers, "json": json})
+        return _response(
+            201,
+            json_data={
+                "id": 7001,
+                "number": 41,
+                "state": "open",
+                "html_url": "https://github.com/acme/app/pull/41",
+            },
+        )
+
+    monkeypatch.setattr(external_actions.httpx, "post", fake_post)
+    output = external_actions.github_create_pull_request(
+        {
+            "owner": "acme",
+            "repo": "app",
+            "title": "Ship governed tools",
+            "head": "feature/tools",
+            "base": "main",
+            "body": "Adds provider actions.",
+            "draft": True,
+        },
+        "github-token",
+    )
+
+    assert observed["url"].endswith("/repos/acme/app/pulls")
+    assert observed["json"]["head"] == "feature/tools"
+    assert observed["json"]["base"] == "main"
+    assert observed["json"]["draft"] is True
+    assert output["number"] == 41
+    assert output["evidence"]["receipt_id"] == "github-pull:7001"
+
+
+def test_github_merge_pull_request_returns_merge_receipt(monkeypatch) -> None:
+    observed = {}
+
+    def fake_put(url, *, headers, json, timeout):
+        observed.update({"url": url, "headers": headers, "json": json})
+        return _response(
+            200,
+            json_data={
+                "sha": "abc123",
+                "merged": True,
+                "message": "Pull Request successfully merged",
+            },
+        )
+
+    monkeypatch.setattr(external_actions.httpx, "put", fake_put)
+    output = external_actions.github_merge_pull_request(
+        {
+            "owner": "acme",
+            "repo": "app",
+            "pull_number": 41,
+            "merge_method": "squash",
+            "sha": "head123",
+        },
+        "github-token",
+    )
+
+    assert observed["url"].endswith("/repos/acme/app/pulls/41/merge")
+    assert observed["json"] == {
+        "merge_method": "squash",
+        "sha": "head123",
+    }
+    assert output["merged"] is True
+    assert output["evidence"]["receipt_id"] == "github-merge:abc123"
+
+
+def test_github_merge_pull_request_fails_when_provider_does_not_merge(
+    monkeypatch,
+) -> None:
+    def fake_put(url, *, headers, json, timeout):
+        return _response(
+            200,
+            json_data={
+                "sha": None,
+                "merged": False,
+                "message": "Branch protection blocked merge",
+            },
+        )
+
+    monkeypatch.setattr(external_actions.httpx, "put", fake_put)
+    with pytest.raises(ToolGatewayError, match="Branch protection blocked merge"):
+        external_actions.github_merge_pull_request(
+            {
+                "owner": "acme",
+                "repo": "app",
+                "pull_number": 41,
+            },
+            "github-token",
+        )
+
+
 def test_github_dispatch_uses_workflow_run_receipt(monkeypatch) -> None:
     def fake_post(url, *, headers, json, timeout):
         assert url.endswith("/actions/workflows/deploy.yml/dispatches")
