@@ -173,3 +173,17 @@ html[data-portal-motion="reduced"] *::after{animation:none!important;scroll-beha
   .owner-hero-copy h2{font-size:36px}
 }
 @media(prefers-reduced-motion:reduce){.owner-reactor::before,.owner-reactor::after{animation:none}}
+
+.portal-links-card{grid-column:1/-1}
+.portal-link-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.portal-link-grid a{
+  display:flex;align-items:center;justify-content:center;min-height:42px;padding:10px 12px;
+  border:1px solid var(--portal-line);border-radius:11px;background:rgba(255,255,255,.025);
+  color:var(--portal-text);text-decoration:none;font-size:12px;font-weight:750
+}
+.portal-link-grid a:hover{
+  border-color:color-mix(in srgb,var(--portal-accent) 55%,transparent);
+  background:color-mix(in srgb,var(--portal-accent) 7%,transparent)
+}
+@media(max-width:760px){.portal-link-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:440px){.portal-link-grid{grid-template-columns:1fr}}
