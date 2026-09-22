@@ -29,6 +29,7 @@ def select_best_agent(
     agents: Iterable[Agent],
     required_capabilities: list[str],
     performance_evidence: dict[UUID, dict[str, float | int]] | None = None,
+    required_tool_slug: str | None = None,
 ) -> tuple[Agent | None, int]:
     required = {normalize_capability(item) for item in required_capabilities if item.strip()}
     if not required:
@@ -38,6 +39,12 @@ def select_best_agent(
     candidates: list[tuple[int, int, float, int, int, str, Agent]] = []
     for agent in agents:
         if agent.status != AgentStatus.ACTIVE.value:
+            continue
+        if (
+            required_tool_slug
+            and agent.allowed_tool_slugs is not None
+            and required_tool_slug not in agent.allowed_tool_slugs
+        ):
             continue
         available = {normalize_capability(item) for item in agent.capabilities}
         matched = len(required & available)
@@ -177,6 +184,7 @@ def create_orchestration_run(
             agents,
             planned.required_capabilities,
             performance_evidence,
+            planned.tool_slug,
         )
         task_status = TaskStatus.ASSIGNED if agent is not None else TaskStatus.QUEUED
         task = Task(
@@ -192,6 +200,16 @@ def create_orchestration_run(
                 "orchestration_run_id": str(run.id),
                 "sequence": sequence,
                 "context": context,
+                **(
+                    {
+                        "tool_request": {
+                            "slug": planned.tool_slug,
+                            "input": planned.tool_input or {},
+                        }
+                    }
+                    if planned.tool_slug
+                    else {}
+                ),
                 "agent_routing": {
                     "mode": "evidence-weighted-v1",
                     "capability_match_score": score,
@@ -214,6 +232,7 @@ def create_orchestration_run(
                     "orchestration_run_id": str(run.id),
                     "status": task.status,
                     "requires_approval": planned.requires_approval,
+                    "tool_slug": planned.tool_slug,
                     "project_id": str(project_id) if project_id else None,
                 },
             )
@@ -268,6 +287,7 @@ def create_orchestration_run(
         "matched_steps": matched_steps,
         "unmatched_steps": len(plan) - matched_steps,
         "approval_required_steps": approval_required_steps,
+        "tool_steps": sum(bool(step.tool_slug) for step in plan),
         "agent_routing": {
             "mode": "evidence-weighted-v1",
             "agents_with_completed_evidence": sum(
