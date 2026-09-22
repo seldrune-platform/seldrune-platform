@@ -300,3 +300,38 @@ def test_secret_reference_delete_is_dependency_safe(client) -> None:
     )
     assert disabled_webhook.status_code == 200
     assert disabled_webhook.json()["status"] == "disabled"
+
+
+def test_secret_reference_delete_blocks_tool_dependency(client) -> None:
+    owner_token, organization_id = register_owner(client)
+    owner_headers = _headers(owner_token)
+
+    reference = _create_reference(
+        client,
+        organization_id,
+        owner_headers,
+        slug="github-token",
+        locator="GITHUB_TOOL_TOKEN",
+    )
+    assert reference.status_code == 201
+    reference_id = reference.json()["id"]
+
+    tool = client.post(
+        f"/api/v1/organizations/{organization_id}/tools",
+        headers=owner_headers,
+        json={
+            "name": "GitHub Issue",
+            "slug": "github-issue",
+            "provider": "github",
+            "action_name": "create-issue",
+            "credential_reference_id": reference_id,
+            "risk_level": "medium",
+        },
+    )
+    assert tool.status_code == 201
+
+    deleted = client.delete(
+        f"/api/v1/organizations/{organization_id}/secret-references/{reference_id}",
+        headers=owner_headers,
+    )
+    assert deleted.status_code == 409
