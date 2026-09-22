@@ -38,6 +38,9 @@ from backend.app.services.evidence_execution import prepare_orchestration_resear
 from backend.app.services.founding_agents import ensure_founding_agents
 from backend.app.services.live_planner import build_live_plan
 from backend.app.services.orchestrator import create_orchestration_run, refresh_orchestration_status
+from backend.app.services.owner_action_compiler import (
+    compile_required_external_action_steps,
+)
 from backend.app.services.owner_dashboard import build_decision_brief, build_owner_dashboard
 from backend.app.services.playbook_engine import consolidate_playbooks
 from backend.app.services.playbook_guidance import build_playbook_guidance
