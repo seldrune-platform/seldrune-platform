@@ -238,11 +238,11 @@ def _missing_required_fields(
 
 
 _DIRECT_ACTION_ORDER = re.compile(
-    r"^\\s*(?:"
-    r"merge\\b|deploy\\b|redeploy\\b|send\\b|email\\b|mail\\b|notify\\b|"
-    r"create\\s+(?:an?\\s+)?(?:issue|bug|pull request|pr)\\b|"
-    r"open\\s+(?:an?\\s+)?(?:issue|bug|pull request|pr)\\b|"
-    r"comment\\b|reply\\b|trigger\\b|dispatch\\b|run\\s+(?:the\\s+)?workflow\\b"
+    r"^\s*(?:"
+    r"merge\b|deploy\b|redeploy\b|send\b|email\b|mail\b|notify\b|"
+    r"create\s+(?:an?\s+)?(?:issue|bug|pull request|pr)\b|"
+    r"open\s+(?:an?\s+)?(?:issue|bug|pull request|pr)\b|"
+    r"comment\b|reply\b|trigger\b|dispatch\b|run\s+(?:the\s+)?workflow\b"
     r")",
     re.I,
 )
