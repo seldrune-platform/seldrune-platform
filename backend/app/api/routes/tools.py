@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -22,12 +22,14 @@ from backend.app.schemas.tooling import (
     ToolRunPublic,
 )
 from backend.app.services.audit import record_audit
+from backend.app.services.external_actions import default_external_action_catalog
 from backend.app.services.tool_gateway import (
     ToolGatewayError,
     allowed_internal_actions,
     approve_tool_run,
     create_tool_run,
     execute_tool_run,
+    external_action_registered,
     reject_tool_run,
 )
 
@@ -69,6 +71,34 @@ def _gateway_conflict(exc: ToolGatewayError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
+@router.get(
+    "/{organization_id}/tool-adapters",
+    response_model=list[dict[str, Any]],
+)
+def list_tool_adapters(
+    organization_id: UUID,
+    _membership: ToolsRunDep,
+) -> list[dict[str, Any]]:
+    del organization_id
+    internal = [
+        {
+            "provider": "internal",
+            "action_name": action_name,
+            "name": f"Internal · {action_name}",
+            "description": "Seldrune built-in deterministic action.",
+            "risk_level": "low",
+            "credential_required": False,
+            "input_schema": {},
+        }
+        for action_name in allowed_internal_actions()
+    ]
+    external = [
+        {**item, "credential_required": True}
+        for item in default_external_action_catalog()
+    ]
+    return [*internal, *external]
+
+
 @router.post(
     "/{organization_id}/tools",
     response_model=ToolDefinitionPublic,
@@ -88,6 +118,17 @@ def create_tool(
         )
     if payload.provider == "internal" and payload.credential_reference_id is not None:
         raise HTTPException(status_code=422, detail="Internal tools cannot bind credentials")
+    if (
+        payload.provider != "internal"
+        and not external_action_registered(payload.provider, payload.action_name)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "External tool adapter is not registered: "
+                f"{payload.provider}:{payload.action_name}"
+            ),
+        )
     if payload.credential_reference_id is not None:
         credential_reference = session.scalar(
             select(SecretReference).where(
