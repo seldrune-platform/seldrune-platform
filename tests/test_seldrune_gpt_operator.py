@@ -242,6 +242,39 @@ def test_operator_executes_required_planned_tool_with_receipt(
     assert body["evidence_url"].endswith(f"/{body['command_id']}/brief")
 
 
+def test_deploy_order_reports_missing_default_service_configuration(
+    _client,  # noqa: F811
+    monkeypatch,
+):
+    client = _client
+    monkeypatch.setenv("SELDRUNE_RENDER_API_KEY", "render-test-token")
+    monkeypatch.setattr(
+        tool_input_defaults.settings,
+        "render_default_service_id",
+        None,
+    )
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.post(
+        f"/api/v1/organizations/{organization_id}/gpt/operate",
+        headers=headers,
+        json={"order": "Deploy production"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "configuration_required"
+    assert body["command_id"]
+    assert body["executed_steps"] == 0
+    assert body["halted_reason"] == (
+        "required_external_action_configuration_missing"
+    )
+    assert body["missing_tools"] == ["render:deploy-service"]
+    assert body["configuration_hints"] == [
+        "SELDRUNE_RENDER_DEFAULT_SERVICE_ID"
+    ]
+
+
 def test_merge_pr_order_is_one_tool_step_then_executes_after_confirmation(
     _client,  # noqa: F811
     monkeypatch,
