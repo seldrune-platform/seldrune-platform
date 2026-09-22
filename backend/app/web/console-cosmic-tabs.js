@@ -13,6 +13,7 @@ function initCosmicConsole() {
     ['worlds', 'Worlds', '◉'],
     ['intel', 'Intel', '⬡'],
     ['creations', 'Creations', '♧'],
+    ['tools', 'Tools', '⌁'],
     ['system', 'System', '⚙'],
     ['gpt', 'GPT', '✦'],
   ];
@@ -61,6 +62,7 @@ function initCosmicConsole() {
     worlds: 'LiveShift, Seldrune Face, and real-time media expansion.',
     intel: 'Production incidents, governance events, and integrity evidence.',
     creations: 'Authorized creation tools and experimental product surfaces.',
+    tools: 'Provider actions, credential references, approvals, and execution receipts.',
     system: 'Treasury, execution boundaries, and organization controls.',
     gpt: 'A dedicated ChatGPT-style workspace for reasoning and governed execution.',
   };
@@ -113,6 +115,7 @@ function initCosmicConsole() {
   move('.incident-center', 'intel');
   move('.audit-center', 'intel');
   move('#face-external-test', 'creations');
+  move('#tool-control', 'tools');
   move('.treasury', 'system');
   move('.governance-policy', 'system');
   move('#seldrune-gpt', 'gpt');
