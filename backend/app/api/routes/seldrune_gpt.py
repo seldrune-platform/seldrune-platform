@@ -75,8 +75,8 @@ _TOOL_INTENT_PATTERNS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
         "gmail",
         "send-message",
         re.compile(
-            r"\b(send|email|mail)\b.{0,80}\b(email|mail|gmail|message)\b"
-            r"|\b(email|mail|gmail)\b.{0,80}\b(send|message)\b",
+            r"\b(send|notify|email|mail)\b.{0,80}"
+            r"\b(email|mail|gmail|owner|recipient|client|customer|team)\b",
             re.I,
         ),
     ),
