@@ -53,9 +53,9 @@ def test_gpt_operator_requires_auth(client):
 
 
 def test_gpt_capabilities_report_registered_tools_and_provider_readiness(
-    _client,
+    _client,  # noqa: F811
     monkeypatch,
-):  # noqa: F811
+):
     client = _client
     monkeypatch.setenv("SELDRUNE_GITHUB_TOOL_TOKEN", "github-test-token")
     monkeypatch.delenv("SELDRUNE_GMAIL_TOOL_CREDENTIAL", raising=False)
