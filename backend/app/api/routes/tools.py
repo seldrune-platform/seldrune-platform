@@ -80,7 +80,7 @@ def create_tool(
     current_user: CurrentUserDep,
     session: SessionDep,
 ) -> ToolDefinition:
-    if payload.action_name not in allowed_internal_actions():
+    if payload.provider == "internal" and payload.action_name not in allowed_internal_actions():
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"allowed_actions": allowed_internal_actions()},
@@ -95,7 +95,7 @@ def create_tool(
         name=payload.name,
         slug=payload.slug,
         description=payload.description,
-        provider="internal",
+        provider=payload.provider,
         action_name=payload.action_name,
         status=ToolStatus.ACTIVE.value,
         risk_level=payload.risk_level,
@@ -120,6 +120,7 @@ def create_tool(
         resource_id=str(tool.id),
         details={
             "slug": tool.slug,
+            "provider": tool.provider,
             "action_name": tool.action_name,
             "risk_level": tool.risk_level,
             "approval_mode": tool.approval_mode,
