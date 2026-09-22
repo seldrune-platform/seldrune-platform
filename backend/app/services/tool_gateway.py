@@ -39,6 +39,14 @@ def register_external_action(
     _EXTERNAL_ACTIONS[key] = handler
 
 
+def external_action_registered(provider: str, action_name: str) -> bool:
+    return (provider.strip().lower(), action_name.strip()) in _EXTERNAL_ACTIONS
+
+
+def registered_external_actions() -> tuple[tuple[str, str], ...]:
+    return tuple(sorted(_EXTERNAL_ACTIONS))
+
+
 def _resolve_action(tool: ToolDefinition) -> Callable[..., dict[str, Any]]:
     if tool.provider == "internal":
         action = _INTERNAL_ACTIONS.get(tool.action_name)
