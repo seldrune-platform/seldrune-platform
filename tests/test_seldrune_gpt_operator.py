@@ -2,6 +2,7 @@ from tests.test_autonomous_execution import client as _client  # noqa: F401
 from backend.app.core.orchestration import PlannedStep
 from backend.app.services import tool_gateway, tool_input_defaults
 from backend.app.services.live_planner import PlanResult
+from backend.app.services.owner_action_compiler import required_external_tool_actions
 from tests.test_autonomous_execution import register_owner
 
 
@@ -24,21 +25,19 @@ def test_operator_risk_classification_is_explicit():
 
 
 def test_external_action_intents_map_to_registered_provider_actions():
-    from backend.app.api.routes.seldrune_gpt import _required_external_tool_actions
-
-    assert _required_external_tool_actions("Send an email to the owner") == [
+    assert required_external_tool_actions("Send an email to the owner") == [
         ("gmail", "send-message")
     ]
-    assert _required_external_tool_actions("Merge PR 233") == [
+    assert required_external_tool_actions("Merge PR 233") == [
         ("github", "merge-pull-request")
     ]
-    assert _required_external_tool_actions("Create a pull request for this branch") == [
+    assert required_external_tool_actions("Create a pull request for this branch") == [
         ("github", "create-pull-request")
     ]
-    assert _required_external_tool_actions("Trigger the GitHub Actions workflow") == [
+    assert required_external_tool_actions("Trigger the GitHub Actions workflow") == [
         ("github", "dispatch-workflow")
     ]
-    assert _required_external_tool_actions("Deploy this release to production") == [
+    assert required_external_tool_actions("Deploy this release to production") == [
         ("render", "deploy-service")
     ]
 
