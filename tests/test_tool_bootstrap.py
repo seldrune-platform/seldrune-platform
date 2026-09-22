@@ -64,6 +64,8 @@ def test_tool_bootstrap_activates_configured_provider_idempotently(
     assert set(first_body["created_tools"]) == {
         "github-create-issue",
         "github-comment",
+        "github-create-pull-request",
+        "github-merge-pull-request",
         "github-dispatch-workflow",
     }
     assert "SELDRUNE_GMAIL_TOOL_CREDENTIAL" in first_body["missing_env_locators"]
@@ -92,7 +94,7 @@ def test_tool_bootstrap_activates_configured_provider_idempotently(
     )
     assert tools.status_code == 200
     github_tools = [item for item in tools.json() if item["provider"] == "github"]
-    assert len(github_tools) == 3
+    assert len(github_tools) == 5
     dispatch = next(
         item for item in github_tools if item["action_name"] == "dispatch-workflow"
     )
