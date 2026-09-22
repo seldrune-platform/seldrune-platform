@@ -28,6 +28,7 @@ from backend.app.services.tool_bootstrap import (
     configured_external_tool_status,
     ensure_configured_external_tools,
 )
+from backend.app.services.tool_input_defaults import external_action_defaults_status
 from backend.app.services.tool_gateway import (
     ToolGatewayError,
     allowed_internal_actions,
@@ -149,6 +150,33 @@ def bootstrap_tools(
     )
     session.commit()
     return result
+
+
+@router.get(
+    "/{organization_id}/tool-defaults",
+    response_model=list[dict[str, Any]],
+)
+def list_tool_defaults(
+    organization_id: UUID,
+    _membership: ToolsRunDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> list[dict[str, Any]]:
+    tools = list(
+        session.scalars(
+            select(ToolDefinition)
+            .where(
+                ToolDefinition.organization_id == organization_id,
+                ToolDefinition.status == ToolStatus.ACTIVE.value,
+            )
+            .order_by(ToolDefinition.name)
+        )
+    )
+    return external_action_defaults_status(
+        session,
+        tools=tools,
+        requested_by_user_id=current_user.id,
+    )
 
 
 @router.get(
