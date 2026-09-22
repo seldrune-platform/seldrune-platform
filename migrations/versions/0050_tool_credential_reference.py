@@ -1,13 +1,13 @@
 """add tool credential reference
 
 Revision ID: 0050_tool_credential_reference
-Revises: 0049_cosmic_owner_console
+Revises: 0030_seldrune_gpt_messages
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "0050_tool_credential_reference"
-down_revision = "0049_cosmic_owner_console"
+down_revision = "0030_seldrune_gpt_messages"
 branch_labels = None
 depends_on = None
 
