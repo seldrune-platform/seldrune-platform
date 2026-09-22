@@ -317,6 +317,12 @@ def seldrune_gpt(
     input_text = payload.message
     if context:
         input_text = f"Recent conversation:\\n{context}\\n\\nUser: {payload.message}"
+    ensure_configured_external_tools(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+    )
+    session.commit()
     active_tools = list(
         session.scalars(
             select(ToolDefinition).where(
