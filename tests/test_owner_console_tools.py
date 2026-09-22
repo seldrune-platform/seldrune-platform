@@ -31,7 +31,9 @@ def test_tools_workspace_exposes_action_controls() -> None:
         "tool-run-list",
         "tool-control-refresh",
         "tool-auto-activate",
+        "tool-provider-preflight",
         "tool-provider-readiness",
+        "tool-provider-preflight-results",
     ):
         assert f'id="{element_id}"' in html
 
@@ -40,6 +42,7 @@ def test_tools_workspace_exposes_action_controls() -> None:
     assert "api('/tools')" in script
     assert "api('/tool-runs')" in script
     assert "api('/tool-bootstrap/status')" in script
+    assert "api('/tool-bootstrap/preflight'" in script
     assert "api('/tool-bootstrap'" in script
     assert "Approve & execute" in script
     assert "credential reference" in script.lower()
