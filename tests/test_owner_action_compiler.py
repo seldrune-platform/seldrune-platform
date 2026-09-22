@@ -134,6 +134,8 @@ def test_ambiguous_create_pull_request_is_not_guessed() -> None:
     )
     assert steps == original
     assert metadata["mode"] == "planner-only"
+    assert metadata["configuration_hints"] == []
+    assert metadata["unresolved_user_fields"] == ["head"]
     assert metadata["unresolved"] == [
         {
             "provider": "github",
