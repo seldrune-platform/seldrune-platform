@@ -359,22 +359,32 @@ def create_owner_command(
             )
         )
     )
-    tool_catalog = [
-        {
-            "slug": tool.slug,
-            "description": tool.description,
-            "provider": tool.provider,
-            "action_name": tool.action_name,
-            "risk_level": tool.risk_level,
-            "input_schema": tool.input_schema,
-            "input_defaults": external_action_default_fields(
-                session,
-                tool=tool,
-                requested_by_user_id=current_user.id,
-            ),
-        }
-        for tool in active_tools
-    ]
+    tool_catalog: list[dict[str, Any]] = []
+    for tool in active_tools:
+        input_defaults = external_action_default_fields(
+            session,
+            tool=tool,
+            requested_by_user_id=current_user.id,
+        )
+        planner_schema = dict(tool.input_schema or {})
+        required_fields = planner_schema.get("required")
+        if isinstance(required_fields, list) and input_defaults:
+            planner_schema["required"] = [
+                field
+                for field in required_fields
+                if field not in input_defaults
+            ]
+        tool_catalog.append(
+            {
+                "slug": tool.slug,
+                "description": tool.description,
+                "provider": tool.provider,
+                "action_name": tool.action_name,
+                "risk_level": tool.risk_level,
+                "input_schema": planner_schema,
+                "input_defaults": input_defaults,
+            }
+        )
     planned = build_live_plan(
         payload.objective,
         adaptive_guidance=adaptive_guidance,
