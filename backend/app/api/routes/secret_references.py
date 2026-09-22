@@ -10,6 +10,7 @@ from backend.app.core.rbac import Permission
 from backend.app.models.membership import Membership
 from backend.app.models.research_connector import ResearchConnector
 from backend.app.models.secret_reference import SecretReference
+from backend.app.models.tool_definition import ToolDefinition
 from backend.app.models.webhook import WebhookEndpoint
 from backend.app.schemas.secret_references import (
     SecretReferenceCreate,
@@ -73,6 +74,16 @@ def _dependency_kinds(
     )
     if webhook_id is not None:
         kinds.append("webhook_endpoint")
+    tool_id = session.scalar(
+        select(ToolDefinition.id)
+        .where(
+            ToolDefinition.organization_id == organization_id,
+            ToolDefinition.credential_reference_id == reference_id,
+        )
+        .limit(1)
+    )
+    if tool_id is not None:
+        kinds.append("tool_definition")
     return kinds
 
 
