@@ -43,6 +43,7 @@ from backend.app.services.playbook_engine import consolidate_playbooks
 from backend.app.services.playbook_guidance import build_playbook_guidance
 from backend.app.services.playbook_overlay import merge_playbook
 from backend.app.services.tool_bootstrap import ensure_configured_external_tools
+from backend.app.services.tool_input_defaults import external_action_default_fields
 from backend.app.services.portfolio_governor import (
     evaluate_project_execution,
     reserve_project_budget,
@@ -366,6 +367,11 @@ def create_owner_command(
             "action_name": tool.action_name,
             "risk_level": tool.risk_level,
             "input_schema": tool.input_schema,
+            "input_defaults": external_action_default_fields(
+                session,
+                tool=tool,
+                requested_by_user_id=current_user.id,
+            ),
         }
         for tool in active_tools
     ]
