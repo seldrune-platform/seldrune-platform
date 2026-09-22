@@ -108,7 +108,7 @@ def _planned_actions(
 def _first_number(order: str, nouns: str) -> int | None:
     patterns = (
         rf"\b(?:{nouns})\b\s*#?\s*(\d+)\b",
-        rf"#(\d+)\b",
+        r"#(\d+)\b",
     )
     for pattern in patterns:
         match = re.search(pattern, order, re.I)
