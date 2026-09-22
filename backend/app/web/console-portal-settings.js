@@ -104,6 +104,17 @@
           </small>
           <strong>Owner portal mode · Active</strong>
         </article>
+
+        <article class="portal-setting-card portal-links-card">
+          <span>Advanced portals</span>
+          <small>Open focused operational views without crowding the main workspace tabs.</small>
+          <div class="portal-link-grid">
+            <a href="/console-assets/executive-brief.html">Executive brief</a>
+            <a href="/console-assets/command-monitor.html">Command monitor</a>
+            <a href="/console-assets/organization-board.html">Organization board</a>
+            <a href="/console-assets/aetherion.html">Aetherion lab</a>
+          </div>
+        </article>
       </div>
 
       <div class="portal-settings-actions">
