@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 
 class OrchestrationStatus(StrEnum):
@@ -23,6 +23,8 @@ class PlannedStep(NamedTuple):
     required_capabilities: list[str]
     priority: int = 0
     requires_approval: bool = False
+    tool_slug: str | None = None
+    tool_input: dict[str, Any] | None = None
 
 
 def build_default_plan(objective: str) -> list[PlannedStep]:
