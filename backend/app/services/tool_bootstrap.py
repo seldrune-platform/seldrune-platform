@@ -37,7 +37,7 @@ def _reference_by_slug(
     return next((item for item in references if item.slug == slug), None)
 
 
-def _matching_active_tool(
+def _matching_tool(
     tools: list[ToolDefinition],
     *,
     provider: str,
@@ -47,12 +47,26 @@ def _matching_active_tool(
         (
             item
             for item in tools
-            if item.provider == provider
-            and item.action_name == action_name
-            and item.status == ToolStatus.ACTIVE.value
+            if item.provider == provider and item.action_name == action_name
         ),
         None,
     )
+
+
+def _matching_active_tool(
+    tools: list[ToolDefinition],
+    *,
+    provider: str,
+    action_name: str,
+) -> ToolDefinition | None:
+    tool = _matching_tool(
+        tools,
+        provider=provider,
+        action_name=action_name,
+    )
+    if tool is None or tool.status != ToolStatus.ACTIVE.value:
+        return None
+    return tool
 
 
 def configured_external_tool_status(
@@ -218,7 +232,7 @@ def ensure_configured_external_tools(
             continue
 
         for item in items:
-            existing = _matching_active_tool(
+            existing = _matching_tool(
                 tools,
                 provider=str(item["provider"]),
                 action_name=str(item["action_name"]),
