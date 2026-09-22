@@ -10,11 +10,37 @@ def test_operator_risk_classification_is_explicit():
 
     assert _operator_risk_reasons("Analyze the organization") == []
     assert _operator_risk_reasons("Deploy to production and send an email") == []
-    reasons = _operator_risk_reasons("Delete records, pay invoice, rotate API key, sign contract")
+    reasons = _operator_risk_reasons(
+        "Delete records, pay invoice, rotate API key, sign contract, merge PR 233"
+    )
     assert "destructive_change" in reasons
     assert "financial_commitment" in reasons
     assert "credential_or_access_change" in reasons
     assert "legal_or_people_commitment" in reasons
+    assert "repository_merge" in reasons
+
+
+
+
+
+def test_external_action_intents_map_to_registered_provider_actions():
+    from backend.app.api.routes.seldrune_gpt import _required_external_tool_actions
+
+    assert _required_external_tool_actions("Send an email to the owner") == [
+        ("gmail", "send-message")
+    ]
+    assert _required_external_tool_actions("Merge PR 233") == [
+        ("github", "merge-pull-request")
+    ]
+    assert _required_external_tool_actions("Create a pull request for this branch") == [
+        ("github", "create-pull-request")
+    ]
+    assert _required_external_tool_actions("Trigger the GitHub Actions workflow") == [
+        ("github", "dispatch-workflow")
+    ]
+    assert _required_external_tool_actions("Deploy this release to production") == [
+        ("render", "deploy-service")
+    ]
 
 
 def test_gpt_operator_requires_auth(client):
