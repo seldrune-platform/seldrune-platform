@@ -234,15 +234,6 @@ def test_autonomous_execution_uses_registered_tool_receipt(
 ) -> None:
     token, organization_id = register_owner(client)
     headers = {"Authorization": f"Bearer {token}"}
-    create_agent(
-        client,
-        organization_id,
-        headers,
-        name="Tool Agent",
-        slug="tool-agent",
-        capabilities=["analysis"],
-        allowed_tool_slugs=["echo-action"],
-    )
     tool = client.post(
         f"/api/v1/organizations/{organization_id}/tools",
         headers=headers,
@@ -256,6 +247,15 @@ def test_autonomous_execution_uses_registered_tool_receipt(
         },
     )
     assert tool.status_code == 201
+    create_agent(
+        client,
+        organization_id,
+        headers,
+        name="Tool Agent",
+        slug="tool-agent",
+        capabilities=["analysis"],
+        allowed_tool_slugs=["echo-action"],
+    )
 
     created = client.post(
         f"/api/v1/organizations/{organization_id}/orchestrations",
@@ -312,15 +312,6 @@ def test_high_risk_tool_blocks_until_tool_run_is_approved(
 ) -> None:
     token, organization_id = register_owner(client)
     headers = {"Authorization": f"Bearer {token}"}
-    create_agent(
-        client,
-        organization_id,
-        headers,
-        name="Governed Tool Agent",
-        slug="governed-tool-agent",
-        capabilities=["analysis"],
-        allowed_tool_slugs=["reviewed-echo"],
-    )
     tool = client.post(
         f"/api/v1/organizations/{organization_id}/tools",
         headers=headers,
@@ -334,6 +325,15 @@ def test_high_risk_tool_blocks_until_tool_run_is_approved(
         },
     )
     assert tool.status_code == 201
+    create_agent(
+        client,
+        organization_id,
+        headers,
+        name="Governed Tool Agent",
+        slug="governed-tool-agent",
+        capabilities=["analysis"],
+        allowed_tool_slugs=["reviewed-echo"],
+    )
 
     created = client.post(
         f"/api/v1/organizations/{organization_id}/orchestrations",
