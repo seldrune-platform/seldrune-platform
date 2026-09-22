@@ -139,8 +139,28 @@ def create_tool(
         )
         if credential_reference is None:
             raise HTTPException(status_code=422, detail="Credential reference is unavailable")
+    risk_level = payload.risk_level
+    risk_rank = {
+        ToolRisk.LOW.value: 0,
+        ToolRisk.MEDIUM.value: 1,
+        ToolRisk.HIGH.value: 2,
+    }
+    adapter = next(
+        (
+            item
+            for item in default_external_action_catalog()
+            if item["provider"] == payload.provider
+            and item["action_name"] == payload.action_name
+        ),
+        None,
+    )
+    if adapter is not None:
+        adapter_risk = str(adapter.get("risk_level") or ToolRisk.LOW.value)
+        if risk_rank[adapter_risk] > risk_rank[risk_level]:
+            risk_level = adapter_risk
+
     approval_mode = payload.approval_mode
-    if payload.risk_level == ToolRisk.HIGH.value:
+    if risk_level == ToolRisk.HIGH.value:
         approval_mode = ApprovalMode.ALWAYS.value
 
     tool = ToolDefinition(
@@ -153,7 +173,7 @@ def create_tool(
         action_name=payload.action_name,
         credential_reference_id=payload.credential_reference_id,
         status=ToolStatus.ACTIVE.value,
-        risk_level=payload.risk_level,
+        risk_level=risk_level,
         approval_mode=approval_mode,
         input_schema=payload.input_schema,
     )
