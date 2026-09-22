@@ -1,0 +1,149 @@
+.tool-control{
+  display:grid;
+  gap:18px;
+}
+
+.tool-control-summary{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:12px;
+}
+
+.tool-control-summary article,
+.tool-console-card{
+  border:1px solid rgba(125,223,181,.16);
+  border-radius:16px;
+  background:rgba(6,22,16,.64);
+  padding:16px;
+}
+
+.tool-control-summary article{
+  display:grid;
+  gap:6px;
+}
+
+.tool-control-summary small,
+.tool-row small{
+  color:var(--muted);
+}
+
+.tool-control-summary strong{
+  font-size:28px;
+}
+
+.tool-control-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:16px;
+}
+
+.tool-console-card{
+  display:grid;
+  align-content:start;
+  gap:14px;
+}
+
+.tool-console-card h3{
+  margin:0;
+}
+
+.tool-form{
+  display:grid;
+  gap:10px;
+}
+
+.tool-form label{
+  display:grid;
+  gap:6px;
+  color:var(--muted);
+  font-size:13px;
+}
+
+.tool-form input,
+.tool-form select,
+.tool-form textarea{
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid rgba(125,223,181,.2);
+  border-radius:10px;
+  background:rgba(3,14,10,.58);
+  color:var(--ink);
+  padding:10px 12px;
+  font:inherit;
+}
+
+.tool-form textarea{
+  resize:vertical;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+
+.tool-form input:focus,
+.tool-form select:focus,
+.tool-form textarea:focus{
+  outline:1px solid rgba(214,245,111,.65);
+  border-color:rgba(214,245,111,.38);
+  box-shadow:0 0 0 4px rgba(214,245,111,.06);
+}
+
+.tool-stack{
+  display:grid;
+  gap:9px;
+}
+
+.tool-row{
+  display:grid;
+  gap:6px;
+  padding:12px;
+  border:1px solid rgba(125,223,181,.14);
+  border-radius:12px;
+  background:rgba(8,27,20,.56);
+}
+
+.tool-row p{
+  margin:0;
+  color:var(--muted);
+  line-height:1.45;
+}
+
+.tool-row-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.tool-row-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:4px;
+}
+
+.tool-schema{
+  max-height:180px;
+  overflow:auto;
+  margin:0;
+  padding:10px;
+  border-radius:10px;
+  background:rgba(1,10,7,.72);
+  border:1px solid rgba(125,223,181,.13);
+  color:#bcebd3;
+  font-size:11px;
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+
+@media(max-width:900px){
+  .tool-control-summary,
+  .tool-control-grid{
+    grid-template-columns:1fr 1fr;
+  }
+}
+
+@media(max-width:620px){
+  .tool-control-summary,
+  .tool-control-grid{
+    grid-template-columns:1fr;
+  }
+}
