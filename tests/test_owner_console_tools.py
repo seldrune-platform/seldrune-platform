@@ -47,5 +47,5 @@ def test_tools_workspace_exposes_action_controls() -> None:
     assert "api('/tool-bootstrap'" in script
     assert "Approve & execute" in script
     assert "credential reference" in script.lower()
-    assert "['tools', 'Tools'" in cosmic
-    assert "move('#tool-control', 'tools')" in cosmic
+    assert '["tools", "Tools", "⌁"]' in cosmic
+    assert 'move("#tool-control", "tools")' in cosmic
