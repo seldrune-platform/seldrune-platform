@@ -34,11 +34,13 @@ from backend.app.api.routes.sti import router as sti_router
 from backend.app.api.routes.tools import router as tools_router
 from backend.app.api.routes.webhooks import router as webhooks_router
 from backend.app.core.config import settings
+from backend.app.services.external_actions import register_default_external_actions
 
 WEB_ROOT = Path(__file__).resolve().parent / "web"
 
 
 def create_app() -> FastAPI:
+    register_default_external_actions()
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
