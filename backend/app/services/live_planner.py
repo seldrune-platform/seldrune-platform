@@ -322,6 +322,7 @@ def _planner_input(
             "action_name": str(tool.get("action_name") or ""),
             "risk_level": str(tool.get("risk_level") or ""),
             "input_schema": tool.get("input_schema") or {},
+            "input_defaults": list(tool.get("input_defaults") or []),
         }
         for tool in (available_tools or [])
         if tool.get("slug")
@@ -331,7 +332,9 @@ def _planner_input(
         base += (
             "\n\nAvailable registered tools. Use a tool only when the step must perform "
             "a real action. Set tool_slug to the exact slug and tool_input_json to a JSON "
-            "object string matching the tool input schema. Otherwise set both fields to null."
+            "object string matching the tool input schema. Fields listed in input_defaults "
+            "are supplied by Seldrune at execution when omitted; never invent values for them. "
+            "Otherwise set both fields to null."
             f"\n{json.dumps(tool_catalog, separators=(',', ':'))}"
         )
     if not summary["applied"]:
