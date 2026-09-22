@@ -23,6 +23,7 @@ from backend.app.schemas.tooling import (
 )
 from backend.app.services.audit import record_audit
 from backend.app.services.external_actions import default_external_action_catalog
+from backend.app.services.provider_preflight import preflight_configured_providers
 from backend.app.services.tool_bootstrap import (
     configured_external_tool_status,
     ensure_configured_external_tools,
@@ -73,6 +74,47 @@ def _get_run(session: SessionDep, organization_id: UUID, run_id: UUID) -> ToolRu
 
 def _gateway_conflict(exc: ToolGatewayError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
+@router.post(
+    "/{organization_id}/tool-bootstrap/preflight",
+    response_model=dict[str, Any],
+)
+def preflight_tools(
+    organization_id: UUID,
+    _membership: ToolsManageDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    results = preflight_configured_providers(
+        session,
+        organization_id=organization_id,
+    )
+    record_audit(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+        action="tool_bootstrap.provider_preflight",
+        resource_type="organization",
+        resource_id=str(organization_id),
+        details={
+            "providers": [
+                {
+                    "provider": item["provider"],
+                    "status": item["status"],
+                    "verified": item["verified"],
+                    "http_status": item["http_status"],
+                }
+                for item in results
+            ]
+        },
+    )
+    session.commit()
+    return {
+        "providers": results,
+        "verified": sum(bool(item["verified"]) for item in results),
+        "total": len(results),
+    }
 
 
 @router.get(
