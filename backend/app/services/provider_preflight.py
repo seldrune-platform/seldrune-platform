@@ -256,6 +256,29 @@ _PREFLIGHT_HANDLERS = {
 }
 
 
+def preflight_provider_credential(
+    provider: str,
+    credential: str,
+) -> dict[str, Any]:
+    handler = _PREFLIGHT_HANDLERS.get(provider)
+    if handler is None:
+        return _result(
+            provider,
+            status="unsupported",
+            verified=False,
+            detail="No non-destructive preflight is registered for this provider.",
+        )
+    try:
+        return handler(credential)
+    except httpx.HTTPError:
+        return _result(
+            provider,
+            status="network_error",
+            verified=False,
+            detail="Provider preflight could not reach the remote API.",
+        )
+
+
 def preflight_configured_providers(
     session: Session,
     *,
@@ -304,26 +327,5 @@ def preflight_configured_providers(
             )
             continue
 
-        handler = _PREFLIGHT_HANDLERS.get(provider)
-        if handler is None:
-            results.append(
-                _result(
-                    provider,
-                    status="unsupported",
-                    verified=False,
-                    detail="No non-destructive preflight is registered for this provider.",
-                )
-            )
-            continue
-        try:
-            results.append(handler(credential))
-        except httpx.HTTPError:
-            results.append(
-                _result(
-                    provider,
-                    status="network_error",
-                    verified=False,
-                    detail="Provider preflight could not reach the remote API.",
-                )
-            )
+        results.append(preflight_provider_credential(provider, credential))
     return results
