@@ -22,6 +22,7 @@ from backend.app.services.agent_revisions import (
 from backend.app.services.audit import record_audit
 from backend.app.services.external_actions import default_external_action_catalog
 from backend.app.services.secret_vault import SecretVaultError, resolve_secret
+from backend.app.services.tool_gateway import internal_action_catalog
 
 
 
@@ -293,6 +294,45 @@ def ensure_configured_external_tools(
     created_references: list[str] = []
     created_tools: list[str] = []
     missing_env_locators: set[str] = set()
+
+    for item in internal_action_catalog():
+        existing = _matching_tool(
+            tools,
+            provider="internal",
+            action_name=str(item["action_name"]),
+        )
+        if existing is not None:
+            if existing.status != ToolStatus.ACTIVE.value:
+                existing.status = ToolStatus.ACTIVE.value
+            continue
+        action_name = str(item["action_name"])
+        tool = ToolDefinition(
+            organization_id=organization_id,
+            created_by_user_id=actor_user_id,
+            name=str(item["name"]),
+            slug=f"internal-{action_name}",
+            description=str(item.get("description") or ""),
+            provider="internal",
+            action_name=action_name,
+            credential_reference_id=None,
+            status=ToolStatus.ACTIVE.value,
+            risk_level=ToolRisk.LOW.value,
+            approval_mode=ApprovalMode.NEVER.value,
+            input_schema=dict(item.get("input_schema") or {}),
+        )
+        session.add(tool)
+        session.flush()
+        tools.append(tool)
+        created_tools.append(tool.slug)
+        record_audit(
+            session,
+            organization_id=organization_id,
+            actor_user_id=actor_user_id,
+            action="tool_bootstrap.internal_tool_created",
+            resource_type="tool",
+            resource_id=str(tool.id),
+            details={"slug": tool.slug, "action_name": action_name},
+        )
 
     catalog_by_credential: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for item in _catalog():
