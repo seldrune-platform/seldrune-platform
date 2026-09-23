@@ -338,7 +338,7 @@ def _native_value_after_label(
     )
     candidates: list[tuple[int, str]] = []
     label_pattern = re.compile(
-        rf"^\s*{re.escape(label)}\s*[:\-]?\s+(.+?)\s*$",
+        rf"^\s*{re.escape(label)}(?:\s*[:\-]\s*|\s+)(.+?)\s*$",
         re.IGNORECASE,
     )
     try:
