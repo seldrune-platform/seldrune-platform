@@ -87,6 +87,14 @@ def _complexity_score(
 
     medium_terms = (
         "architecture",
+        "build",
+        "develop",
+        "application",
+        "software",
+        "code",
+        "repository",
+        "website",
+        "api",
         "debug",
         "refactor",
         "migration",
@@ -116,7 +124,7 @@ def _complexity_score(
         "high stakes",
     )
     if any(term in lowered for term in medium_terms):
-        score += 1
+        score += 2
     if any(term in lowered for term in hard_terms):
         score += 2
 
