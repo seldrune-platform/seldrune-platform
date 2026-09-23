@@ -1,9 +1,8 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Literal
 
 
 class ProviderCredentialUpsert(BaseModel):
