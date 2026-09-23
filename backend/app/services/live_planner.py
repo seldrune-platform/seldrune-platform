@@ -421,7 +421,7 @@ def build_live_plan(
         reasoning_effort=route.reasoning_effort,
         prompt_cache_key="seldrune:owner-command-planner",
         max_estimated_cost_usd=route.request_budget_usd,
-        exact_token_preflight=True,
+        exact_token_preflight=False,
     )
     try:
         result, latency_ms = (gateway or ModelGateway(settings)).generate(request)
