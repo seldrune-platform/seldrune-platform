@@ -40,6 +40,17 @@ class Settings(BaseSettings):
     model_default: str = "mock-v1"
     model_timeout_seconds: float = 60.0
     model_max_output_tokens: int = 1200
+    ai_cost_governor_enabled: bool = True
+    ai_default_tier: str = "economy"
+    ai_economy_model: str = "gpt-5.6-luna"
+    ai_balanced_model: str = "gpt-5.6-terra"
+    ai_premium_model: str = "gpt-5.6-sol"
+    ai_economy_max_output_tokens: int = 1800
+    ai_balanced_max_output_tokens: int = 5000
+    ai_premium_max_output_tokens: int = 8000
+    ai_max_request_cost_usd: float = 0.25
+    ai_default_scope_budget_usd: float = 1.0
+    ai_cache_ttl_seconds: int = 900
     project_estimated_cost_per_step_usd: float = 0.05
     knowledge_retrieval_limit: int = 6
     knowledge_context_max_chars: int = 6000
@@ -77,6 +88,25 @@ class Settings(BaseSettings):
             raise ValueError("SELDRUNE_MODEL_TIMEOUT_SECONDS must be positive")
         if self.model_max_output_tokens <= 0:
             raise ValueError("SELDRUNE_MODEL_MAX_OUTPUT_TOKENS must be positive")
+        if self.ai_default_tier not in {"economy", "balanced", "premium"}:
+            raise ValueError(
+                "SELDRUNE_AI_DEFAULT_TIER must be economy, balanced, or premium"
+            )
+        if any(
+            value <= 0
+            for value in (
+                self.ai_economy_max_output_tokens,
+                self.ai_balanced_max_output_tokens,
+                self.ai_premium_max_output_tokens,
+            )
+        ):
+            raise ValueError("AI tier output token limits must be positive")
+        if self.ai_max_request_cost_usd <= 0:
+            raise ValueError("SELDRUNE_AI_MAX_REQUEST_COST_USD must be positive")
+        if self.ai_default_scope_budget_usd <= 0:
+            raise ValueError("SELDRUNE_AI_DEFAULT_SCOPE_BUDGET_USD must be positive")
+        if self.ai_cache_ttl_seconds < 0:
+            raise ValueError("SELDRUNE_AI_CACHE_TTL_SECONDS cannot be negative")
         if self.project_estimated_cost_per_step_usd < 0:
             raise ValueError("SELDRUNE_PROJECT_ESTIMATED_COST_PER_STEP_USD cannot be negative")
         if not 1 <= self.knowledge_retrieval_limit <= 25:
