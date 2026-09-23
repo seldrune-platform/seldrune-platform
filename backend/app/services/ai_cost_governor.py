@@ -164,8 +164,8 @@ def projected_cost_exceeds_budget(
             True,
             projected,
             (
-                f"Projected AI request cost $\{projected:.4f} exceeds the "
-                f"$\{decision.request_budget_usd:.4f} per-request budget"
+                f"Projected AI request cost ${projected:.4f} exceeds the "
+                f"${decision.request_budget_usd:.4f} per-request budget"
             ),
         )
 
@@ -177,8 +177,8 @@ def projected_cost_exceeds_budget(
                 True,
                 projected,
                 (
-                    f"Projected AI scope cost $\{spent + projected:.4f} exceeds the "
-                    f"$\{decision.scope_budget_usd:.4f} budget"
+                    f"Projected AI scope cost ${spent + projected:.4f} exceeds the "
+                    f"${decision.scope_budget_usd:.4f} budget"
                 ),
             )
     return False, projected, None
@@ -275,7 +275,7 @@ def external_operation_allowed(
     return (
         False,
         (
-            f"Estimated external AI operation cost $\{estimated_cost_usd:.4f} "
-            f"exceeds the $\{limit:.4f} budget"
+            f"Estimated external AI operation cost ${estimated_cost_usd:.4f} "
+            f"exceeds the ${limit:.4f} budget"
         ),
     )
