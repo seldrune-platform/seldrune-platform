@@ -53,7 +53,7 @@ jobs:
       - name: Test A through M
         run: pytest -q tests/test_[a-m]*.py
 
-  pytest-n-z:
+  pytest-n-r:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -66,8 +66,24 @@ jobs:
           cache: pip
       - name: Install
         run: python -m pip install --upgrade pip && pip install -e ".[dev]"
-      - name: Test N through Z excluding UNARCHI
-        run: pytest -q tests/test_[n-z]*.py --ignore=tests/test_unarchi_engine.py --ignore=tests/test_unarchi_benchmark.py
+      - name: Test N through R
+        run: pytest -q tests/test_[n-r]*.py
+
+  pytest-s-z:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: python -m pip install --upgrade pip && pip install -e ".[dev]"
+      - name: Test S through Z excluding UNARCHI
+        run: pytest -q tests/test_[s-z]*.py --ignore=tests/test_unarchi_engine.py --ignore=tests/test_unarchi_benchmark.py
 
   migration:
     runs-on: ubuntu-latest
