@@ -180,7 +180,10 @@ def choose_cost_route(
             model, tier = premium, "premium"
 
     if purpose == "pdf":
-        max_output = min(settings.ai_pdf_max_output_tokens, 3200)
+        max_output = min(
+            settings.ai_pdf_max_output_tokens,
+            3200 if attempt == 0 else 2200,
+        )
         budget = settings.ai_pdf_request_max_usd
     elif purpose == "planner":
         max_output = min(settings.model_max_output_tokens, 1000)
