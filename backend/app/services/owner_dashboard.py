@@ -40,16 +40,6 @@ def build_owner_dashboard(session: Session, organization_id: UUID) -> dict[str, 
         else []
     )
     tasks = [task for step in steps if (task := session.get(Task, step.task_id)) is not None]
-    task_ids = [task.id for task in tasks]
-    invocations = (
-        list(
-            session.scalars(
-                select(ModelInvocation).where(ModelInvocation.task_id.in_(task_ids))
-            )
-        )
-        if task_ids
-        else []
-    )
     organization_agents = list(
         session.scalars(
             select(Agent).where(Agent.organization_id == organization_id)
