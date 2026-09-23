@@ -799,3 +799,38 @@ def test_fidelity_uses_rgb_channel_tolerance_not_integer_distance() -> None:
 
     assert score == 100
     assert "color=yes" in note
+
+
+def test_low_typography_fidelity_alone_does_not_make_layout_unsafe() -> None:
+    source = _text_pdf("Invoice total: OLD")
+    plan = {
+        "summary": "Update total",
+        "operations": [
+            {
+                "action": "replace_text",
+                "page": 1,
+                "target_text": "OLD",
+                "replacement_text": "NEW",
+                "text": None,
+                "bbox": None,
+                "occurrence": None,
+                "field_name": None,
+                "value": None,
+                "degrees": None,
+                "font_size": None,
+            }
+        ],
+    }
+
+    result = apply_pdf_edit_plan(source, plan)
+    assessment = assess_pdf_edit_candidate(
+        source,
+        result.data,
+        plan,
+        visual_fidelity_score=83,
+    )
+
+    assert result.verification_score == 100
+    assert assessment.safe_to_return is True
+    assert assessment.layout_integrity_score == 100
+    assert assessment.issues == ()
