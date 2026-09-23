@@ -404,15 +404,45 @@ def ensure_configured_external_tools(
                 provider=str(item["provider"]),
                 action_name=str(item["action_name"]),
             )
-            if existing is not None:
-                continue
-
             risk_level = str(item.get("risk_level") or ToolRisk.LOW.value)
             approval_mode = (
                 ApprovalMode.ALWAYS.value
                 if risk_level == ToolRisk.HIGH.value
                 else ApprovalMode.NEVER.value
             )
+            if existing is not None:
+                changed: list[str] = []
+                if existing.status != ToolStatus.ACTIVE.value:
+                    existing.status = ToolStatus.ACTIVE.value
+                    changed.append("status")
+                if existing.credential_reference_id != reference.id:
+                    existing.credential_reference_id = reference.id
+                    changed.append("credential_reference_id")
+                if existing.risk_level != risk_level:
+                    existing.risk_level = risk_level
+                    changed.append("risk_level")
+                if existing.approval_mode != approval_mode:
+                    existing.approval_mode = approval_mode
+                    changed.append("approval_mode")
+                expected_schema = dict(item.get("input_schema") or {})
+                if existing.input_schema != expected_schema:
+                    existing.input_schema = expected_schema
+                    changed.append("input_schema")
+                if existing.name != str(item["name"]):
+                    existing.name = str(item["name"])
+                    changed.append("name")
+                if changed:
+                    record_audit(
+                        session,
+                        organization_id=organization_id,
+                        actor_user_id=actor_user_id,
+                        action="tool_bootstrap.tool_repaired",
+                        resource_type="tool",
+                        resource_id=str(existing.id),
+                        details={"slug": existing.slug, "changed_fields": changed},
+                    )
+                continue
+
             tool = ToolDefinition(
                 organization_id=organization_id,
                 created_by_user_id=actor_user_id,
