@@ -222,3 +222,120 @@ def test_rotation_operation_is_verified() -> None:
     assert output[0].rotation == 90
     output.close()
     assert result.verification_score == 100
+
+
+def test_native_replace_reconstructs_original_font_size_color_and_baseline() -> None:
+    document = pymupdf.open()
+    page = document.new_page(width=500, height=300)
+    page.draw_rect(
+        pymupdf.Rect(40, 55, 460, 115),
+        color=(0.15, 0.35, 0.55),
+        fill=(0.93, 0.95, 0.98),
+        width=1.5,
+    )
+    page.insert_text(
+        pymupdf.Point(92, 92),
+        "Original total: OLD",
+        fontname="tibo",
+        fontsize=18,
+        color=(0.2, 0.35, 0.55),
+    )
+    source = document.tobytes()
+    original_drawings = len(page.get_drawings())
+    document.close()
+
+    result = apply_pdf_edit_plan(
+        source,
+        {
+            "summary": "Replace total while preserving appearance",
+            "operations": [
+                {
+                    "action": "replace_text",
+                    "page": 1,
+                    "target_text": "OLD",
+                    "replacement_text": "NEW",
+                    "text": None,
+                    "bbox": None,
+                    "occurrence": None,
+                    "field_name": None,
+                    "value": None,
+                    "degrees": None,
+                    "font_size": None,
+                }
+            ],
+        },
+    )
+
+    output = pymupdf.open(stream=result.data, filetype="pdf")
+    output_page = output[0]
+    spans = [
+        span
+        for block in output_page.get_text("dict").get("blocks", [])
+        for line in block.get("lines", [])
+        for span in line.get("spans", [])
+        if "NEW" in str(span.get("text") or "")
+    ]
+    assert spans
+    replacement = spans[0]
+
+    assert "times" in str(replacement["font"]).casefold()
+    assert "bold" in str(replacement["font"]).casefold()
+    assert float(replacement["size"]) == pytest.approx(18.0, abs=0.2)
+    assert int(replacement["color"]) == 0x33598C
+    assert float(replacement["origin"][1]) == pytest.approx(92.0, abs=0.8)
+    assert len(output_page.get_drawings()) == original_drawings
+    output.close()
+
+    assert any(
+        "original-look reconstruction" in note
+        for note in result.verification_notes
+    )
+
+
+def test_native_replace_keeps_original_point_size_for_longer_text() -> None:
+    document = pymupdf.open()
+    page = document.new_page(width=500, height=300)
+    page.insert_text(
+        pymupdf.Point(72, 90),
+        "Code OLD",
+        fontname="hebo",
+        fontsize=15,
+        color=(0.0, 0.0, 0.0),
+    )
+    source = document.tobytes()
+    document.close()
+
+    result = apply_pdf_edit_plan(
+        source,
+        {
+            "summary": "Replace code",
+            "operations": [
+                {
+                    "action": "replace_text",
+                    "page": 1,
+                    "target_text": "OLD",
+                    "replacement_text": "LONGER",
+                    "text": None,
+                    "bbox": None,
+                    "occurrence": None,
+                    "field_name": None,
+                    "value": None,
+                    "degrees": None,
+                    "font_size": None,
+                }
+            ],
+        },
+    )
+
+    output = pymupdf.open(stream=result.data, filetype="pdf")
+    spans = [
+        span
+        for block in output[0].get_text("dict").get("blocks", [])
+        for line in block.get("lines", [])
+        for span in line.get("spans", [])
+        if "LONGER" in str(span.get("text") or "")
+    ]
+    assert spans
+    assert float(spans[0]["size"]) == pytest.approx(15.0, abs=0.2)
+    assert "bold" in str(spans[0]["font"]).casefold()
+    output.close()
