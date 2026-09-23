@@ -1,5 +1,6 @@
 import base64
 import binascii
+from hashlib import sha256
 import json
 import re
 
@@ -275,6 +276,7 @@ class SeldruneGPTPDFEditResponse(BaseModel):
     layout_integrity_score: int
     reconstruction_attempts: int = 1
     repair_passes: int = 0
+    estimated_ai_cost_usd: float = 0.0
     verification_notes: list[str] = Field(default_factory=list)
 
 
@@ -617,6 +619,14 @@ def edit_seldrune_gpt_pdf(
     except PDFEditorError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    cost_scope = "pdf-edit:" + sha256(
+        pdf_bytes + payload.instruction.encode("utf-8")
+    ).hexdigest()[:20]
+    pdf_scope_budget_usd = min(
+        settings.ai_default_scope_budget_usd,
+        0.35,
+    )
+
     input_files = (
         ModelFileInput(
             filename=payload.pdf.name,
@@ -681,11 +691,24 @@ def edit_seldrune_gpt_pdf(
         response_schema=_PDF_EDIT_SCHEMA,
         input_images=initial_images,
         input_files=input_files,
+        metadata={
+            "cost_tier": "economy",
+            "cost_sensitive": True,
+            "cost_scope": cost_scope,
+            "scope_budget_usd": pdf_scope_budget_usd,
+            "max_request_cost_usd": min(
+                settings.ai_max_request_cost_usd,
+                0.12,
+            ),
+            "cacheable": True,
+        },
     )
     try:
         result, _latency_ms = ModelGateway(settings).generate(request)
     except ModelGatewayError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    pdf_ai_cost = float(result.estimated_cost_usd or 0.0)
 
     try:
         plan = json.loads(result.output_text)
@@ -705,7 +728,8 @@ def edit_seldrune_gpt_pdf(
     best_safe_plan = None
     best_safe_quality = -1
 
-    for attempt_index in range(5):
+    max_reconstruction_attempts = 1 + settings.ai_max_paid_retries_per_scope
+    for attempt_index in range(max_reconstruction_attempts):
         reconstruction_attempts = attempt_index + 1
         candidate_result = None
         candidate_assessment = None
@@ -778,7 +802,7 @@ def edit_seldrune_gpt_pdf(
             candidate_diagnostics.append(str(exc))
 
         last_diagnostics = list(dict.fromkeys(candidate_diagnostics))
-        if attempt_index >= 4:
+        if attempt_index >= max_reconstruction_attempts - 1:
             break
 
         rejection_text = (
@@ -853,10 +877,24 @@ def edit_seldrune_gpt_pdf(
             response_schema=_PDF_EDIT_SCHEMA,
             input_images=retry_images,
             input_files=input_files,
+            metadata={
+                "cost_tier": "economy",
+                "cost_sensitive": True,
+                "cost_scope": cost_scope,
+                "scope_budget_usd": pdf_scope_budget_usd,
+                "max_request_cost_usd": min(
+                    settings.ai_max_request_cost_usd,
+                    0.12,
+                ),
+                "cacheable": True,
+            },
         )
         try:
             retry_model_result, _retry_latency = ModelGateway(settings).generate(
                 retry_request
+            )
+            pdf_ai_cost += float(
+                retry_model_result.estimated_cost_usd or 0.0
             )
             candidate_plan = json.loads(retry_model_result.output_text)
         except (ModelGatewayError, json.JSONDecodeError) as exc:
@@ -921,6 +959,8 @@ def edit_seldrune_gpt_pdf(
             "repair_passes": repair_passes,
             "warnings": edit_result.warnings[:20],
             "model": result.model,
+            "estimated_ai_cost_usd": round(pdf_ai_cost, 6),
+            "cost_scope_budget_usd": pdf_scope_budget_usd,
         },
     )
     session.add(
@@ -973,6 +1013,7 @@ def edit_seldrune_gpt_pdf(
         layout_integrity_score=selected_assessment.layout_integrity_score,
         reconstruction_attempts=reconstruction_attempts,
         repair_passes=repair_passes,
+        estimated_ai_cost_usd=round(pdf_ai_cost, 6),
         verification_notes=edit_result.verification_notes,
     )
 
