@@ -73,7 +73,7 @@
       name.textContent = provider.provider.toUpperCase();
       top.append(
         name,
-        createPill(provider.ready ? 'ready' : 'setup required', provider.ready ? '' : 'pending')
+        createPill(provider.ready ? 'ready' : 'not connected', provider.ready ? '' : 'pending')
       );
       const meta = document.createElement('small');
       const readyActions = provider.actions.filter(action => action.ready).length;
@@ -87,7 +87,7 @@
           'Credential is available. Activate configured providers to create missing tools.';
       } else {
         detail.textContent =
-          `Add ${provider.credential_env_locator} to the service environment, then activate.`;
+          'Connect this provider in Owner Credential Vault or add its environment/AWS secret.';
       }
       card.append(top, meta, detail);
       root.append(card);
@@ -354,6 +354,61 @@
       setStatus(error.message);
     }
   }
+
+  byId('provider-vault-toggle')?.addEventListener('click', event => {
+    const input = byId('provider-vault-secret');
+    if (!input) return;
+    const reveal = input.type === 'password';
+    input.type = reveal ? 'text' : 'password';
+    event.currentTarget.textContent = reveal ? 'Hide' : 'Show';
+  });
+
+  byId('provider-vault-form')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const provider = byId('provider-vault-provider')?.value || '';
+    const secretInput = byId('provider-vault-secret');
+    const secretValue = secretInput?.value || '';
+    const vaultStatus = byId('provider-vault-status');
+    if (!provider || !secretValue) return;
+    const submit = event.currentTarget.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    if (vaultStatus) vaultStatus.textContent = `Encrypting and activating ${provider}…`;
+    try {
+      const result = await api('/tool-bootstrap/credentials', {
+        method: 'POST',
+        body: JSON.stringify({
+          provider,
+          secret_value: secretValue,
+        }),
+      });
+      if (secretInput) {
+        secretInput.value = '';
+        secretInput.type = 'password';
+      }
+      const toggle = byId('provider-vault-toggle');
+      if (toggle) toggle.textContent = 'Show';
+      if (vaultStatus) {
+        vaultStatus.textContent =
+          `${provider.toUpperCase()} connected · ${result.tool_count} active tools.`;
+      }
+      toast(`${provider.toUpperCase()} credential saved and activated`);
+      await loadToolControl();
+      try {
+        providerPreflight = await api('/tool-bootstrap/preflight', {
+          method: 'POST',
+          body: '{}',
+        });
+        renderProviderPreflight();
+      } catch (preflightError) {
+        console.warn('Provider preflight after credential save failed', preflightError);
+      }
+    } catch (error) {
+      if (vaultStatus) vaultStatus.textContent = `Credential save failed: ${error.message}`;
+      toast(error.message);
+    } finally {
+      submit.disabled = false;
+    }
+  });
 
   byId('tool-control-refresh')?.addEventListener('click', loadToolControl);
   byId('tool-provider-preflight')?.addEventListener('click', async event => {
