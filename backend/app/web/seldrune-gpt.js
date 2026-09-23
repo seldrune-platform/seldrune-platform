@@ -332,6 +332,12 @@
       const layout = Number.isFinite(result.layout_integrity_score)
         ? `${result.layout_integrity_score}% layout integrity`
         : 'layout integrity unavailable';
+      const cost = Number.isFinite(result.estimated_ai_cost_usd)
+        ? `AI cost ~${Number(result.estimated_ai_cost_usd).toFixed(4)}`
+        : 'AI cost unavailable';
+      const modelRoute = (result.models_used || []).length
+        ? `${result.models_used.join(' → ')} · ${result.model_calls || 0} model call${result.model_calls === 1 ? '' : 's'}`
+        : null;
       const profile = [
         result.document_type || 'PDF',
         `${result.page_count || 0} pages`,
@@ -344,6 +350,8 @@
         result.reconstruction_attempts > 1
           ? `${result.reconstruction_attempts} clean reconstruction attempts`
           : null,
+        modelRoute,
+        cost,
       ].filter(Boolean).join(' · ');
       addDownloadMessage(
         'Seldrune GPT · AI PDF Editor',
@@ -351,7 +359,7 @@
         result.filename,
         result.data_base64,
       );
-      status.textContent = `Edited PDF ready · ${verification} · ${fidelity} · ${layout} · ${result.filename}`;
+      status.textContent = `Edited PDF ready · ${verification} · ${layout} · ${cost} · ${result.filename}`;
     } catch (error) {
       addMessage('System', `AI PDF edit failed: ${error.message}`);
       status.textContent =
@@ -460,7 +468,11 @@
       clearAttachments();
       model.textContent = result.model || 'OpenAI';
       addMessage('Seldrune GPT', result.response || '(No text returned)');
-      status.textContent = `${result.provider || 'openai'} · ${result.model || 'model'} · ${result.latency_ms || 0} ms · ${result.input_tokens || 0} input · ${result.output_tokens || 0} output tokens`;
+      const chatCost = Number.isFinite(result.estimated_cost_usd)
+        ? ` · ~${Number(result.estimated_cost_usd).toFixed(4)}`
+        : '';
+      const cached = Number(result.cached_input_tokens || 0);
+      status.textContent = `${result.provider || 'openai'} · ${result.model || 'model'} (${result.cost_tier || 'auto'}) · ${result.latency_ms || 0} ms · ${result.input_tokens || 0} input · ${result.output_tokens || 0} output${cached ? ` · ${cached} cached` : ''}${chatCost}`;
     } catch (error) {
       addMessage('System', `GPT request failed: ${error.message}`);
       status.textContent = 'Request failed.';
