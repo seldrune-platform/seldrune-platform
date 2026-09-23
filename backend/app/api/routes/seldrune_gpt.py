@@ -3,7 +3,6 @@ import binascii
 import json
 import re
 
-import pymupdf
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -32,6 +31,12 @@ from backend.app.services.audit import record_audit
 from backend.app.services.external_actions import default_external_action_catalog
 from backend.app.services.model_gateway import ModelGateway, ModelGatewayError
 from backend.app.services.owner_action_compiler import required_external_tool_actions
+from backend.app.services.pdf_editor import (
+    PDFEditorError,
+    apply_pdf_edit_plan,
+    inspect_pdf,
+    prepare_pdf_for_model,
+)
 from backend.app.services.tool_bootstrap import (
     configured_external_tool_status,
     ensure_configured_external_tools,
@@ -243,8 +248,9 @@ def _model_attachments(
 
 
 class SeldruneGPTPDFEditRequest(BaseModel):
-    instruction: str = Field(min_length=3, max_length=8000)
+    instruction: str = Field(min_length=3, max_length=12000)
     pdf: SeldruneGPTAttachment
+    password: str | None = Field(default=None, max_length=256)
 
 
 class SeldruneGPTPDFEditResponse(BaseModel):
@@ -255,6 +261,14 @@ class SeldruneGPTPDFEditResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     model: str
     response_id: str | None = None
+    document_type: str
+    page_count: int
+    native_text_pages: int
+    image_only_pages: int
+    form_fields: int
+    verified_operations: int
+    verification_score: int
+    verification_notes: list[str] = Field(default_factory=list)
 
 
 _PDF_EDIT_SCHEMA: dict = {
@@ -264,19 +278,37 @@ _PDF_EDIT_SCHEMA: dict = {
         "summary": {"type": "string"},
         "operations": {
             "type": "array",
-            "maxItems": 50,
+            "maxItems": 80,
             "items": {
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["replace_text", "redact_text", "add_note"],
+                        "enum": [
+                            "replace_text",
+                            "redact_text",
+                            "add_text",
+                            "add_note",
+                            "fill_form",
+                            "rotate_page",
+                        ],
                     },
                     "page": {"type": ["integer", "null"], "minimum": 1},
                     "target_text": {"type": ["string", "null"]},
                     "replacement_text": {"type": ["string", "null"]},
                     "text": {"type": ["string", "null"]},
+                    "bbox": {
+                        "type": ["array", "null"],
+                        "items": {"type": "number", "minimum": 0, "maximum": 1000},
+                        "minItems": 4,
+                        "maxItems": 4,
+                    },
+                    "occurrence": {"type": ["integer", "null"], "minimum": 1},
+                    "field_name": {"type": ["string", "null"]},
+                    "value": {"type": ["string", "null"]},
+                    "degrees": {"type": ["integer", "null"]},
+                    "font_size": {"type": ["number", "null"], "minimum": 4, "maximum": 72},
                 },
                 "required": [
                     "action",
@@ -284,6 +316,12 @@ _PDF_EDIT_SCHEMA: dict = {
                     "target_text",
                     "replacement_text",
                     "text",
+                    "bbox",
+                    "occurrence",
+                    "field_name",
+                    "value",
+                    "degrees",
+                    "font_size",
                 ],
             },
         },
@@ -295,113 +333,18 @@ _PDF_EDIT_SCHEMA: dict = {
 def _apply_pdf_edit_plan(
     pdf_bytes: bytes,
     plan: dict,
+    *,
+    password: str | None = None,
 ) -> tuple[bytes, int, list[str]]:
     try:
-        document = pymupdf.open(stream=pdf_bytes, filetype="pdf")
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail="Invalid or unreadable PDF") from exc
-
-    if document.needs_pass:
-        document.close()
-        raise HTTPException(
-            status_code=422,
-            detail="Password-protected PDFs must be unlocked before editing",
+        result = apply_pdf_edit_plan(
+            pdf_bytes,
+            plan,
+            password=password,
         )
-
-    applied = 0
-    warnings: list[str] = []
-    operations = plan.get("operations")
-    if not isinstance(operations, list):
-        document.close()
-        raise HTTPException(status_code=502, detail="Invalid PDF edit plan")
-
-    for operation in operations:
-        if not isinstance(operation, dict):
-            continue
-        action = operation.get("action")
-        page_number = operation.get("page")
-        if page_number is None:
-            page_indexes = list(range(document.page_count))
-        elif isinstance(page_number, int) and 1 <= page_number <= document.page_count:
-            page_indexes = [page_number - 1]
-        else:
-            warnings.append(f"Skipped edit with invalid page: {page_number}")
-            continue
-
-        if action in {"replace_text", "redact_text"}:
-            target_text = str(operation.get("target_text") or "").strip()
-            if not target_text:
-                warnings.append(f"Skipped {action} without target text")
-                continue
-            matched = False
-            for page_index in page_indexes:
-                page = document[page_index]
-                rectangles = page.search_for(target_text)
-                if not rectangles:
-                    continue
-                matched = True
-                replacement = ""
-                if action == "replace_text":
-                    replacement = str(operation.get("replacement_text") or "")
-                for rectangle in rectangles:
-                    font_size = max(6.0, min(14.0, rectangle.height * 0.72))
-                    page.add_redact_annot(
-                        rectangle,
-                        text=replacement,
-                        fontsize=font_size,
-                        fill=(1, 1, 1),
-                        text_color=(0, 0, 0),
-                    )
-                    applied += 1
-                page.apply_redactions()
-            if not matched:
-                warnings.append(
-                    f'Text not found for {action}: "{target_text[:80]}"'
-                )
-            continue
-
-        if action == "add_note":
-            note_text = str(operation.get("text") or "").strip()
-            if not note_text:
-                warnings.append("Skipped add_note without text")
-                continue
-            page_index = page_indexes[0] if page_indexes else 0
-            page = document[page_index]
-            note_box = pymupdf.Rect(
-                36,
-                max(36, page.rect.height - 108),
-                max(72, page.rect.width - 36),
-                max(72, page.rect.height - 36),
-            )
-            result = page.insert_textbox(
-                note_box,
-                note_text,
-                fontsize=9,
-                overlay=True,
-            )
-            if result < 0:
-                warnings.append(
-                    f"Could not fit note on page {page_index + 1}"
-                )
-            else:
-                applied += 1
-            continue
-
-        warnings.append(f"Skipped unsupported PDF edit action: {action}")
-
-    if applied == 0:
-        document.close()
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "No PDF edits could be applied. The requested text may not exist "
-                "as editable text, or the PDF may be image-only/scanned."
-            ),
-        )
-
-    output = document.tobytes(garbage=4, deflate=True)
-    document.close()
-    return output, applied, warnings
+    except PDFEditorError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return result.data, result.applied_edits, result.warnings
 
 
 class SeldruneGPTOperatorRequest(BaseModel):
@@ -614,22 +557,53 @@ def edit_seldrune_gpt_pdf(
     if payload.pdf.media_type.lower().strip() != "application/pdf":
         raise HTTPException(status_code=422, detail="PDF editor accepts one PDF file")
 
-    _images, input_files, _names = _model_attachments([payload.pdf])
+    try:
+        pdf_bytes = base64.b64decode(payload.pdf.data_base64, validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise HTTPException(status_code=422, detail="Invalid PDF encoding") from exc
+
+    try:
+        inspection = inspect_pdf(pdf_bytes, payload.password)
+        model_pdf_bytes = prepare_pdf_for_model(pdf_bytes, payload.password)
+    except PDFEditorError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    model_pdf = SeldruneGPTAttachment(
+        name=payload.pdf.name,
+        media_type="application/pdf",
+        data_base64=base64.b64encode(model_pdf_bytes).decode("ascii"),
+    )
+    _images, input_files, _names = _model_attachments([model_pdf])
+
+    profile = (
+        f"PDF profile: {inspection.page_count} pages; "
+        f"type={inspection.document_type}; "
+        f"native_text_pages={inspection.native_text_pages}; "
+        f"image_only_pages={inspection.image_only_pages}; "
+        f"form_fields={inspection.form_fields}."
+    )
     request = ModelRequest(
         provider=ModelProvider.OPENAI,
         model=settings.model_default,
         input_text=(
             "Edit the attached PDF according to this owner instruction:\n"
-            + payload.instruction
+            f"{payload.instruction}\n\n{profile}"
         ),
         instructions=(
-            "Create a deterministic PDF edit plan. Prefer replace_text for changing "
-            "existing visible text, redact_text for removing text, and add_note only "
-            "when new text should be added. For replace/redact, copy target_text exactly "
-            "from the PDF so a text search can find it. Page numbers are 1-based. "
-            "Do not invent edits beyond the owner's instruction."
+            "You are Seldrune's document-edit planner. Produce a precise deterministic "
+            "edit plan for the attached PDF. Preserve all content not requested for change. "
+            "Use page numbers starting at 1. Use replace_text or redact_text for native "
+            "text. Copy target_text exactly when possible. For scanned, image-only, or "
+            "visually positioned content where searchable text is unavailable, provide bbox "
+            "coordinates normalized to 0..1000 as [x0,y0,x1,y1] for the visible target. "
+            "Use fill_form for interactive PDF fields and copy the field name as closely as "
+            "possible. Use add_text only for new visible text and provide a bbox whenever "
+            "placement matters. Use rotate_page only when explicitly requested. Do not "
+            "invent unrelated edits. If there are repeated target strings, set occurrence "
+            "when the owner clearly identifies a specific one. Keep replacements concise "
+            "enough for the original region when possible."
         ),
-        max_output_tokens=min(settings.model_max_output_tokens, 4000),
+        max_output_tokens=min(settings.model_max_output_tokens, 7000),
         response_schema=_PDF_EDIT_SCHEMA,
         input_files=input_files,
     )
@@ -647,11 +621,14 @@ def edit_seldrune_gpt_pdf(
         ) from exc
 
     try:
-        pdf_bytes = base64.b64decode(payload.pdf.data_base64, validate=True)
-    except (ValueError, binascii.Error) as exc:
-        raise HTTPException(status_code=422, detail="Invalid PDF encoding") from exc
+        edit_result = apply_pdf_edit_plan(
+            pdf_bytes,
+            plan,
+            password=payload.password,
+        )
+    except PDFEditorError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    edited_pdf, applied_edits, warnings = _apply_pdf_edit_plan(pdf_bytes, plan)
     stem = payload.pdf.name.rsplit(".", 1)[0]
     safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip("-._") or "document"
     output_name = f"{safe_stem}-edited.pdf"
@@ -667,8 +644,12 @@ def edit_seldrune_gpt_pdf(
         details={
             "source_filename": payload.pdf.name,
             "output_filename": output_name,
-            "applied_edits": applied_edits,
-            "warnings": warnings[:20],
+            "document_type": edit_result.inspection.document_type,
+            "page_count": edit_result.inspection.page_count,
+            "applied_edits": edit_result.applied_edits,
+            "verified_operations": edit_result.verified_operations,
+            "verification_score": edit_result.verification_score,
+            "warnings": edit_result.warnings[:20],
             "model": result.model,
         },
     )
@@ -677,9 +658,7 @@ def edit_seldrune_gpt_pdf(
             organization_id=organization_id,
             user_id=current_user.id,
             role="user",
-            content=(
-                f"{payload.instruction}\n[PDF edit: {payload.pdf.name}]"
-            ),
+            content=f"{payload.instruction}\n[Advanced PDF edit: {payload.pdf.name}]",
         )
     )
     session.add(
@@ -688,7 +667,9 @@ def edit_seldrune_gpt_pdf(
             user_id=current_user.id,
             role="assistant",
             content=(
-                f"{summary} Created {output_name} with {applied_edits} applied edits."
+                f"{summary} Created {output_name} with "
+                f"{edit_result.applied_edits} applied edits and "
+                f"{edit_result.verification_score}% machine verification."
             ),
             model=result.model,
             response_id=result.response_id,
@@ -698,12 +679,20 @@ def edit_seldrune_gpt_pdf(
 
     return SeldruneGPTPDFEditResponse(
         filename=output_name,
-        data_base64=base64.b64encode(edited_pdf).decode("ascii"),
+        data_base64=base64.b64encode(edit_result.data).decode("ascii"),
         summary=summary,
-        applied_edits=applied_edits,
-        warnings=warnings,
+        applied_edits=edit_result.applied_edits,
+        warnings=edit_result.warnings,
         model=result.model,
         response_id=result.response_id,
+        document_type=edit_result.inspection.document_type,
+        page_count=edit_result.inspection.page_count,
+        native_text_pages=edit_result.inspection.native_text_pages,
+        image_only_pages=edit_result.inspection.image_only_pages,
+        form_fields=edit_result.inspection.form_fields,
+        verified_operations=edit_result.verified_operations,
+        verification_score=edit_result.verification_score,
+        verification_notes=edit_result.verification_notes,
     )
 
 
