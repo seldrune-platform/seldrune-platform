@@ -17,6 +17,31 @@ _TOOL_INTENTS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
     ),
     (
         "github",
+        "repository-info",
+        re.compile(r"\b(inspect|check|verify|show|get)\b.{0,80}\b(repository|repo)\b", re.I),
+    ),
+    (
+        "github",
+        "read-file",
+        re.compile(r"\b(read|inspect|show)\b.{0,80}\b(file|path)\b", re.I),
+    ),
+    (
+        "github",
+        "create-branch",
+        re.compile(r"\b(create|open)\b.{0,40}\bbranch\b", re.I),
+    ),
+    (
+        "github",
+        "get-pull-request",
+        re.compile(r"\b(check|inspect|show|get)\b.{0,80}\b(pull request|pr)\b", re.I),
+    ),
+    (
+        "github",
+        "workflow-run-status",
+        re.compile(r"\b(check|inspect|show|get)\b.{0,80}\bworkflow run\b", re.I),
+    ),
+    (
+        "github",
         "create-issue",
         re.compile(r"\b(create|open|file)\b.{0,80}\b(issue|bug)\b", re.I),
     ),
@@ -61,8 +86,16 @@ def required_external_tool_actions(order: str) -> list[tuple[str, str]]:
             located.append((match.start(), provider, action_name))
 
     deploy_match = re.search(r"\b(deploy|redeploy)\b", order, re.I)
+    deploy_status_match = re.search(
+        r"\b(check|verify|inspect|show|get)\b.{0,80}\bdeploy(?:ment)?(?:\s+status)?\b"
+        r"|\bdeploy(?:ment)?\s+status\b",
+        order,
+        re.I,
+    )
     github_workflow = re.search(r"\b(workflow|github action)\b", order, re.I)
-    if deploy_match is not None and github_workflow is None:
+    if deploy_status_match is not None and github_workflow is None:
+        located.append((deploy_status_match.start(), "render", "deploy-status"))
+    elif deploy_match is not None and github_workflow is None:
         located.append((deploy_match.start(), "render", "deploy-service"))
 
     deduped: dict[tuple[str, str], int] = {}
@@ -152,6 +185,39 @@ def _branch_pair(order: str) -> tuple[str | None, str | None]:
     return (head_match.group(1), None) if head_match is not None else (None, None)
 
 
+def _repository_path(order: str) -> str | None:
+    quoted = _quoted_text(order)
+    if quoted and ("/" in quoted or "." in quoted):
+        return quoted
+    match = re.search(
+        r"\b(?:file|path)\s+([A-Za-z0-9._/-]+)",
+        order,
+        re.I,
+    )
+    return match.group(1) if match is not None else None
+
+
+def _branch_name(order: str) -> str | None:
+    match = re.search(
+        r"\b(?:create|open)\s+(?:a\s+)?branch\s+([A-Za-z0-9._/-]+)",
+        order,
+        re.I,
+    )
+    return match.group(1) if match is not None else None
+
+
+def _deploy_id(order: str) -> str | None:
+    match = re.search(r"\b(dep-[A-Za-z0-9_-]+)\b", order, re.I)
+    if match is not None:
+        return match.group(1)
+    match = re.search(
+        r"\bdeploy(?:ment)?(?:\s+id)?\s+([A-Za-z0-9_-]{6,})\b",
+        order,
+        re.I,
+    )
+    return match.group(1) if match is not None else None
+
+
 def _workflow_id(order: str) -> str | None:
     file_match = re.search(r"\b([A-Za-z0-9._/-]+\.ya?ml)\b", order, re.I)
     if file_match is not None:
@@ -183,8 +249,31 @@ def _input_for_action(
     if provider == "render" and action_name == "deploy-service":
         return {}
 
+    if provider == "render" and action_name == "deploy-status":
+        deploy_id = _deploy_id(order)
+        return {"deploy_id": deploy_id} if deploy_id else {}
+
     if provider != "github":
         return {}
+
+    if action_name == "repository-info":
+        return {}
+
+    if action_name == "read-file":
+        path = _repository_path(order)
+        return {"path": path} if path else {}
+
+    if action_name == "create-branch":
+        branch = _branch_name(order)
+        return {"branch": branch} if branch else {}
+
+    if action_name == "get-pull-request":
+        number = _first_number(order, r"pr|pull request")
+        return {"pull_number": number} if number is not None else {}
+
+    if action_name == "workflow-run-status":
+        run_id = _first_number(order, r"workflow run|run")
+        return {"run_id": run_id} if run_id is not None else {}
 
     if action_name == "merge-pull-request":
         number = _first_number(order, r"pr|pull request")
@@ -240,7 +329,8 @@ def _missing_required_fields(
 _DIRECT_ACTION_ORDER = re.compile(
     r"^\s*(?:"
     r"merge\b|deploy\b|redeploy\b|send\b|email\b|mail\b|notify\b|"
-    r"create\s+(?:an?\s+)?(?:issue|bug|pull request|pr)\b|"
+    r"check\b|inspect\b|show\b|read\b|verify\b|"
+    r"create\s+(?:an?\s+)?(?:issue|bug|pull request|pr|branch)\b|"
     r"open\s+(?:an?\s+)?(?:issue|bug|pull request|pr)\b|"
     r"comment\b|reply\b|trigger\b|dispatch\b|run\s+(?:the\s+)?workflow\b"
     r")",
