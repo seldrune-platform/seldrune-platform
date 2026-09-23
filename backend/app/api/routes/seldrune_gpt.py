@@ -37,6 +37,7 @@ from backend.app.services.pdf_editor import (
     assess_pdf_edit_candidate,
     inspect_pdf,
     prepare_pdf_for_model,
+    render_pdf_pages_for_model,
     validate_pdf_edit_plan,
 )
 from backend.app.services.tool_bootstrap import (
@@ -599,17 +600,23 @@ def edit_seldrune_gpt_pdf(
     except (ValueError, binascii.Error) as exc:
         raise HTTPException(status_code=422, detail="Invalid PDF encoding") from exc
 
-    try:
-        inspection = inspect_pdf(pdf_bytes, payload.password)
-        model_pdf_bytes = prepare_pdf_for_model(pdf_bytes, payload.password)
-    except PDFEditorError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
     if len(pdf_bytes) > 25 * 1024 * 1024:
         raise HTTPException(
             status_code=413,
             detail="Advanced PDF editor supports PDFs up to 25 MB",
         )
+
+    try:
+        inspection = inspect_pdf(pdf_bytes, payload.password)
+        model_pdf_bytes = prepare_pdf_for_model(pdf_bytes, payload.password)
+        initial_page_renders = render_pdf_pages_for_model(
+            pdf_bytes,
+            payload.password,
+            max_pages=8,
+        )
+    except PDFEditorError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     input_files = (
         ModelFileInput(
             filename=payload.pdf.name,
@@ -617,6 +624,17 @@ def edit_seldrune_gpt_pdf(
             data_base64=base64.b64encode(model_pdf_bytes).decode("ascii"),
         ),
     )
+    initial_images = tuple(
+        ModelImageInput(
+            media_type=render.media_type,
+            data_base64=base64.b64encode(render.data).decode("ascii"),
+            name=f"pdf-page-{render.page_number}.jpg",
+        )
+        for render in initial_page_renders
+    )
+    initial_visual_pages = ", ".join(
+        str(render.page_number) for render in initial_page_renders
+    ) or "none"
 
     profile = (
         f"PDF profile: {inspection.page_count} pages; "
@@ -630,7 +648,10 @@ def edit_seldrune_gpt_pdf(
         model=settings.model_default,
         input_text=(
             "Edit the attached PDF according to this owner instruction:\n"
-            f"{payload.instruction}\n\n{profile}"
+            f"{payload.instruction}\n\n{profile}\n"
+            "Rendered ORIGINAL page previews are also attached after this text in page "
+            f"order: {initial_visual_pages}. Use those previews whenever visible content "
+            "is missing from the PDF text layer."
         ),
         instructions=(
             "You are Seldrune's autonomous AI PDF editor. Follow the owner's requested "
@@ -658,6 +679,7 @@ def edit_seldrune_gpt_pdf(
         ),
         max_output_tokens=max(settings.model_max_output_tokens, 6000),
         response_schema=_PDF_EDIT_SCHEMA,
+        input_images=initial_images,
         input_files=input_files,
     )
     try:
@@ -764,6 +786,40 @@ def edit_seldrune_gpt_pdf(
             if last_diagnostics
             else "candidate can be improved"
         )
+        referenced_pages = sorted(
+            {
+                int(operation.get("page"))
+                for operation in candidate_plan.get("operations", [])
+                if isinstance(operation, dict)
+                and isinstance(operation.get("page"), int)
+                and 1 <= int(operation.get("page")) <= inspection.page_count
+            }
+        )
+        if not referenced_pages:
+            referenced_pages = [
+                render.page_number for render in initial_page_renders
+            ]
+        try:
+            retry_page_renders = render_pdf_pages_for_model(
+                pdf_bytes,
+                payload.password,
+                page_numbers=referenced_pages,
+                max_pages=10,
+            )
+        except PDFEditorError:
+            retry_page_renders = initial_page_renders
+        retry_images = tuple(
+            ModelImageInput(
+                media_type=render.media_type,
+                data_base64=base64.b64encode(render.data).decode("ascii"),
+                name=f"pdf-page-{render.page_number}.jpg",
+            )
+            for render in retry_page_renders
+        )
+        retry_visual_pages = ", ".join(
+            str(render.page_number) for render in retry_page_renders
+        ) or "none"
+
         retry_request = ModelRequest(
             provider=ModelProvider.OPENAI,
             model=settings.model_default,
@@ -772,7 +828,11 @@ def edit_seldrune_gpt_pdf(
                 "Start from the untouched original; do not layer on a previous candidate.\n"
                 f"Owner instruction: {payload.instruction}\n\n"
                 f"Previous candidate diagnostics:\n- {rejection_text}\n\n"
-                f"{profile}"
+                f"{profile}\n"
+                "Rendered ORIGINAL page previews are attached after this text in page "
+                f"order: {retry_visual_pages}. For every missing/search-invisible target, "
+                "locate it visually in these previews and supply a normalized bbox "
+                "[x0,y0,x1,y1] on the 0..1000 coordinate system."
             ),
             instructions=(
                 "Re-plan the edit from the untouched original PDF. Every requested change "
@@ -791,6 +851,7 @@ def edit_seldrune_gpt_pdf(
             ),
             max_output_tokens=max(settings.model_max_output_tokens, 6000),
             response_schema=_PDF_EDIT_SCHEMA,
+            input_images=retry_images,
             input_files=input_files,
         )
         try:
