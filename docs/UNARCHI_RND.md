@@ -441,3 +441,69 @@ The measurable target is intervention-aware self/world reasoning: when an
 outcome changes because Seldrune changes its own action or internal policy, the
 world model should distinguish that intervention from an external environmental
 cause.
+
+
+## v0.9 intervention-aware self/world integration checkpoint
+
+UNARCHI v0.9 integrates the predictive self-model with the causal world model
+through controlled self-intervention trials.
+
+Causal hypotheses now carry an explicit scope:
+
+- external: the proposed cause is outside Seldrune;
+- self: the proposed cause is Seldrune's own action or policy;
+- mixed: both internal and external causes are involved.
+
+A self-intervention trial records:
+
+- Seldrune's changed action;
+- the task context;
+- an external environment signature;
+- the baseline outcome before the intervention;
+- what each competing self/external hypothesis predicts;
+- risk and reversibility;
+- an optional link to an earlier self-prediction;
+- the observed outcome;
+- whether the environment remained constant;
+- the resulting causal attribution.
+
+The research kernel permits only reversible, zero-cost, bounded-risk
+self-interventions. It does not execute the action itself.
+
+The evidence rule is strict:
+
+- if the environment signature changed during the trial, the observation is
+  marked confounded and hypothesis confidence is frozen;
+- if the environment stayed constant, only the observed outcome can update
+  the competing causal hypotheses;
+- if the outcome remains effectively equal to baseline, the trial records
+  no detectable self effect;
+- if a changed outcome strongly matches a self-scoped prediction, the trial
+  can attribute the evidence to the self intervention;
+- repeated observation of the same trial is rejected so evidence cannot be
+  double counted.
+
+Intervention trials, hypothesis scopes, confidence updates and attribution
+survive export/restore. The metacognitive narrative can reconstruct the
+self/world attribution from the actual intervention record, linked
+self-prediction and causal hypotheses.
+
+The benchmark now requires:
+
+self hypothesis + external hypothesis -> controlled self intervention ->
+constant environment -> changed observed outcome -> confidence revision ->
+self/world causal attribution -> evidence-grounded explanation.
+
+This is functional intervention-aware causal reasoning. It does not establish
+subjective agency, free will, self-awareness, or phenomenal consciousness.
+
+## Next checkpoint: v0.10 recurrent global workspace
+
+The next research step should connect internal state, self-model, world model,
+prospective intentions, conflicts and intervention evidence through a bounded
+recurrent workspace. Important information should be selected, broadcast across
+modules, reconsidered after prediction error, and then retired when resolved.
+
+The measurable target is cross-module causal integration: ablating workspace
+broadcast or recurrence should measurably reduce the system's ability to combine
+memory, self-state, world evidence and goals into one coherent decision cycle.
