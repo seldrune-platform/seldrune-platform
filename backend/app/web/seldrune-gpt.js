@@ -329,6 +329,9 @@
       const fidelity = Number.isFinite(result.visual_fidelity_score)
         ? `${result.visual_fidelity_score}% original-look fidelity`
         : 'original-look fidelity not machine-verifiable for this PDF type';
+      const layout = Number.isFinite(result.layout_integrity_score)
+        ? `${result.layout_integrity_score}% layout integrity`
+        : 'layout integrity unavailable';
       const profile = [
         result.document_type || 'PDF',
         `${result.page_count || 0} pages`,
@@ -338,17 +341,17 @@
         result.form_fields
           ? `${result.form_fields} form fields`
           : null,
-        result.repair_passes
-          ? `${result.repair_passes} automatic repair pass${result.repair_passes === 1 ? '' : 'es'}`
+        result.reconstruction_attempts > 1
+          ? `${result.reconstruction_attempts} clean reconstruction attempts`
           : null,
       ].filter(Boolean).join(' · ');
       addDownloadMessage(
         'Seldrune GPT · AI PDF Editor',
-        `${result.summary || 'PDF edit completed.'} Applied edits: ${result.applied_edits || 0}. ${verification}. ${fidelity}. ${profile}.${warningText}`,
+        `${result.summary || 'PDF edit completed.'} Applied edits: ${result.applied_edits || 0}. ${verification}. ${fidelity}. ${layout}. ${profile}.${warningText}`,
         result.filename,
         result.data_base64,
       );
-      status.textContent = `Edited PDF ready · ${verification} · ${fidelity} · ${result.filename}`;
+      status.textContent = `Edited PDF ready · ${verification} · ${fidelity} · ${layout} · ${result.filename}`;
     } catch (error) {
       addMessage('System', `AI PDF edit failed: ${error.message}`);
       status.textContent =
