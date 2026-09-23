@@ -427,8 +427,12 @@ def apply_advanced_pdf_edit_plan(
     # Re-open the produced file and verify the operations against the actual output.
     verified = 0
     output_document = _open_document(output)
-    for item, operation in zip(verification, operations, strict=False):
-        if not isinstance(operation, dict) or not item.get("verified"):
+    for item in verification:
+        operation_index = int(item.get("operation") or 0)
+        if not (1 <= operation_index <= len(operations)) or not item.get("verified"):
+            continue
+        operation = operations[operation_index - 1]
+        if not isinstance(operation, dict):
             continue
         action = item["action"]
         indexes = _page_indexes(output_document, operation.get("page"))
