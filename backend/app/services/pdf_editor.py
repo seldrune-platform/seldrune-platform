@@ -684,6 +684,40 @@ def _fit_textbox(
     return False
 
 
+def _expected_rendered_text_width(
+    style: PDFTextStyle,
+    text: str,
+) -> float:
+    document = pymupdf.open()
+    page = document.new_page(width=600, height=220)
+    fontname = _builtin_font_name(style.font_name)
+    if style.font_buffer:
+        try:
+            page.insert_font(fontname="SELDTEST", fontbuffer=style.font_buffer)
+            fontname = "SELDTEST"
+        except Exception:
+            fontname = _builtin_font_name(style.font_name)
+    try:
+        page.insert_text(
+            pymupdf.Point(100, 120),
+            text,
+            fontname=fontname,
+            fontsize=style.font_size,
+            color=style.color,
+            rotate=style.rotation,
+            overlay=True,
+        )
+        matches = list(page.search_for(text))
+        if matches:
+            width = float(matches[0].width)
+            document.close()
+            return width
+    except Exception:
+        pass
+    document.close()
+    return _font_text_length(style, text)
+
+
 def _font_family_tokens(value: str) -> set[str]:
     key = _font_key(value)
     tokens: set[str] = set()
@@ -746,9 +780,20 @@ def _replacement_visual_fidelity(
     if best_span is None:
         return 0, "replacement span could not be inspected"
 
-    expected_width = _font_text_length(style, replacement_text)
-    width_tolerance = max(1.2, expected_width * 0.035)
-    width_match = abs(target.width - expected_width) <= width_tolerance
+    expected_advance = _font_text_length(style, replacement_text)
+    expected_visual_width = _expected_rendered_text_width(
+        style,
+        replacement_text,
+    )
+    width_tolerance = max(
+        1.25,
+        style.font_size * 0.08,
+        expected_visual_width * 0.035,
+    )
+    width_match = (
+        abs(target.width - expected_visual_width)
+        <= width_tolerance
+    )
 
     output_font = str(best_span.get("font") or "")
     source_key = _font_key(style.font_name)
@@ -814,7 +859,7 @@ def _replacement_visual_fidelity(
             1.0,
             style.font_size * 0.06,
         )
-        expected_origin = _style_preserving_origin(style, expected_width)
+        expected_origin = _style_preserving_origin(style, expected_advance)
         anchor_match = abs(output_x - expected_origin.x) <= max(
             1.2,
             style.font_size * 0.07,
