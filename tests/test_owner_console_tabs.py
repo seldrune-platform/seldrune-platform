@@ -28,6 +28,7 @@ def test_gpt_operator_remains_truth_gated_and_multimodal():
     assert 'id="seldrune-gpt-files"' in html
     assert 'id="seldrune-gpt-dropzone"' in html
     assert 'id="seldrune-gpt-attachments"' in html
+    assert 'id="seldrune-gpt-mode"' in html
 
 
 def test_portal_controller_defines_owner_workspaces_and_fixed_home():
@@ -102,3 +103,19 @@ def test_every_owner_workspace_uses_portal_visual_system():
         assert selector in css
     assert "FULL WORKSPACE REDESIGN" in css
     assert ".owner-back-button" in css
+
+
+def test_gpt_pdf_editor_is_single_ai_prompt_flow():
+    html = (WEB / "index.html").read_text()
+    script = (WEB / "seldrune-gpt.js").read_text()
+    styles = (WEB / "seldrune-gpt-studio.css").read_text()
+
+    assert 'id="seldrune-gpt-pdf-edit"' not in html
+    assert "AI PDF Editor" in html
+    assert "no coordinates or manual edit tools" in html
+    assert "async function runAiPdfEdit" in script
+    assert "pdfAttachments.length === 1 && attachments.length === 1" in script
+    assert "await runAiPdfEdit(message, pdfAttachments[0])" in script
+    assert "AI Edit PDF" in script
+    assert ".gpt-mode-pill.active" in styles
+    assert ".gpt-dropzone.ai-pdf-mode" in styles
