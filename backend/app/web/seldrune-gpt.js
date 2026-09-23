@@ -9,6 +9,7 @@
   const newConversation = document.querySelector('#seldrune-gpt-new');
   const chatButton = document.querySelector('#seldrune-gpt-chat');
   const executeButton = document.querySelector('#seldrune-gpt-execute');
+  const pdfEditButton = document.querySelector('#seldrune-gpt-pdf-edit');
   const attachButton = document.querySelector('#seldrune-gpt-attach');
   const fileInput = document.querySelector('#seldrune-gpt-files');
   const dropzone = document.querySelector('#seldrune-gpt-dropzone');
@@ -69,10 +70,35 @@
     });
   }
 
+  function addDownloadMessage(label, text, filename, dataBase64) {
+    if (thread.querySelector('.empty')) thread.replaceChildren();
+    const card = document.createElement('article');
+    card.className = 'command-card';
+    card.dataset.role = 'assistant';
+    const body = document.createElement('div');
+    const heading = document.createElement('strong');
+    heading.textContent = label;
+    const message = document.createElement('p');
+    message.textContent = text;
+    const download = document.createElement('a');
+    download.className = 'ghost';
+    download.textContent = `Download ${filename}`;
+    download.download = filename;
+    download.href = `data:application/pdf;base64,${dataBase64}`;
+    body.append(heading, message, download);
+    card.append(body);
+    thread.append(card);
+    card.scrollIntoView({
+      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'nearest',
+    });
+  }
+
   function setBusy(busy, message) {
     input.disabled = busy;
     chatButton.disabled = busy;
     executeButton.disabled = busy;
+    if (pdfEditButton) pdfEditButton.disabled = busy;
     attachButton.disabled = busy;
     fileInput.disabled = busy;
     if (message) status.textContent = message;
@@ -237,6 +263,56 @@
       }),
     });
   }
+
+  pdfEditButton?.addEventListener('click', async () => {
+    const instruction = input.value.trim();
+    if (!instruction) {
+      status.textContent = 'Describe the PDF edit you want first.';
+      input.focus();
+      return;
+    }
+    const pdfAttachments = attachments.filter(item => item.media_type === 'application/pdf');
+    if (pdfAttachments.length !== 1 || attachments.length !== 1) {
+      status.textContent = 'Edit PDF requires exactly one attached PDF.';
+      return;
+    }
+
+    const pdf = pdfAttachments[0];
+    setBusy(true, 'Seldrune GPT is editing the PDF…');
+    addMessage('You', `${instruction}\nPDF edit: ${pdf.name}`, 'user');
+    try {
+      const result = await api('/gpt/pdf/edit', {
+        method: 'POST',
+        body: JSON.stringify({
+          instruction,
+          pdf: {
+            name: pdf.name,
+            media_type: pdf.media_type,
+            data_base64: pdf.data_base64,
+          },
+        }),
+      });
+      clearAttachments();
+      input.value = '';
+      model.textContent = result.model || 'OpenAI';
+      const warningText = (result.warnings || []).length
+        ? ` Warnings: ${result.warnings.join('; ')}`
+        : '';
+      addDownloadMessage(
+        'Seldrune GPT',
+        `${result.summary || 'PDF edit completed.'} Applied edits: ${result.applied_edits || 0}.${warningText}`,
+        result.filename,
+        result.data_base64,
+      );
+      status.textContent = `PDF ready · ${result.applied_edits || 0} edits · ${result.filename}`;
+    } catch (error) {
+      addMessage('System', `PDF edit failed: ${error.message}`);
+      status.textContent = 'PDF edit failed. The original attachment is still available.';
+    } finally {
+      setBusy(false);
+      input.focus();
+    }
+  });
 
   executeButton?.addEventListener('click', async () => {
     const order = input.value.trim();
