@@ -48,9 +48,25 @@ class ModelGateway:
         if not request.model or request.model.startswith("mock-"):
             raise ModelGatewayError("An OpenAI model must be configured")
 
+        model_input: Any = request.input_text
+        if request.input_images:
+            content: list[dict[str, Any]] = [
+                {"type": "input_text", "text": request.input_text}
+            ]
+            for image in request.input_images:
+                content.append(
+                    {
+                        "type": "input_image",
+                        "image_url": (
+                            f"data:{image.media_type};base64,{image.data_base64}"
+                        ),
+                    }
+                )
+            model_input = [{"role": "user", "content": content}]
+
         response_args: dict[str, Any] = {
             "model": request.model,
-            "input": request.input_text,
+            "input": model_input,
             "instructions": request.instructions,
             "max_output_tokens": request.max_output_tokens,
         }
