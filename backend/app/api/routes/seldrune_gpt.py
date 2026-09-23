@@ -558,7 +558,9 @@ def seldrune_gpt(
         reasoning_effort=route.reasoning_effort,
         prompt_cache_key=f"seldrune:{organization_id}:gpt",
         max_estimated_cost_usd=route.request_budget_usd,
-        exact_token_preflight=True,
+        exact_token_preflight=(
+            bool(input_images or input_files) or len(input_text) > 8000
+        ),
     )
     try:
         result, _latency_ms = ModelGateway(settings).generate(request)
