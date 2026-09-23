@@ -22,6 +22,13 @@ class ModelUsage:
 
 
 @dataclass(frozen=True)
+class ModelImageInput:
+    media_type: str
+    data_base64: str
+    name: str | None = None
+
+
+@dataclass(frozen=True)
 class ModelRequest:
     provider: ModelProvider
     model: str
@@ -30,6 +37,7 @@ class ModelRequest:
     max_output_tokens: int | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     response_schema: dict[str, Any] | None = None
+    input_images: tuple[ModelImageInput, ...] = ()
 
 
 @dataclass(frozen=True)
