@@ -172,7 +172,7 @@ def _require_owner_role(membership: Membership) -> None:
 class SeldruneGPTAttachment(BaseModel):
     name: str = Field(min_length=1, max_length=180)
     media_type: str = Field(min_length=3, max_length=160)
-    data_base64: str = Field(min_length=1, max_length=12_000_000)
+    data_base64: str = Field(min_length=1, max_length=40_000_000)
 
 
 class SeldruneGPTRequest(BaseModel):
@@ -568,12 +568,18 @@ def edit_seldrune_gpt_pdf(
     except PDFEditorError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    model_pdf = SeldruneGPTAttachment(
-        name=payload.pdf.name,
-        media_type="application/pdf",
-        data_base64=base64.b64encode(model_pdf_bytes).decode("ascii"),
+    if len(pdf_bytes) > 25 * 1024 * 1024:
+        raise HTTPException(
+            status_code=413,
+            detail="Advanced PDF editor supports PDFs up to 25 MB",
+        )
+    input_files = (
+        ModelFileInput(
+            filename=payload.pdf.name,
+            media_type="application/pdf",
+            data_base64=base64.b64encode(model_pdf_bytes).decode("ascii"),
+        ),
     )
-    _images, input_files, _names = _model_attachments([model_pdf])
 
     profile = (
         f"PDF profile: {inspection.page_count} pages; "
@@ -629,6 +635,62 @@ def edit_seldrune_gpt_pdf(
     except PDFEditorError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    repair_passes = 0
+    unresolved = [
+        warning
+        for warning in edit_result.warnings
+        if "target was not found" in warning
+        or "form field" in warning
+        or "did not fit cleanly" in warning
+    ]
+    if unresolved:
+        repair_file = ModelFileInput(
+            filename=f"repair-{payload.pdf.name}",
+            media_type="application/pdf",
+            data_base64=base64.b64encode(edit_result.data).decode("ascii"),
+        )
+        repair_request = ModelRequest(
+            provider=ModelProvider.OPENAI,
+            model=settings.model_default,
+            input_text=(
+                "Repair only the unresolved PDF edits from the original owner instruction.\n"
+                f"Owner instruction: {payload.instruction}\n"
+                "Unresolved results:\n- " + "\n- ".join(unresolved[:20])
+            ),
+            instructions=(
+                "Return only corrective operations for edits that remain unresolved. "
+                "Inspect the current PDF visually. For scanned or image text, use normalized "
+                "bbox coordinates 0..1000. Do not repeat edits that already succeeded. "
+                "Do not change unrelated content."
+            ),
+            max_output_tokens=min(settings.model_max_output_tokens, 5000),
+            response_schema=_PDF_EDIT_SCHEMA,
+            input_files=(repair_file,),
+        )
+        try:
+            repair_model_result, _repair_latency = ModelGateway(settings).generate(
+                repair_request
+            )
+            repair_plan = json.loads(repair_model_result.output_text)
+            repair_result = apply_pdf_edit_plan(edit_result.data, repair_plan)
+        except (ModelGatewayError, json.JSONDecodeError, PDFEditorError):
+            repair_result = None
+
+        if repair_result is not None:
+            repair_passes = 1
+            edit_result.data = repair_result.data
+            edit_result.applied_edits += repair_result.applied_edits
+            edit_result.verified_operations += repair_result.verified_operations
+            edit_result.verification_notes.extend(repair_result.verification_notes)
+            repaired_warning_set = {
+                item
+                for item in repair_result.warnings
+                if item not in unresolved
+            }
+            edit_result.warnings = [
+                item for item in edit_result.warnings if item not in unresolved
+            ] + sorted(repaired_warning_set)
+
     stem = payload.pdf.name.rsplit(".", 1)[0]
     safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip("-._") or "document"
     output_name = f"{safe_stem}-edited.pdf"
@@ -649,6 +711,7 @@ def edit_seldrune_gpt_pdf(
             "applied_edits": edit_result.applied_edits,
             "verified_operations": edit_result.verified_operations,
             "verification_score": edit_result.verification_score,
+            "repair_passes": repair_passes,
             "warnings": edit_result.warnings[:20],
             "model": result.model,
         },
@@ -669,7 +732,8 @@ def edit_seldrune_gpt_pdf(
             content=(
                 f"{summary} Created {output_name} with "
                 f"{edit_result.applied_edits} applied edits and "
-                f"{edit_result.verification_score}% machine verification."
+                f"{edit_result.verification_score}% machine verification"
+                + (f" after {repair_passes} repair pass." if repair_passes else ".")
             ),
             model=result.model,
             response_id=result.response_id,
