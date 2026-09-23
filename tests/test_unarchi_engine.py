@@ -167,7 +167,7 @@ def test_snapshot_never_claims_phenomenal_consciousness() -> None:
     snapshot = engine.snapshot()
 
     assert snapshot["claims_phenomenal_consciousness"] is False
-    assert snapshot["version"] == "unarchi-v0.8"
+    assert snapshot["version"] == "unarchi-v0.9"
 
 
 def test_export_restore_preserves_identity_state_and_memory() -> None:
@@ -1194,3 +1194,284 @@ def test_world_model_cannot_double_count_same_experiment_evidence() -> None:
         item.confidence for item in engine.causal_hypotheses
     )
     assert after == before
+
+
+def test_self_intervention_attributes_controlled_change_to_self_action() -> None:
+    engine = UnarchiEngine()
+    self_hypothesis = engine.add_causal_hypothesis(
+        statement="Strict validation changes the outcome.",
+        predictions={
+            "intervention:enable strict validation":
+                "strict validation blocks invalid output"
+        },
+        confidence=0.5,
+        scope="self",
+    )
+    external_hypothesis = engine.add_causal_hypothesis(
+        statement="External data quality alone determines the outcome.",
+        predictions={
+            "intervention:enable strict validation":
+                "external data quality remains unchanged"
+        },
+        confidence=0.5,
+        scope="external",
+    )
+    prediction = engine.predict_action(
+        action="enable strict validation",
+        expected_success=0.7,
+        expected_information_gain=0.8,
+        risk=0.1,
+    )
+    trial = engine.plan_self_intervention(
+        action="enable strict validation",
+        context="controlled local validation test",
+        environment_signature="dataset:v1",
+        baseline_outcome="invalid output passes",
+        risk=0.1,
+        linked_prediction_id=prediction.id,
+    )
+
+    observed = engine.observe_self_intervention(
+        trial.id,
+        observed_outcome="strict validation blocks invalid output",
+        environment_signature="dataset:v1",
+    )
+
+    assert observed.status == "observed"
+    assert observed.environment_held_constant is True
+    assert observed.attribution == "self_intervention"
+    assert observed.evidence_strength is not None
+    assert observed.evidence_strength > 0.5
+    assert self_hypothesis.supporting_evidence == 1
+    assert external_hypothesis.contradicting_evidence == 1
+    assert self_hypothesis.confidence > external_hypothesis.confidence
+
+
+def test_self_intervention_confounded_environment_freezes_confidence() -> None:
+    engine = UnarchiEngine()
+    self_hypothesis = engine.add_causal_hypothesis(
+        statement="Local policy causes the change.",
+        predictions={"intervention:change local policy": "target output changes"},
+        confidence=0.5,
+        scope="self",
+    )
+    external_hypothesis = engine.add_causal_hypothesis(
+        statement="External input causes the change.",
+        predictions={
+            "intervention:change local policy":
+                "target output remains unchanged"
+        },
+        confidence=0.5,
+        scope="external",
+    )
+    trial = engine.plan_self_intervention(
+        action="change local policy",
+        context="controlled policy test",
+        environment_signature="input:v1",
+        baseline_outcome="target output unchanged",
+        risk=0.1,
+    )
+    before = (self_hypothesis.confidence, external_hypothesis.confidence)
+
+    observed = engine.observe_self_intervention(
+        trial.id,
+        observed_outcome="target output changes",
+        environment_signature="input:v2",
+    )
+
+    assert observed.status == "confounded"
+    assert observed.environment_held_constant is False
+    assert observed.attribution == "confounded_environment_change"
+    assert (self_hypothesis.confidence, external_hypothesis.confidence) == before
+    assert observed.confidence_updates == ()
+
+
+def test_no_change_after_self_intervention_supports_no_detectable_effect() -> None:
+    engine = UnarchiEngine()
+    self_hypothesis = engine.add_causal_hypothesis(
+        statement="Strict validation changes the outcome.",
+        predictions={
+            "intervention:enable strict validation":
+                "strict validation blocks invalid output"
+        },
+        confidence=0.5,
+        scope="self",
+    )
+    external_hypothesis = engine.add_causal_hypothesis(
+        statement="External mechanism dominates the outcome.",
+        predictions={
+            "intervention:enable strict validation": "invalid output passes"
+        },
+        confidence=0.5,
+        scope="external",
+    )
+    trial = engine.plan_self_intervention(
+        action="enable strict validation",
+        context="controlled local validation test",
+        environment_signature="dataset:v1",
+        baseline_outcome="invalid output passes",
+        risk=0.1,
+    )
+
+    observed = engine.observe_self_intervention(
+        trial.id,
+        observed_outcome="invalid output passes",
+        environment_signature="dataset:v1",
+    )
+
+    assert observed.attribution == "no_detectable_self_effect"
+    assert external_hypothesis.confidence > self_hypothesis.confidence
+
+
+def test_self_intervention_rejects_unbounded_or_non_discriminating_trials() -> None:
+    engine = UnarchiEngine()
+    engine.add_causal_hypothesis(
+        statement="Self cause.",
+        predictions={"intervention:test action": "same evidence"},
+        scope="self",
+    )
+    engine.add_causal_hypothesis(
+        statement="External cause.",
+        predictions={"intervention:test action": "same evidence"},
+        scope="external",
+    )
+
+    try:
+        engine.plan_self_intervention(
+            action="test action",
+            context="test",
+            environment_signature="env:v1",
+            baseline_outcome="baseline",
+            risk=0.1,
+        )
+    except ValueError as exc:
+        assert "must discriminate hypotheses" in str(exc)
+    else:
+        raise AssertionError("non-discriminating intervention must be rejected")
+
+    try:
+        engine.plan_self_intervention(
+            action="test action",
+            context="test",
+            environment_signature="env:v1",
+            baseline_outcome="baseline",
+            risk=0.9,
+        )
+    except ValueError as exc:
+        assert "risk exceeds research bound" in str(exc)
+    else:
+        raise AssertionError("high-risk intervention must be rejected")
+
+
+def test_self_intervention_cannot_double_count_observation() -> None:
+    engine = UnarchiEngine()
+    engine.add_causal_hypothesis(
+        statement="Self cause.",
+        predictions={"intervention:test action": "output alpha"},
+        scope="self",
+    )
+    engine.add_causal_hypothesis(
+        statement="External cause.",
+        predictions={"intervention:test action": "output beta"},
+        scope="external",
+    )
+    trial = engine.plan_self_intervention(
+        action="test action",
+        context="test",
+        environment_signature="env:v1",
+        baseline_outcome="baseline output",
+        risk=0.1,
+    )
+    engine.observe_self_intervention(
+        trial.id,
+        observed_outcome="output alpha",
+        environment_signature="env:v1",
+    )
+    before = tuple(item.confidence for item in engine.causal_hypotheses)
+
+    try:
+        engine.observe_self_intervention(
+            trial.id,
+            observed_outcome="output alpha",
+            environment_signature="env:v1",
+        )
+    except ValueError as exc:
+        assert "already been observed" in str(exc)
+    else:
+        raise AssertionError("self intervention evidence must not be counted twice")
+
+    assert tuple(item.confidence for item in engine.causal_hypotheses) == before
+
+
+def test_intervention_narrative_links_self_prediction_and_world_hypotheses() -> None:
+    engine = UnarchiEngine()
+    engine.add_causal_hypothesis(
+        statement="Self policy changes the result.",
+        predictions={"intervention:change policy": "result alpha"},
+        scope="self",
+    )
+    engine.add_causal_hypothesis(
+        statement="External cause dominates.",
+        predictions={"intervention:change policy": "result beta"},
+        scope="external",
+    )
+    prediction = engine.predict_action(
+        action="change policy",
+        expected_success=0.6,
+        expected_information_gain=0.7,
+        risk=0.1,
+    )
+    trial = engine.plan_self_intervention(
+        action="change policy",
+        context="controlled local test",
+        environment_signature="env:v1",
+        baseline_outcome="result beta",
+        risk=0.1,
+        linked_prediction_id=prediction.id,
+    )
+    engine.observe_self_intervention(
+        trial.id,
+        observed_outcome="result alpha",
+        environment_signature="env:v1",
+    )
+
+    narrative = engine.build_metacognitive_narrative("intervention")
+
+    assert "intervention:0" in narrative.evidence_refs
+    assert "prediction:0" in narrative.evidence_refs
+    assert "hypothesis:0" in narrative.evidence_refs
+    assert "hypothesis:1" in narrative.evidence_refs
+    assert narrative.unsupported_claims == 0
+
+
+def test_export_restore_preserves_intervention_aware_self_world_model() -> None:
+    engine = UnarchiEngine()
+    engine.add_causal_hypothesis(
+        statement="Self cause.",
+        predictions={"intervention:test action": "output alpha"},
+        scope="self",
+    )
+    engine.add_causal_hypothesis(
+        statement="External cause.",
+        predictions={"intervention:test action": "output beta"},
+        scope="external",
+    )
+    trial = engine.plan_self_intervention(
+        action="test action",
+        context="controlled test",
+        environment_signature="env:v1",
+        baseline_outcome="output beta",
+        risk=0.1,
+    )
+    engine.observe_self_intervention(
+        trial.id,
+        observed_outcome="output alpha",
+        environment_signature="env:v1",
+    )
+
+    restored = UnarchiEngine.from_export(engine.export_state())
+
+    assert restored.causal_hypotheses == engine.causal_hypotheses
+    assert restored.intervention_trials == engine.intervention_trials
+    assert restored.next_intervention_id == engine.next_intervention_id
+    assert restored.snapshot() == engine.snapshot()
