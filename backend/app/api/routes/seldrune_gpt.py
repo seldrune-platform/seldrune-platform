@@ -472,12 +472,12 @@ def seldrune_gpt(
                 SeldruneGPTMessage.user_id == current_user.id,
             )
             .order_by(SeldruneGPTMessage.created_at.desc())
-            .limit(12)
+            .limit(8)
         )
     )
     history.reverse()
     context_lines = [f"{item.role}: {item.content}" for item in history]
-    while sum(len(line) for line in context_lines) > 24000 and context_lines:
+    while sum(len(line) for line in context_lines) > 12000 and context_lines:
         context_lines.pop(0)
     context = "\\n".join(context_lines)
     attachment_context = (
@@ -524,26 +524,41 @@ def seldrune_gpt(
         + (", ".join(missing_provider_env) if missing_provider_env else "none")
         + "."
     )
+    route = choose_cost_route(
+        settings,
+        purpose="chat",
+        text=payload.message,
+        has_images=bool(input_images),
+        has_files=bool(input_files),
+    )
     request = ModelRequest(
         provider=ModelProvider.OPENAI,
-        model=settings.model_default,
+        model=route.model,
         input_text=input_text,
         instructions=(
             "You are Seldrune GPT, the reasoning interface inside the Seldrune STI "
-            "owner console. Help the owner analyze, design, and plan work. Do not claim "
-            f"The configured model identifier is {settings.model_default}. "
-            "When asked which model Seldrune is using, report that configured identifier exactly. "
-            "Seldrune STI is an AI-native governed virtual organization: it plans work, "
-            "coordinates agents and tools, records evidence, and preserves owner-controlled "
-            "approvals. When the owner asks you to perform work, explain that Execute order "
-            "can run the instruction through Seldrune's governed operator. Never imply that "
-            "chat text alone performed an action. Do not claim an external action occurred "
-            "unless Seldrune provides verified evidence. "
+            "owner console. Help the owner analyze, design, and plan work. "
+            f"The model selected for this request is {route.model}. "
+            "When asked which model is serving the current request, report that identifier "
+            "exactly. Seldrune uses an automatic cost governor, so different requests can "
+            "use different model tiers. Seldrune STI is an AI-native governed virtual "
+            "organization: it plans work, coordinates agents and tools, records evidence, "
+            "and preserves owner-controlled approvals. When the owner asks you to perform "
+            "work, explain that Execute order can run the instruction through Seldrune's "
+            "governed operator. Never imply that chat text alone performed an action. Do "
+            "not claim an external action occurred unless Seldrune provides verified "
+            "evidence. "
             + tool_runtime_context
         ),
-        max_output_tokens=settings.model_max_output_tokens,
+        max_output_tokens=route.max_output_tokens,
         input_images=input_images,
         input_files=input_files,
+        image_detail=route.image_detail,
+        pdf_detail=route.pdf_detail,
+        reasoning_effort=route.reasoning_effort,
+        prompt_cache_key=f"seldrune:{organization_id}:gpt",
+        max_estimated_cost_usd=route.request_budget_usd,
+        exact_token_preflight=True,
     )
     try:
         result, _latency_ms = ModelGateway(settings).generate(request)
@@ -581,6 +596,9 @@ def seldrune_gpt(
         response_id=result.response_id,
         input_tokens=result.usage.input_tokens,
         output_tokens=result.usage.output_tokens,
+        cached_input_tokens=result.usage.cached_input_tokens,
+        estimated_cost_usd=result.usage.estimated_cost_usd,
+        cost_tier=route.tier,
         latency_ms=int(_latency_ms),
         provider=settings.model_provider,
     )
