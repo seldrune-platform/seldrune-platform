@@ -689,7 +689,6 @@ def edit_seldrune_gpt_pdf(
         ),
         max_output_tokens=max(settings.model_max_output_tokens, 6000),
         response_schema=_PDF_EDIT_SCHEMA,
-        input_images=initial_images,
         input_files=input_files,
         metadata={
             "cost_tier": "economy",
@@ -876,7 +875,7 @@ def edit_seldrune_gpt_pdf(
             max_output_tokens=max(settings.model_max_output_tokens, 6000),
             response_schema=_PDF_EDIT_SCHEMA,
             input_images=retry_images,
-            input_files=input_files,
+            input_files=(),
             metadata={
                 "cost_tier": "economy",
                 "cost_sensitive": True,
