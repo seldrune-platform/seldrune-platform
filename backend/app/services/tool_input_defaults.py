@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 from uuid import UUID
 
@@ -15,6 +16,28 @@ def _non_empty(value: str | None) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _github_runtime_defaults() -> tuple[str | None, str | None, str | None]:
+    owner = _non_empty(settings.github_default_owner)
+    repo = _non_empty(settings.github_default_repo)
+    ref = _non_empty(settings.github_default_ref)
+
+    render_slug = _non_empty(os.getenv("RENDER_GIT_REPO_SLUG"))
+    if render_slug and "/" in render_slug:
+        render_owner, render_repo = render_slug.split("/", 1)
+        owner = owner or _non_empty(render_owner)
+        repo = repo or _non_empty(render_repo)
+
+    ref = ref or _non_empty(os.getenv("RENDER_GIT_BRANCH")) or "main"
+    return owner, repo, ref
+
+
+def _render_service_id() -> str | None:
+    return (
+        _non_empty(settings.render_default_service_id)
+        or _non_empty(os.getenv("RENDER_SERVICE_ID"))
+    )
 
 
 def external_action_input_defaults(
@@ -33,20 +56,20 @@ def external_action_input_defaults(
             defaults["to"] = user.email
 
     if provider == "github":
-        owner = _non_empty(settings.github_default_owner)
-        repo = _non_empty(settings.github_default_repo)
-        ref = _non_empty(settings.github_default_ref)
+        owner, repo, ref = _github_runtime_defaults()
         if owner:
             defaults["owner"] = owner
         if repo:
             defaults["repo"] = repo
-        if action == "dispatch-workflow" and ref:
+        if action in {"dispatch-workflow", "read-file", "create-branch"} and ref:
             defaults["ref"] = ref
         if action == "create-pull-request" and ref:
             defaults["base"] = ref
+        if action == "upsert-file" and ref:
+            defaults["base_ref"] = ref
 
-    if provider == "render" and action == "deploy-service":
-        service_id = _non_empty(settings.render_default_service_id)
+    if provider == "render" and action in {"deploy-service", "deploy-status"}:
+        service_id = _render_service_id()
         if service_id:
             defaults["service_id"] = service_id
 
