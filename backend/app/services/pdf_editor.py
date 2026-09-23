@@ -866,7 +866,12 @@ def _replacement_visual_fidelity(
             for span in line.get("spans", []):
                 for char in span.get("chars", []):
                     char_rect = pymupdf.Rect(char.get("bbox", (0, 0, 0, 0)))
-                    if _rect_intersection_area(char_rect, target) <= 0:
+                    intersection = _rect_intersection_area(char_rect, target)
+                    char_area = max(1.0, char_rect.width * char_rect.height)
+                    if (
+                        intersection < 0.5
+                        or intersection / char_area < 0.10
+                    ):
                         continue
                     char_origin = char.get("origin")
                     if (
