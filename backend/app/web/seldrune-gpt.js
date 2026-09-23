@@ -332,6 +332,9 @@
       const layout = Number.isFinite(result.layout_integrity_score)
         ? `${result.layout_integrity_score}% layout integrity`
         : 'layout integrity unavailable';
+      const cost = Number.isFinite(result.estimated_ai_cost_usd)
+        ? `AI cost ~${Number(result.estimated_ai_cost_usd).toFixed(4)}`
+        : null;
       const profile = [
         result.document_type || 'PDF',
         `${result.page_count || 0} pages`,
@@ -344,6 +347,7 @@
         result.reconstruction_attempts > 1
           ? `${result.reconstruction_attempts} clean reconstruction attempts`
           : null,
+        cost,
       ].filter(Boolean).join(' · ');
       addDownloadMessage(
         'Seldrune GPT · AI PDF Editor',
