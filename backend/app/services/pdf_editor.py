@@ -776,7 +776,8 @@ def _replacement_visual_fidelity(
         or output_key in source_key
     )
     semantic_font_match = (
-        (not family_tokens or bool(family_tokens & output_tokens))
+        bool(family_tokens)
+        and bool(family_tokens & output_tokens)
         and all(
             token in output_tokens
             or (token == "italic" and "oblique" in output_tokens)
