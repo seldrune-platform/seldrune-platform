@@ -147,3 +147,166 @@ def test_pdf_editor_rejects_plan_when_target_is_missing() -> None:
         )
 
     assert exc_info.value.status_code == 422
+
+
+def test_advanced_pdf_editor_verifies_text_replacement() -> None:
+    import pymupdf
+
+    from backend.app.services.pdf_editor import apply_advanced_pdf_edit_plan
+
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), "Member ID: ABC123")
+    source = document.tobytes()
+    document.close()
+
+    edited, applied, verified, warnings, verification = apply_advanced_pdf_edit_plan(
+        source,
+        {
+            "operations": [
+                {
+                    "action": "replace_text",
+                    "page": 1,
+                    "target_text": "ABC123",
+                    "replacement_text": "XYZ789",
+                    "text": None,
+                    "rect_norm": None,
+                    "font_size": None,
+                    "text_color": None,
+                    "background_color": None,
+                    "alignment": "left",
+                    "field_name": None,
+                    "field_value": None,
+                    "rotation": None,
+                }
+            ]
+        },
+    )
+
+    output = pymupdf.open(stream=edited, filetype="pdf")
+    text = output[0].get_text("text")
+    output.close()
+
+    assert applied == 1
+    assert verified == 1
+    assert verification[0]["verified"] is True
+    assert "XYZ789" in text
+    assert "ABC123" not in text
+    assert not [item for item in warnings if "Verification failed" in item]
+
+
+def test_advanced_pdf_editor_visual_fallback_adds_text_layer() -> None:
+    import pymupdf
+
+    from backend.app.services.pdf_editor import apply_advanced_pdf_edit_plan
+
+    document = pymupdf.open()
+    page = document.new_page(width=400, height=300)
+    page.draw_rect(
+        pymupdf.Rect(40, 90, 360, 150),
+        color=None,
+        fill=(0.94, 0.94, 0.94),
+    )
+    source = document.tobytes()
+    document.close()
+
+    edited, applied, verified, _warnings, verification = apply_advanced_pdf_edit_plan(
+        source,
+        {
+            "operations": [
+                {
+                    "action": "visual_replace",
+                    "page": 1,
+                    "target_text": None,
+                    "replacement_text": "Scanned document correction",
+                    "text": None,
+                    "rect_norm": [0.1, 0.3, 0.9, 0.5],
+                    "font_size": 12,
+                    "text_color": [0, 0, 0],
+                    "background_color": [0.94, 0.94, 0.94],
+                    "alignment": "center",
+                    "field_name": None,
+                    "field_value": None,
+                    "rotation": None,
+                }
+            ]
+        },
+    )
+
+    output = pymupdf.open(stream=edited, filetype="pdf")
+    text = output[0].get_text("text")
+    output.close()
+
+    assert applied == 1
+    assert verified == 1
+    assert verification[0]["verified"] is True
+    assert "Scanned document correction" in text
+
+
+def test_advanced_pdf_editor_updates_form_field() -> None:
+    import pymupdf
+
+    from backend.app.services.pdf_editor import apply_advanced_pdf_edit_plan
+
+    document = pymupdf.open()
+    page = document.new_page()
+    widget = pymupdf.Widget()
+    widget.field_name = "customer_name"
+    widget.field_type = pymupdf.PDF_WIDGET_TYPE_TEXT
+    widget.rect = pymupdf.Rect(72, 72, 260, 100)
+    page.add_widget(widget)
+    source = document.tobytes()
+    document.close()
+
+    edited, applied, verified, _warnings, verification = apply_advanced_pdf_edit_plan(
+        source,
+        {
+            "operations": [
+                {
+                    "action": "set_form_field",
+                    "page": 1,
+                    "target_text": None,
+                    "replacement_text": None,
+                    "text": None,
+                    "rect_norm": None,
+                    "font_size": None,
+                    "text_color": None,
+                    "background_color": None,
+                    "alignment": None,
+                    "field_name": "customer_name",
+                    "field_value": "Seldrune Owner",
+                    "rotation": None,
+                }
+            ]
+        },
+    )
+
+    output = pymupdf.open(stream=edited, filetype="pdf")
+    output_widget = output[0].first_widget
+    assert output_widget is not None
+    value = output_widget.field_value
+    output.close()
+
+    assert applied == 1
+    assert verified == 1
+    assert verification[0]["verified"] is True
+    assert value == "Seldrune Owner"
+
+
+def test_pdf_visual_context_detects_image_dominant_page() -> None:
+    import pymupdf
+
+    from backend.app.services.pdf_editor import build_pdf_visual_context
+
+    document = pymupdf.open()
+    document.new_page(width=320, height=240)
+    source = document.tobytes()
+    document.close()
+
+    context = build_pdf_visual_context(source, max_rendered_pages=2)
+
+    assert context.scanned_pages == (1,)
+    assert context.rendered_pages == (1,)
+    assert len(context.images) == 1
+    assert context.images[0].media_type == "image/jpeg"
+    assert "page=1" in context.profile_text
