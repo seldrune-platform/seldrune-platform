@@ -40,6 +40,19 @@ def _render_service_id() -> str | None:
     )
 
 
+def production_runtime_targets() -> dict[str, str | None]:
+    owner, repo, ref = _github_runtime_defaults()
+    return {
+        "github_owner": owner,
+        "github_repo": repo,
+        "github_ref": ref,
+        "github_full_name": f"{owner}/{repo}" if owner and repo else None,
+        "render_service_id": _render_service_id(),
+        "render_external_url": _non_empty(os.getenv("RENDER_EXTERNAL_URL")),
+        "render_service_name": _non_empty(os.getenv("RENDER_SERVICE_NAME")),
+    }
+
+
 def external_action_input_defaults(
     session: Session,
     *,
