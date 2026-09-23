@@ -54,6 +54,8 @@ def test_tools_workspace_exposes_action_controls() -> None:
     assert "/tool-bootstrap/credentials" in script
     assert "/tool-bootstrap/credentials/verified" in script
     assert "/tool-bootstrap/credentials/cleanup-invalid" in script
+    assert "invalidCredentialCleanupAttempted" in script
+    assert "cleanupInvalidCredentials({silent: true})" in script
     assert "data-provider-disconnect" in script
     assert "data-secret-remove" in script
     assert "verified and connected" in script
