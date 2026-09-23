@@ -36,3 +36,34 @@
 #gpt-studio-foot,#seldrune-gpt-status{color:var(--portal-accent)}
 @media(max-width:900px){.gpt-studio-body{grid-template-columns:1fr}.gpt-studio-sidebar{display:grid;grid-template-columns:1fr 1fr;border-right:0;border-bottom:1px solid var(--portal-line)}.gpt-capability-note{grid-column:1/-1;margin-top:0}.gpt-studio-head{display:block}.gpt-studio-runtime{margin-top:14px;justify-items:start}.gpt-thread{max-height:520px}}
 @media(max-width:600px){.gpt-studio-head{padding:20px 18px 14px}.gpt-studio-sidebar{grid-template-columns:1fr;padding:12px}.gpt-composer{padding:0 12px 10px}.gpt-composer-bar{align-items:flex-start;flex-direction:column}.gpt-composer-actions{width:100%}.gpt-composer-actions button{flex:1}.gpt-studio-foot{display:block;padding:0 14px 16px}.gpt-studio-foot p+ p{margin-top:6px}.gpt-thread{padding:14px}.gpt-thread .command-card{max-width:94%}}
+
+.gpt-pdf-password{
+  display:flex!important;
+  align-items:center;
+  gap:7px;
+  margin-left:2px;
+  padding:5px 8px;
+  border:1px solid var(--portal-line);
+  border-radius:10px;
+  background:rgba(255,255,255,.018);
+}
+.gpt-pdf-password.hidden{display:none!important}
+.gpt-pdf-password span{
+  color:var(--portal-muted);
+  font-size:9px;
+  white-space:nowrap;
+}
+.gpt-pdf-password input{
+  width:118px!important;
+  min-height:28px!important;
+  padding:5px 7px!important;
+  border-radius:7px!important;
+  font-size:10px!important;
+}
+@media(max-width:600px){
+  .gpt-pdf-password{
+    width:100%;
+    justify-content:space-between;
+  }
+  .gpt-pdf-password input{width:min(190px,52vw)!important}
+}
