@@ -295,8 +295,8 @@ html[data-portal-motion="reduced"] *::after{animation:none!important;scroll-beha
     repeating-radial-gradient(circle at 50% 52%,
       transparent 0 64px,rgba(88,218,255,.035) 65px,transparent 66px 95px);
   transform:translate3d(
-    calc((var(--cursor-x) - 50%) / 18),
-    calc((var(--cursor-y) - 50%) / 18),
+    var(--cursor-shift-x,0),
+    var(--cursor-shift-y,0),
     0
   );
 }
@@ -673,7 +673,6 @@ html[data-portal-motion="reduced"] *::after{animation:none!important;scroll-beha
   overflow:visible;
 }
 .portal-particles i{
-  --angle:calc(var(--particle-index) * 16.36deg);
   position:absolute;
   left:50%;
   top:50%;
@@ -685,12 +684,12 @@ html[data-portal-motion="reduced"] *::after{animation:none!important;scroll-beha
     0 0 8px rgba(102,237,255,.9),
     -10px 0 9px rgba(102,237,255,.18);
   transform:
-    rotate(var(--angle))
+    rotate(var(--particle-angle))
     translateX(calc(var(--portal-size) * .53))
-    scale(calc(.65 + (var(--particle-index) / 44)));
+    scale(var(--particle-scale));
   transform-origin:0 0;
-  animation:particle-orbit calc(7s + var(--particle-index) * .18s) linear infinite;
-  opacity:calc(.25 + (var(--particle-index) / 40));
+  animation:particle-orbit var(--particle-duration) linear infinite;
+  opacity:var(--particle-opacity);
 }
 
 .portal-live-strip{
@@ -787,9 +786,9 @@ html[data-portal-motion="reduced"] *::after{animation:none!important;scroll-beha
 @keyframes particle-orbit{
   to{
     transform:
-      rotate(calc(var(--angle) + 360deg))
+      rotate(calc(var(--particle-angle) + 360deg))
       translateX(calc(var(--portal-size) * .53))
-      scale(calc(.65 + (var(--particle-index) / 44)));
+      scale(var(--particle-scale));
   }
 }
 
