@@ -818,6 +818,204 @@ def _verify_text_change(
     return False, "replacement could not be verified from extracted page text"
 
 
+@dataclass(frozen=True)
+class PDFEditAssessment:
+    safe_to_return: bool
+    layout_integrity_score: int
+    issues: tuple[str, ...]
+
+
+def _expanded_rect(
+    page: pymupdf.Page,
+    rect: pymupdf.Rect,
+    *,
+    x_pad: float,
+    y_pad: float,
+) -> pymupdf.Rect:
+    return pymupdf.Rect(
+        max(page.rect.x0, rect.x0 - x_pad),
+        max(page.rect.y0, rect.y0 - y_pad),
+        min(page.rect.x1, rect.x1 + x_pad),
+        min(page.rect.y1, rect.y1 + y_pad),
+    )
+
+
+def _nearest_rect(
+    rectangles: list[pymupdf.Rect],
+    target: pymupdf.Rect,
+) -> pymupdf.Rect | None:
+    if not rectangles:
+        return None
+    return min(
+        rectangles,
+        key=lambda item: abs((item.x0 + item.x1) / 2 - (target.x0 + target.x1) / 2)
+        + abs((item.y0 + item.y1) / 2 - (target.y0 + target.y1) / 2),
+    )
+
+
+def _protected_word_rectangles(
+    page: pymupdf.Page,
+    target: pymupdf.Rect,
+) -> list[pymupdf.Rect]:
+    protected: list[pymupdf.Rect] = []
+    target_pad = _expanded_rect(
+        page,
+        target,
+        x_pad=max(1.0, target.height * 0.08),
+        y_pad=max(1.0, target.height * 0.08),
+    )
+    for word in page.get_text("words"):
+        rect = pymupdf.Rect(word[0], word[1], word[2], word[3])
+        if _rect_intersection_area(rect, target_pad) > 0:
+            continue
+        protected.append(rect)
+    return protected
+
+
+def assess_pdf_edit_candidate(
+    original_pdf: bytes,
+    edited_pdf: bytes,
+    plan: dict[str, Any],
+    *,
+    password: str | None = None,
+    visual_fidelity_score: int | None = None,
+) -> PDFEditAssessment:
+    original = _open_document(original_pdf, password)
+    edited = _open_document(edited_pdf)
+    issues: list[str] = []
+
+    if original.page_count != edited.page_count:
+        original.close()
+        edited.close()
+        return PDFEditAssessment(
+            safe_to_return=False,
+            layout_integrity_score=0,
+            issues=("page count changed unexpectedly",),
+        )
+
+    operations = plan.get("operations")
+    if not isinstance(operations, list):
+        original.close()
+        edited.close()
+        return PDFEditAssessment(
+            safe_to_return=False,
+            layout_integrity_score=0,
+            issues=("invalid edit plan",),
+        )
+
+    edited_pages: set[int] = set()
+    for op_index, operation in enumerate(operations, start=1):
+        if not isinstance(operation, dict):
+            continue
+        action = str(operation.get("action") or "")
+        if action not in {"replace_text", "redact_text"}:
+            continue
+
+        indexes = _page_indexes(original, operation.get("page"))
+        target_text = str(operation.get("target_text") or "").strip()
+        replacement_text = str(operation.get("replacement_text") or "")
+        occurrence = operation.get("occurrence")
+
+        for page_index in indexes:
+            edited_pages.add(page_index)
+            source_page = original[page_index]
+            output_page = edited[page_index]
+            target_rectangles: list[pymupdf.Rect] = []
+            if target_text:
+                target_rectangles, _mode = _locate_text(source_page, target_text)
+            if not target_rectangles:
+                visual_rect = _normalized_bbox(source_page, operation.get("bbox"))
+                if visual_rect is not None:
+                    target_rectangles = [visual_rect]
+
+            if isinstance(occurrence, int) and occurrence >= 1:
+                target_rectangles = target_rectangles[occurrence - 1 : occurrence]
+
+            if not target_rectangles:
+                issues.append(
+                    f"operation {op_index}: original target region could not be located"
+                )
+                continue
+
+            for target_rect in target_rectangles:
+                check_region = _expanded_rect(
+                    output_page,
+                    target_rect,
+                    x_pad=max(2.0, target_rect.height * 0.18),
+                    y_pad=max(2.0, target_rect.height * 0.18),
+                )
+                region_text = _normalize_text(output_page.get_textbox(check_region))
+                if target_text and _normalize_text(target_text) in region_text:
+                    issues.append(
+                        f"operation {op_index}: old text remains in its original region"
+                    )
+
+                if action == "redact_text":
+                    continue
+
+                replacement_matches = list(output_page.search_for(replacement_text))
+                replacement_rect = _nearest_rect(replacement_matches, target_rect)
+                if replacement_rect is None:
+                    issues.append(
+                        f"operation {op_index}: replacement text is not detectable"
+                    )
+                    continue
+
+                vertical_drift = abs(
+                    (replacement_rect.y0 + replacement_rect.y1) / 2
+                    - (target_rect.y0 + target_rect.y1) / 2
+                )
+                max_vertical_drift = max(2.5, target_rect.height * 0.35)
+                if vertical_drift > max_vertical_drift:
+                    issues.append(
+                        f"operation {op_index}: replacement drifted vertically "
+                        f"{vertical_drift:.1f}pt"
+                    )
+
+                for protected in _protected_word_rectangles(source_page, target_rect):
+                    intersection = _rect_intersection_area(replacement_rect, protected)
+                    if intersection <= 0:
+                        continue
+                    protected_area = max(1.0, protected.width * protected.height)
+                    replacement_area = max(
+                        1.0,
+                        replacement_rect.width * replacement_rect.height,
+                    )
+                    if (
+                        intersection / protected_area >= 0.08
+                        or intersection / replacement_area >= 0.05
+                    ):
+                        issues.append(
+                            f"operation {op_index}: replacement overlaps unrelated text"
+                        )
+                        break
+
+    for page_index in edited_pages:
+        source_drawings = len(original[page_index].get_drawings())
+        output_drawings = len(edited[page_index].get_drawings())
+        if output_drawings < source_drawings:
+            issues.append(
+                f"page {page_index + 1}: vector lines or shapes were removed"
+            )
+
+    original.close()
+    edited.close()
+
+    if visual_fidelity_score is not None and visual_fidelity_score < 95:
+        issues.append(
+            f"native typography fidelity is only {visual_fidelity_score}%"
+        )
+
+    unique_issues = tuple(dict.fromkeys(issues))
+    penalty = min(100, len(unique_issues) * 25)
+    score = max(0, 100 - penalty)
+    return PDFEditAssessment(
+        safe_to_return=not unique_issues,
+        layout_integrity_score=score,
+        issues=unique_issues,
+    )
+
+
 def apply_pdf_edit_plan(
     pdf_bytes: bytes,
     plan: dict[str, Any],
