@@ -170,6 +170,10 @@
       for (let index = 0; index < 22; index += 1) {
         const particle = document.createElement("i");
         particle.style.setProperty("--particle-index", String(index));
+        particle.style.setProperty("--particle-angle", `${(index * 16.36).toFixed(2)}deg`);
+        particle.style.setProperty("--particle-duration", `${(7 + index * .18).toFixed(2)}s`);
+        particle.style.setProperty("--particle-scale", (0.65 + index / 44).toFixed(2));
+        particle.style.setProperty("--particle-opacity", (0.25 + index / 40).toFixed(2));
         particleRoot.append(particle);
       }
     }
@@ -184,6 +188,8 @@
         const y = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
         scene.style.setProperty("--cursor-x", `${(x * 100).toFixed(2)}%`);
         scene.style.setProperty("--cursor-y", `${(y * 100).toFixed(2)}%`);
+        scene.style.setProperty("--cursor-shift-x", `${((x - .5) * 16).toFixed(2)}px`);
+        scene.style.setProperty("--cursor-shift-y", `${((y - .5) * 12).toFixed(2)}px`);
         scene.style.setProperty("--portal-tilt-x", `${((.5 - y) * 8).toFixed(2)}deg`);
         scene.style.setProperty("--portal-tilt-y", `${((x - .5) * 10).toFixed(2)}deg`);
         scene.querySelectorAll("[data-depth]").forEach(node => {
@@ -195,6 +201,8 @@
         });
       });
       scene.addEventListener("pointerleave", () => {
+        scene.style.setProperty("--cursor-shift-x", "0px");
+        scene.style.setProperty("--cursor-shift-y", "0px");
         scene.style.setProperty("--portal-tilt-x", "0deg");
         scene.style.setProperty("--portal-tilt-y", "0deg");
         scene.querySelectorAll("[data-depth]").forEach(node => {
