@@ -684,6 +684,40 @@ def _fit_textbox(
     return False
 
 
+def _font_family_tokens(value: str) -> set[str]:
+    key = _font_key(value)
+    tokens: set[str] = set()
+    for token in (
+        "times",
+        "helvetica",
+        "arial",
+        "courier",
+        "calibri",
+        "cambria",
+        "georgia",
+        "verdana",
+        "serif",
+        "sans",
+        "mono",
+        "bold",
+        "italic",
+        "oblique",
+    ):
+        if token in key:
+            tokens.add(token)
+    return tokens
+
+
+def _rgb_channels(value: int | None) -> tuple[int, int, int] | None:
+    if not isinstance(value, int):
+        return None
+    return (
+        (value >> 16) & 255,
+        (value >> 8) & 255,
+        value & 255,
+    )
+
+
 def _replacement_visual_fidelity(
     page: pymupdf.Page,
     replacement_text: str,
@@ -712,69 +746,103 @@ def _replacement_visual_fidelity(
     if best_span is None:
         return 0, "replacement span could not be inspected"
 
-    checks: list[bool] = []
+    expected_width = _font_text_length(style, replacement_text)
+    width_tolerance = max(1.2, expected_width * 0.035)
+    width_match = abs(target.width - expected_width) <= width_tolerance
+
     output_font = str(best_span.get("font") or "")
     source_key = _font_key(style.font_name)
     output_key = _font_key(output_font)
-    font_match = (
+    source_tokens = _font_family_tokens(style.font_name)
+    output_tokens = _font_family_tokens(output_font)
+    family_tokens = source_tokens & {
+        "times",
+        "helvetica",
+        "arial",
+        "courier",
+        "calibri",
+        "cambria",
+        "georgia",
+        "verdana",
+        "serif",
+        "sans",
+        "mono",
+    }
+    style_tokens = source_tokens & {"bold", "italic", "oblique"}
+
+    name_match = (
         source_key == output_key
         or source_key in output_key
         or output_key in source_key
-        or (
-            style.exact_font_reusable
-            and all(
-                token in output_key
-                for token in re.findall(
-                    r"(bold|italic|oblique|times|helvetica|courier)",
-                    source_key,
-                )
-            )
+    )
+    semantic_font_match = (
+        (not family_tokens or bool(family_tokens & output_tokens))
+        and all(
+            token in output_tokens
+            or (token == "italic" and "oblique" in output_tokens)
+            or (token == "oblique" and "italic" in output_tokens)
+            for token in style_tokens
         )
     )
-    checks.append(font_match)
+    embedded_metric_match = style.exact_font_reusable and width_match
+    font_match = name_match or semantic_font_match or embedded_metric_match
 
     output_size = float(best_span.get("size") or 0.0)
-    checks.append(abs(output_size - style.font_size) <= 0.25)
-
-    output_color = best_span.get("color")
-    expected_color = (
-        round(style.color[0] * 255) << 16
-        | round(style.color[1] * 255) << 8
-        | round(style.color[2] * 255)
+    size_match = abs(output_size - style.font_size) <= max(
+        0.25,
+        style.font_size * 0.015,
     )
-    checks.append(isinstance(output_color, int) and abs(output_color - expected_color) <= 1)
+
+    output_rgb = _rgb_channels(best_span.get("color"))
+    expected_rgb = tuple(round(channel * 255) for channel in style.color)
+    color_match = bool(
+        output_rgb
+        and all(
+            abs(output_rgb[index] - expected_rgb[index]) <= 2
+            for index in range(3)
+        )
+    )
 
     output_origin = best_span.get("origin")
     baseline_match = False
+    anchor_match = False
     if isinstance(output_origin, (list, tuple)) and len(output_origin) == 2:
-        baseline_match = abs(float(output_origin[1]) - style.origin[1]) <= 0.9
-    checks.append(baseline_match)
-
-    expected_width = _font_text_length(style, replacement_text)
-    if style.alignment == pymupdf.TEXT_ALIGN_RIGHT:
-        alignment_match = abs(target.x1 - style.target_rect.x1) <= 1.5
-    elif style.alignment == pymupdf.TEXT_ALIGN_CENTER:
-        alignment_match = (
-            abs(
-                target.x0
-                + target.width / 2
-                - style.target_rect.x0
-                - style.target_rect.width / 2
-            )
-            <= 1.5
+        output_x = float(output_origin[0])
+        output_y = float(output_origin[1])
+        baseline_match = abs(output_y - style.origin[1]) <= max(
+            1.0,
+            style.font_size * 0.06,
         )
-    else:
-        alignment_match = abs(target.x0 - style.origin[0]) <= max(1.5, expected_width * 0.02)
-    checks.append(alignment_match)
+        expected_origin = _style_preserving_origin(style, expected_width)
+        anchor_match = abs(output_x - expected_origin.x) <= max(
+            1.2,
+            style.font_size * 0.07,
+        )
 
-    score = round((sum(1 for item in checks if item) / len(checks)) * 100)
+    # Internal PDF font names are not a visual property. A subset font can be
+    # exposed as ABCDEF+FontName or a generated resource alias even when the
+    # exact same font bytes are reused. Fidelity therefore requires matching
+    # glyph metrics plus size/color/baseline/anchor; the name is only supporting
+    # evidence unless it directly matches.
+    checks = {
+        "font": font_match,
+        "width": width_match,
+        "size": size_match,
+        "color": color_match,
+        "baseline": baseline_match,
+        "anchor": anchor_match,
+    }
+    score = round(
+        (sum(1 for item in checks.values() if item) / len(checks)) * 100
+    )
     return score, (
         f"visual fidelity {score}% "
-        f"(font={'yes' if checks[0] else 'no'}, "
-        f"size={'yes' if checks[1] else 'no'}, "
-        f"color={'yes' if checks[2] else 'no'}, "
-        f"baseline={'yes' if checks[3] else 'no'}, "
-        f"alignment={'yes' if checks[4] else 'no'})"
+        f"(font={'yes' if checks['font'] else 'no'}, "
+        f"width={'yes' if checks['width'] else 'no'}, "
+        f"size={'yes' if checks['size'] else 'no'}, "
+        f"color={'yes' if checks['color'] else 'no'}, "
+        f"baseline={'yes' if checks['baseline'] else 'no'}, "
+        f"anchor={'yes' if checks['anchor'] else 'no'})"
     )
 
 
