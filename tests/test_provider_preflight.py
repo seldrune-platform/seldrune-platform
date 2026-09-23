@@ -43,6 +43,15 @@ def test_provider_preflight_is_non_destructive_and_redacts_credentials(
                 200,
                 json_data={"login": "seldrune-owner", "id": 99},
             )
+        if "api.github.com/repos/seldrune-platform/seldrune-platform" in url:
+            return _response(
+                200,
+                json_data={
+                    "id": 700,
+                    "full_name": "seldrune-platform/seldrune-platform",
+                    "default_branch": "main",
+                },
+            )
         if "api.render.com/v1/users" in url:
             return _response(
                 200,
@@ -80,6 +89,9 @@ def test_provider_preflight_is_non_destructive_and_redacts_credentials(
     assert providers["gmail"]["verified"] is False
     assert providers["github"]["status"] == "verified"
     assert providers["github"]["identity"]["login"] == "seldrune-owner"
+    assert providers["github"]["identity"]["repository"] == (
+        "seldrune-platform/seldrune-platform"
+    )
     assert providers["render"]["status"] == "verified"
     assert providers["render"]["identity"]["id"] == "usr-c123"
 
@@ -89,6 +101,7 @@ def test_provider_preflight_is_non_destructive_and_redacts_credentials(
     } == {
         "https://gmail.googleapis.com/gmail/v1/users/me/profile",
         "https://api.github.com/user",
+        "https://api.github.com/repos/seldrune-platform/seldrune-platform",
         "https://api.render.com/v1/users",
     }
     output = str(body)
