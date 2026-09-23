@@ -19,17 +19,21 @@ def _non_empty(value: str | None) -> str | None:
 
 
 def _github_runtime_defaults() -> tuple[str | None, str | None, str | None]:
-    owner = _non_empty(settings.github_default_owner)
-    repo = _non_empty(settings.github_default_repo)
-    ref = _non_empty(settings.github_default_ref)
-
+    owner = None
+    repo = None
     render_slug = _non_empty(os.getenv("RENDER_GIT_REPO_SLUG"))
     if render_slug and "/" in render_slug:
         render_owner, render_repo = render_slug.split("/", 1)
-        owner = owner or _non_empty(render_owner)
-        repo = repo or _non_empty(render_repo)
+        owner = _non_empty(render_owner)
+        repo = _non_empty(render_repo)
 
-    ref = ref or _non_empty(os.getenv("RENDER_GIT_BRANCH")) or "main"
+    owner = owner or _non_empty(settings.github_default_owner)
+    repo = repo or _non_empty(settings.github_default_repo)
+    ref = (
+        _non_empty(os.getenv("RENDER_GIT_BRANCH"))
+        or _non_empty(settings.github_default_ref)
+        or "main"
+    )
     return owner, repo, ref
 
 
