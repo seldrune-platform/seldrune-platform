@@ -15,6 +15,7 @@ from backend.app.core.tasking import AgentStatus, TaskStatus
 from backend.app.models.agent import Agent
 from backend.app.models.model_invocation import ModelInvocation
 from backend.app.models.task import Task, TaskEvent
+from backend.app.services.ai_cost_governor import estimate_cost_usd
 from backend.app.services.audit import record_audit
 from backend.app.services.knowledge import build_agent_context, remember_task_result
 from backend.app.services.model_gateway import ModelGateway
@@ -74,19 +75,31 @@ def _build_input(task: Task, knowledge_context: str = "") -> str:
     return base
 
 
-def _estimate_cost(agent: Agent, input_tokens: int, output_tokens: int) -> float | None:
+def _estimate_cost(
+    agent: Agent,
+    input_tokens: int,
+    output_tokens: int,
+    *,
+    model: str | None = None,
+) -> float | None:
     input_rate = agent.runtime_config.get("input_cost_per_million")
     output_rate = agent.runtime_config.get("output_cost_per_million")
-    if input_rate is None or output_rate is None:
-        return None
-    try:
-        return round(
-            (input_tokens / 1_000_000) * float(input_rate)
-            + (output_tokens / 1_000_000) * float(output_rate),
-            8,
+    if input_rate is not None and output_rate is not None:
+        try:
+            return round(
+                (input_tokens / 1_000_000) * float(input_rate)
+                + (output_tokens / 1_000_000) * float(output_rate),
+                8,
+            )
+        except (TypeError, ValueError):
+            pass
+    if model:
+        return estimate_cost_usd(
+            model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
-    except (TypeError, ValueError):
-        return None
+    return None
 
 
 def execute_agent_task(
@@ -216,10 +229,15 @@ def execute_agent_task(
     invocation.input_tokens = result.usage.input_tokens
     invocation.output_tokens = result.usage.output_tokens
     invocation.total_tokens = result.usage.total_tokens
-    invocation.estimated_cost_usd = _estimate_cost(
-        agent,
-        result.usage.input_tokens,
-        result.usage.output_tokens,
+    invocation.estimated_cost_usd = (
+        result.estimated_cost_usd
+        if result.estimated_cost_usd is not None
+        else _estimate_cost(
+            agent,
+            result.usage.input_tokens,
+            result.usage.output_tokens,
+            model=result.model,
+        )
     )
     invocation.latency_ms = latency_ms
     invocation.completed_at = datetime.now(UTC)
