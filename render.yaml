@@ -18,6 +18,32 @@ services:
         value: openai
       - key: SELDRUNE_MODEL_DEFAULT
         value: gpt-5.6-sol
+      - key: SELDRUNE_MODEL_ECONOMY
+        value: gpt-5.6-luna
+      - key: SELDRUNE_MODEL_BALANCED
+        value: gpt-5.6-terra
+      - key: SELDRUNE_MODEL_PREMIUM
+        value: gpt-5.6-sol
+      - key: SELDRUNE_AI_COST_GOVERNOR_ENABLED
+        value: true
+      - key: SELDRUNE_AI_REQUEST_MAX_USD
+        value: 0.15
+      - key: SELDRUNE_AI_PDF_REQUEST_MAX_USD
+        value: 0.10
+      - key: SELDRUNE_AI_PDF_MAX_TOTAL_USD
+        value: 0.25
+      - key: SELDRUNE_AI_PDF_MAX_ATTEMPTS
+        value: 3
+      - key: SELDRUNE_AI_PDF_MAX_OUTPUT_TOKENS
+        value: 3200
+      - key: SELDRUNE_AI_IMAGE_DETAIL
+        value: low
+      - key: SELDRUNE_AI_PDF_DETAIL
+        value: low
+      - key: SELDRUNE_AI_PROMPT_CACHE_ENABLED
+        value: true
+      - key: SELDRUNE_AI_EXACT_TOKEN_PREFLIGHT
+        value: true
       - key: OPENAI_API_KEY
         sync: false
       - key: SELDRUNE_GMAIL_TOOL_CREDENTIAL
@@ -55,6 +81,32 @@ services:
         value: openai
       - key: SELDRUNE_MODEL_DEFAULT
         value: gpt-5.6-sol
+      - key: SELDRUNE_MODEL_ECONOMY
+        value: gpt-5.6-luna
+      - key: SELDRUNE_MODEL_BALANCED
+        value: gpt-5.6-terra
+      - key: SELDRUNE_MODEL_PREMIUM
+        value: gpt-5.6-sol
+      - key: SELDRUNE_AI_COST_GOVERNOR_ENABLED
+        value: true
+      - key: SELDRUNE_AI_REQUEST_MAX_USD
+        value: 0.15
+      - key: SELDRUNE_AI_PDF_REQUEST_MAX_USD
+        value: 0.10
+      - key: SELDRUNE_AI_PDF_MAX_TOTAL_USD
+        value: 0.25
+      - key: SELDRUNE_AI_PDF_MAX_ATTEMPTS
+        value: 3
+      - key: SELDRUNE_AI_PDF_MAX_OUTPUT_TOKENS
+        value: 3200
+      - key: SELDRUNE_AI_IMAGE_DETAIL
+        value: low
+      - key: SELDRUNE_AI_PDF_DETAIL
+        value: low
+      - key: SELDRUNE_AI_PROMPT_CACHE_ENABLED
+        value: true
+      - key: SELDRUNE_AI_EXACT_TOKEN_PREFLIGHT
+        value: true
       - key: OPENAI_API_KEY
         sync: false
       - key: SELDRUNE_GMAIL_TOOL_CREDENTIAL
