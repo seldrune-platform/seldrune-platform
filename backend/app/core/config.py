@@ -31,10 +31,11 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_starttls: bool = True
     smtp_timeout_seconds: float = 10.0
-    github_default_owner: str | None = None
-    github_default_repo: str | None = None
-    github_default_ref: str | None = None
+    github_default_owner: str | None = "seldrune-platform"
+    github_default_repo: str | None = "seldrune-platform"
+    github_default_ref: str | None = "main"
     render_default_service_id: str | None = None
+    agent_auto_grant_production_tools: bool = False
     model_provider: str = "mock"
     model_default: str = "mock-v1"
     model_timeout_seconds: float = 60.0
