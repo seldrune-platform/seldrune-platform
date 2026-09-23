@@ -67,3 +67,47 @@
   }
   .gpt-pdf-password input{width:min(190px,52vw)!important}
 }
+
+
+.gpt-mode-pill{
+  display:inline-flex;
+  align-items:center;
+  min-height:26px;
+  padding:4px 9px;
+  border:1px solid var(--portal-line);
+  border-radius:999px;
+  color:var(--portal-muted);
+  background:rgba(255,255,255,.018);
+  font-size:9px;
+  font-weight:750;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.gpt-mode-pill.active{
+  color:#dffcff;
+  border-color:color-mix(in srgb,var(--portal-accent) 48%,transparent);
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb,var(--portal-accent) 15%,transparent),
+      color-mix(in srgb,var(--portal-accent-2) 13%,transparent));
+  box-shadow:0 0 18px color-mix(in srgb,var(--portal-accent) 10%,transparent);
+}
+.gpt-dropzone.ai-pdf-mode{
+  border-color:color-mix(in srgb,var(--portal-accent) 48%,transparent);
+  background:
+    radial-gradient(circle at 88% 0,
+      color-mix(in srgb,var(--portal-accent) 10%,transparent),
+      transparent 18rem),
+    rgba(3,10,24,.8);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb,var(--portal-accent) 5%,transparent),
+    0 0 32px color-mix(in srgb,var(--portal-accent) 7%,transparent),
+    inset 0 1px rgba(255,255,255,.04);
+}
+.gpt-dropzone.ai-pdf-mode #seldrune-gpt-chat{
+  border-color:color-mix(in srgb,var(--portal-accent) 55%,transparent)!important;
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb,var(--portal-accent) 30%,transparent),
+      color-mix(in srgb,var(--portal-accent-2) 24%,transparent))!important;
+}
