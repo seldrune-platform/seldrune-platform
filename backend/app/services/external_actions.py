@@ -660,6 +660,141 @@ DEFAULT_EXTERNAL_ACTION_CATALOG: tuple[dict[str, Any], ...] = (
     },
     {
         "provider": "github",
+        "action_name": "repository-info",
+        "name": "GitHub · Repository info",
+        "default_tool_slug": "github-repository-info",
+        "credential_slug": "github-tool-token",
+        "credential_name": "GitHub tool token",
+        "credential_env_locator": "SELDRUNE_GITHUB_TOOL_TOKEN",
+        "description": "Verify the authorized repository and read its default branch metadata.",
+        "risk_level": "low",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"},
+                "repo": {"type": "string"},
+            },
+            "required": ["owner", "repo"],
+        },
+    },
+    {
+        "provider": "github",
+        "action_name": "read-file",
+        "name": "GitHub · Read file",
+        "default_tool_slug": "github-read-file",
+        "credential_slug": "github-tool-token",
+        "credential_name": "GitHub tool token",
+        "credential_env_locator": "SELDRUNE_GITHUB_TOOL_TOKEN",
+        "description": "Read a UTF-8 repository file from an authorized ref.",
+        "risk_level": "low",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"},
+                "repo": {"type": "string"},
+                "path": {"type": "string"},
+                "ref": {"type": "string"},
+            },
+            "required": ["owner", "repo", "path", "ref"],
+        },
+    },
+    {
+        "provider": "github",
+        "action_name": "create-branch",
+        "name": "GitHub · Create branch",
+        "default_tool_slug": "github-create-branch",
+        "credential_slug": "github-tool-token",
+        "credential_name": "GitHub tool token",
+        "credential_env_locator": "SELDRUNE_GITHUB_TOOL_TOKEN",
+        "description": "Create a feature branch from an authorized repository ref.",
+        "risk_level": "medium",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"},
+                "repo": {"type": "string"},
+                "branch": {"type": "string"},
+                "ref": {"type": "string"},
+            },
+            "required": ["owner", "repo", "branch", "ref"],
+        },
+    },
+    {
+        "provider": "github",
+        "action_name": "upsert-file",
+        "name": "GitHub · Upsert file on feature branch",
+        "default_tool_slug": "github-upsert-file",
+        "credential_slug": "github-tool-token",
+        "credential_name": "GitHub tool token",
+        "credential_env_locator": "SELDRUNE_GITHUB_TOOL_TOKEN",
+        "description": (
+            "Create or update a UTF-8 repository file on a non-default feature branch. "
+            "Direct writes to main/master are rejected."
+        ),
+        "risk_level": "medium",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"},
+                "repo": {"type": "string"},
+                "path": {"type": "string"},
+                "branch": {"type": "string"},
+                "message": {"type": "string"},
+                "content": {"type": "string"},
+                "base_ref": {"type": "string"},
+            },
+            "required": [
+                "owner",
+                "repo",
+                "path",
+                "branch",
+                "message",
+                "content",
+            ],
+        },
+    },
+    {
+        "provider": "github",
+        "action_name": "get-pull-request",
+        "name": "GitHub · Get pull request",
+        "default_tool_slug": "github-get-pull-request",
+        "credential_slug": "github-tool-token",
+        "credential_name": "GitHub tool token",
+        "credential_env_locator": "SELDRUNE_GITHUB_TOOL_TOKEN",
+        "description": "Inspect pull-request state and merge readiness.",
+        "risk_level": "low",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"},
+                "repo": {"type": "string"},
+                "pull_number": {"type": "integer"},
+            },
+            "required": ["owner", "repo", "pull_number"],
+        },
+    },
+    {
+        "provider": "github",
+        "action_name": "workflow-run-status",
+        "name": "GitHub · Workflow run status",
+        "default_tool_slug": "github-workflow-run-status",
+        "credential_slug": "github-tool-token",
+        "credential_name": "GitHub tool token",
+        "credential_env_locator": "SELDRUNE_GITHUB_TOOL_TOKEN",
+        "description": "Read the current state and conclusion of a GitHub Actions run.",
+        "risk_level": "low",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"},
+                "repo": {"type": "string"},
+                "run_id": {"type": "integer"},
+            },
+            "required": ["owner", "repo", "run_id"],
+        },
+    },
+    {
+        "provider": "github",
         "action_name": "create-issue",
         "name": "GitHub · Create issue",
         "default_tool_slug": "github-create-issue",
@@ -775,6 +910,25 @@ DEFAULT_EXTERNAL_ACTION_CATALOG: tuple[dict[str, Any], ...] = (
     },
     {
         "provider": "render",
+        "action_name": "deploy-status",
+        "name": "Render · Deploy status",
+        "default_tool_slug": "render-deploy-status",
+        "credential_slug": "render-api-key",
+        "credential_name": "Render API key",
+        "credential_env_locator": "SELDRUNE_RENDER_API_KEY",
+        "description": "Verify the current state of a Render deploy using its deploy id.",
+        "risk_level": "low",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "service_id": {"type": "string"},
+                "deploy_id": {"type": "string"},
+            },
+            "required": ["service_id", "deploy_id"],
+        },
+    },
+    {
+        "provider": "render",
         "action_name": "deploy-service",
         "name": "Render · Deploy service",
         "default_tool_slug": "render-deploy-service",
@@ -798,11 +952,22 @@ DEFAULT_EXTERNAL_ACTION_CATALOG: tuple[dict[str, Any], ...] = (
 
 def register_default_external_actions() -> None:
     register_external_action("gmail", "send-message", gmail_send_message)
+    register_external_action("github", "repository-info", github_repository_info)
+    register_external_action("github", "read-file", github_read_file)
+    register_external_action("github", "create-branch", github_create_branch)
+    register_external_action("github", "upsert-file", github_upsert_file)
+    register_external_action("github", "get-pull-request", github_get_pull_request)
+    register_external_action(
+        "github",
+        "workflow-run-status",
+        github_workflow_run_status,
+    )
     register_external_action("github", "create-issue", github_create_issue)
     register_external_action("github", "comment", github_comment)
     register_external_action("github", "create-pull-request", github_create_pull_request)
     register_external_action("github", "merge-pull-request", github_merge_pull_request)
     register_external_action("github", "dispatch-workflow", github_dispatch_workflow)
+    register_external_action("render", "deploy-status", render_deploy_status)
     register_external_action("render", "deploy-service", render_deploy_service)
 
 
