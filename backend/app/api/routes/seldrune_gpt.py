@@ -587,6 +587,12 @@ def seldrune_gpt(
             content=result.output_text,
             model=result.model,
             response_id=result.response_id,
+            input_tokens=result.usage.input_tokens,
+            output_tokens=result.usage.output_tokens,
+            cached_input_tokens=result.usage.cached_input_tokens,
+            estimated_cost_usd=result.usage.estimated_cost_usd,
+            cost_tier=route.tier,
+            model_calls=1,
         )
     )
     session.commit()
@@ -732,6 +738,9 @@ def edit_seldrune_gpt_pdf(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     total_ai_cost = float(result.usage.estimated_cost_usd or 0.0)
+    total_input_tokens = result.usage.input_tokens
+    total_output_tokens = result.usage.output_tokens
+    total_cached_input_tokens = result.usage.cached_input_tokens
     model_calls = 1
     models_used: set[str] = {result.model}
 
@@ -942,6 +951,11 @@ def edit_seldrune_gpt_pdf(
             total_ai_cost += float(
                 retry_model_result.usage.estimated_cost_usd or 0.0
             )
+            total_input_tokens += retry_model_result.usage.input_tokens
+            total_output_tokens += retry_model_result.usage.output_tokens
+            total_cached_input_tokens += (
+                retry_model_result.usage.cached_input_tokens
+            )
             candidate_plan = json.loads(retry_model_result.output_text)
         except (ModelGatewayError, json.JSONDecodeError) as exc:
             last_diagnostics.append(f"AI re-planning failed: {exc}")
@@ -1039,6 +1053,12 @@ def edit_seldrune_gpt_pdf(
             ),
             model=result.model,
             response_id=result.response_id,
+            input_tokens=total_input_tokens,
+            output_tokens=total_output_tokens,
+            cached_input_tokens=total_cached_input_tokens,
+            estimated_cost_usd=round(total_ai_cost, 8),
+            cost_tier="adaptive",
+            model_calls=model_calls,
         )
     )
     session.commit()
