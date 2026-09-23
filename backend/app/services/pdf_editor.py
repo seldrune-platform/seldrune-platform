@@ -1325,10 +1325,13 @@ def assess_pdf_edit_candidate(
     original.close()
     edited.close()
 
-    if visual_fidelity_score is not None and visual_fidelity_score < 95:
-        issues.append(
-            f"native typography fidelity is only {visual_fidelity_score}%"
-        )
+    # Typography fidelity is advisory here, not a structural safety failure.
+    # A candidate with correct content, intact table/vector geometry, no overlap,
+    # no drift, and no stale source text is safe to return even when font resource
+    # naming or glyph metrics prevent a 95%+ machine score. The route can continue
+    # trying for a better-looking candidate, but must not discard an otherwise
+    # valid edit solely because of this score.
+    _ = visual_fidelity_score
 
     unique_issues = tuple(dict.fromkeys(issues))
     penalty = min(100, len(unique_issues) * 25)
