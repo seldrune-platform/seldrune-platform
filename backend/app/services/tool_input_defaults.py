@@ -11,6 +11,10 @@ from backend.app.models.tool_definition import ToolDefinition
 from backend.app.models.user import User
 
 
+_SELDRUNE_DEFAULT_GITHUB_OWNER = "seldrune-platform"
+_SELDRUNE_DEFAULT_GITHUB_REPO = "seldrune-platform"
+
+
 def _non_empty(value: str | None) -> str | None:
     if not value:
         return None
@@ -27,8 +31,16 @@ def _github_runtime_defaults() -> tuple[str | None, str | None, str | None]:
         owner = _non_empty(render_owner)
         repo = _non_empty(render_repo)
 
-    owner = owner or _non_empty(settings.github_default_owner)
-    repo = repo or _non_empty(settings.github_default_repo)
+    owner = (
+        owner
+        or _non_empty(settings.github_default_owner)
+        or _SELDRUNE_DEFAULT_GITHUB_OWNER
+    )
+    repo = (
+        repo
+        or _non_empty(settings.github_default_repo)
+        or _SELDRUNE_DEFAULT_GITHUB_REPO
+    )
     ref = (
         _non_empty(os.getenv("RENDER_GIT_BRANCH"))
         or _non_empty(settings.github_default_ref)
