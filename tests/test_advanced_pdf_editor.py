@@ -290,6 +290,7 @@ def test_native_replace_reconstructs_original_font_size_color_and_baseline() -> 
         "original-look reconstruction" in note
         for note in result.verification_notes
     )
+    assert result.visual_fidelity_score == 100
 
 
 def test_native_replace_keeps_original_point_size_for_longer_text() -> None:
@@ -339,3 +340,61 @@ def test_native_replace_keeps_original_point_size_for_longer_text() -> None:
     assert float(spans[0]["size"]) == pytest.approx(15.0, abs=0.2)
     assert "bold" in str(spans[0]["font"]).casefold()
     output.close()
+
+
+def test_visual_bbox_uses_ai_inferred_typography() -> None:
+    document = pymupdf.open()
+    page = document.new_page(width=400, height=300)
+    page.draw_rect(
+        pymupdf.Rect(40, 80, 360, 150),
+        color=None,
+        fill=(0.94, 0.94, 0.94),
+    )
+    source = document.tobytes()
+    document.close()
+
+    result = apply_pdf_edit_plan(
+        source,
+        {
+            "summary": "Reconstruct scanned label",
+            "operations": [
+                {
+                    "action": "replace_text",
+                    "page": 1,
+                    "target_text": "scanned source",
+                    "replacement_text": "Styled replacement",
+                    "text": None,
+                    "bbox": [100, 300, 900, 500],
+                    "occurrence": None,
+                    "field_name": None,
+                    "value": None,
+                    "degrees": None,
+                    "font_size": 16,
+                    "font_family_hint": "Times",
+                    "font_weight": "bold",
+                    "font_style": "regular",
+                    "alignment": "center",
+                    "text_color": [0.8, 0.1, 0.1],
+                    "background_color": [0.94, 0.94, 0.94],
+                }
+            ],
+        },
+    )
+
+    output = pymupdf.open(stream=result.data, filetype="pdf")
+    spans = [
+        span
+        for block in output[0].get_text("dict").get("blocks", [])
+        for line in block.get("lines", [])
+        for span in line.get("spans", [])
+        if "Styled replacement" in str(span.get("text") or "")
+    ]
+    assert spans
+    span = spans[0]
+    assert "times" in str(span["font"]).casefold()
+    assert "bold" in str(span["font"]).casefold()
+    assert float(span["size"]) == pytest.approx(16.0, abs=0.4)
+    assert int(span["color"]) == 0xCC1A1A
+    output.close()
+
+    assert result.visual_fidelity_score is None
