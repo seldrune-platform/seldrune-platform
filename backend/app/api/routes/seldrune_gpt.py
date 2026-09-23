@@ -268,6 +268,7 @@ class SeldruneGPTPDFEditResponse(BaseModel):
     form_fields: int
     verified_operations: int
     verification_score: int
+    repair_passes: int = 0
     verification_notes: list[str] = Field(default_factory=list)
 
 
@@ -756,6 +757,7 @@ def edit_seldrune_gpt_pdf(
         form_fields=edit_result.inspection.form_fields,
         verified_operations=edit_result.verified_operations,
         verification_score=edit_result.verification_score,
+        repair_passes=repair_passes,
         verification_notes=edit_result.verification_notes,
     )
 
