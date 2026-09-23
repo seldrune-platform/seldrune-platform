@@ -21,7 +21,7 @@
   <div>
     <p class="eyebrow">SELD RUNE GPT · OWNER STUDIO</p>
     <h2 id="seldrune-gpt-title">Think, inspect, execute.</h2>
-    <p>Use multimodal chat for reasoning across text, images, PDFs, Office files, CSV, and JSON. Use Execute order for governed production actions backed by registered tools and receipts.</p>
+    <p>Use Seldrune GPT for chat, files, and governed execution. Attach one PDF and the same prompt automatically becomes the AI PDF Editor: describe the change in plain language and Seldrune returns the edited file.</p>
   </div>
   <div class="gpt-studio-runtime">
     <span>MODEL</span>
@@ -39,12 +39,12 @@
       <span>ATTACHMENTS</span>
       <small>Chat attachments: up to 6 files · 8 MB each · 20 MB total</small>
       <small>PNG · JPG · WEBP · GIF · PDF · TXT · MD · CSV · JSON · DOCX · XLSX · PPTX</small>
-      <small>Advanced PDF editor: one PDF up to 25 MB · native, scanned, hybrid, forms.</small>
+      <small>AI PDF Editor: attach one PDF up to 25 MB and describe the change. Seldrune chooses the editing method automatically—no coordinates or manual edit tools.</small>
     </div>
   </aside>
   <div class="gpt-studio-main">
     <div id="seldrune-gpt-thread" class="gpt-thread" aria-live="polite">
-      <div class="empty">Ask Seldrune anything, drop files here, or issue an owner order.</div>
+      <div class="empty">Ask Seldrune anything. Attach one PDF and simply tell the AI what to change—the edited PDF will be returned here.</div>
     </div>
     <form id="seldrune-gpt-form" class="gpt-composer">
       <div id="seldrune-gpt-dropzone" class="gpt-dropzone">
@@ -55,6 +55,7 @@
             <input id="seldrune-gpt-files" type="file" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,text/csv,application/json,.docx,.xlsx,.pptx">
             <button id="seldrune-gpt-attach" type="button" class="ghost">＋ Attach</button>
             <span id="seldrune-gpt-attachment-summary">No attachments</span>
+            <span id="seldrune-gpt-mode" class="gpt-mode-pill">Chat</span>
             <label id="seldrune-gpt-pdf-password-wrap" class="gpt-pdf-password hidden">
               <span>PDF password</span>
               <input id="seldrune-gpt-pdf-password" type="password" maxlength="256"
@@ -63,7 +64,6 @@
           </div>
           <div class="gpt-composer-actions">
             <button id="seldrune-gpt-chat" type="submit">Chat <span>→</span></button>
-            <button id="seldrune-gpt-pdf-edit" type="button" class="ghost">Edit PDF <span>✎</span></button>
             <button id="seldrune-gpt-execute" type="button">Execute order <span>⚡</span></button>
           </div>
         </div>
