@@ -385,6 +385,73 @@ def _apply_pdf_edit_plan(
     return result.data, result.applied_edits, result.warnings
 
 
+_PDF_VISION_DIAGNOSTIC_MARKERS = (
+    "was not found",
+    "could not be located",
+    "could not be verified near its bbox",
+    "not detectable near",
+    "visual-region",
+    "precise bbox",
+)
+
+
+def _pdf_retry_visual_pages(
+    plan: dict,
+    diagnostics: list[str],
+    *,
+    page_count: int,
+    max_pages: int = 3,
+) -> tuple[int, ...]:
+    relevant_operations: set[int] = set()
+    needs_visual_fallback = False
+    for diagnostic in diagnostics:
+        normalized = diagnostic.casefold()
+        if not any(marker in normalized for marker in _PDF_VISION_DIAGNOSTIC_MARKERS):
+            continue
+        needs_visual_fallback = True
+        match = re.search(r"\boperation\s+(\d+)\b", normalized)
+        if match:
+            relevant_operations.add(int(match.group(1)))
+
+    if not needs_visual_fallback:
+        return ()
+
+    operations = plan.get("operations")
+    if not isinstance(operations, list):
+        operations = []
+
+    referenced_pages: list[int] = []
+    for op_index, operation in enumerate(operations, start=1):
+        if relevant_operations and op_index not in relevant_operations:
+            continue
+        if not isinstance(operation, dict):
+            continue
+        page_number = operation.get("page")
+        if (
+            isinstance(page_number, int)
+            and 1 <= page_number <= page_count
+            and page_number not in referenced_pages
+        ):
+            referenced_pages.append(page_number)
+
+    if not referenced_pages and relevant_operations:
+        for operation in operations:
+            if not isinstance(operation, dict):
+                continue
+            page_number = operation.get("page")
+            if (
+                isinstance(page_number, int)
+                and 1 <= page_number <= page_count
+                and page_number not in referenced_pages
+            ):
+                referenced_pages.append(page_number)
+
+    if not referenced_pages and page_count > 0:
+        referenced_pages = [1]
+
+    return tuple(referenced_pages[: max(1, max_pages)])
+
+
 class SeldruneGPTOperatorRequest(BaseModel):
     order: str = Field(min_length=5, max_length=8000)
     command_id: UUID | None = None
@@ -609,11 +676,6 @@ def edit_seldrune_gpt_pdf(
     try:
         inspection = inspect_pdf(pdf_bytes, payload.password)
         model_pdf_bytes = prepare_pdf_for_model(pdf_bytes, payload.password)
-        initial_page_renders = render_pdf_pages_for_model(
-            pdf_bytes,
-            payload.password,
-            max_pages=8,
-        )
     except PDFEditorError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -624,18 +686,6 @@ def edit_seldrune_gpt_pdf(
             data_base64=base64.b64encode(model_pdf_bytes).decode("ascii"),
         ),
     )
-    initial_images = tuple(
-        ModelImageInput(
-            media_type=render.media_type,
-            data_base64=base64.b64encode(render.data).decode("ascii"),
-            name=f"pdf-page-{render.page_number}.jpg",
-        )
-        for render in initial_page_renders
-    )
-    initial_visual_pages = ", ".join(
-        str(render.page_number) for render in initial_page_renders
-    ) or "none"
-
     profile = (
         f"PDF profile: {inspection.page_count} pages; "
         f"type={inspection.document_type}; "
@@ -649,9 +699,11 @@ def edit_seldrune_gpt_pdf(
         input_text=(
             "Edit the attached PDF according to this owner instruction:\n"
             f"{payload.instruction}\n\n{profile}\n"
-            "Rendered ORIGINAL page previews are also attached after this text in page "
-            f"order: {initial_visual_pages}. Use those previews whenever visible content "
-            "is missing from the PDF text layer."
+            "Use the attached PDF itself for the first-pass plan. Prefer its native text "
+            "layer and do not invent coordinates when a requested target is not searchable. "
+            "If an exact visual bbox cannot be established confidently, keep the target page "
+            "and text precise and leave bbox null so the existing retry can request a targeted "
+            "visual fallback only for the affected page."
         ),
         instructions=(
             "You are Seldrune's autonomous AI PDF editor. Follow the owner's requested "
@@ -679,7 +731,7 @@ def edit_seldrune_gpt_pdf(
         ),
         max_output_tokens=max(settings.model_max_output_tokens, 6000),
         response_schema=_PDF_EDIT_SCHEMA,
-        input_images=initial_images,
+        input_images=(),
         input_files=input_files,
     )
     try:
@@ -786,28 +838,23 @@ def edit_seldrune_gpt_pdf(
             if last_diagnostics
             else "candidate can be improved"
         )
-        referenced_pages = sorted(
-            {
-                int(operation.get("page"))
-                for operation in candidate_plan.get("operations", [])
-                if isinstance(operation, dict)
-                and isinstance(operation.get("page"), int)
-                and 1 <= int(operation.get("page")) <= inspection.page_count
-            }
+        retry_visual_page_numbers = _pdf_retry_visual_pages(
+            candidate_plan,
+            last_diagnostics,
+            page_count=inspection.page_count,
         )
-        if not referenced_pages:
-            referenced_pages = [
-                render.page_number for render in initial_page_renders
-            ]
-        try:
-            retry_page_renders = render_pdf_pages_for_model(
-                pdf_bytes,
-                payload.password,
-                page_numbers=referenced_pages,
-                max_pages=10,
-            )
-        except PDFEditorError:
-            retry_page_renders = initial_page_renders
+        retry_page_renders = ()
+        if retry_visual_page_numbers:
+            try:
+                retry_page_renders = render_pdf_pages_for_model(
+                    pdf_bytes,
+                    payload.password,
+                    page_numbers=list(retry_visual_page_numbers),
+                    max_pages=len(retry_visual_page_numbers),
+                )
+            except PDFEditorError:
+                retry_page_renders = ()
+
         retry_images = tuple(
             ModelImageInput(
                 media_type=render.media_type,
@@ -819,6 +866,19 @@ def edit_seldrune_gpt_pdf(
         retry_visual_pages = ", ".join(
             str(render.page_number) for render in retry_page_renders
         ) or "none"
+        if retry_images:
+            retry_visual_instruction = (
+                "Rendered ORIGINAL page previews are attached after this text in page "
+                f"order: {retry_visual_pages}. For every missing/search-invisible target, "
+                "locate it visually in these previews and supply a normalized bbox "
+                "[x0,y0,x1,y1] on the 0..1000 coordinate system."
+            )
+        else:
+            retry_visual_instruction = (
+                "No extra page previews are attached for this retry because the diagnostics "
+                "do not require visual localization. Reuse the attached original PDF and keep "
+                "the previous target geometry unless the diagnostics specifically invalidate it."
+            )
 
         retry_request = ModelRequest(
             provider=ModelProvider.OPENAI,
@@ -829,10 +889,7 @@ def edit_seldrune_gpt_pdf(
                 f"Owner instruction: {payload.instruction}\n\n"
                 f"Previous candidate diagnostics:\n- {rejection_text}\n\n"
                 f"{profile}\n"
-                "Rendered ORIGINAL page previews are attached after this text in page "
-                f"order: {retry_visual_pages}. For every missing/search-invisible target, "
-                "locate it visually in these previews and supply a normalized bbox "
-                "[x0,y0,x1,y1] on the 0..1000 coordinate system."
+                f"{retry_visual_instruction}"
             ),
             instructions=(
                 "Re-plan the edit from the untouched original PDF. Every requested change "
