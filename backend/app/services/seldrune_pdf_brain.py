@@ -10,6 +10,8 @@ import random
 import re
 from typing import Any
 
+import pymupdf
+
 from backend.app.services.pdf_local_ocr import locate_text_with_ocr
 from backend.app.services.pdf_editor import (
     PDFEditAssessment,
@@ -21,7 +23,7 @@ from backend.app.services.pdf_editor import (
     validate_pdf_edit_plan,
 )
 
-MODEL_VERSION = "seldrune-pdf-brain-v0.3"
+MODEL_VERSION = "seldrune-pdf-brain-v0.3.1"
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 _QUOTE = r'(?:"([^"]+)"|\'([^\']+)\'|“([^”]+)”|‘([^’]+)’)'
 _PAGE_RE = re.compile(r"\bpage\s+(\d+)\b", re.IGNORECASE)
@@ -245,6 +247,20 @@ _FIELD_VALUE_PREFIX_RE = re.compile(
     re.IGNORECASE,
 )
 
+_FIELD_LABEL_ONLY_RE = re.compile(
+    r"^(?:the\s+)?(?:"
+    r"joining\s+date|last\s+working\s+date|invoice\s+date|offer\s+date|"
+    r"effective\s+date|start\s+date|end\s+date|date\s+of\s+birth|dob|date|"
+    r"annual\s+salary|monthly\s+salary|gross\s+salary|net\s+salary|"
+    r"basic\s+salary|basic\s+pay|fixed\s+pay|variable\s+pay|salary|"
+    r"total\s+ctc|ctc|hra|amount|total|"
+    r"employee\s+name|candidate\s+name|name|"
+    r"employee\s+id|employee\s+number|id|"
+    r"designation|department|location|address|phone|email|status|notice\s+period"
+    r")\s*:?[\s]*$",
+    re.IGNORECASE,
+)
+
 
 def _clean_slot(value: str | None) -> str | None:
     if value is None:
@@ -281,6 +297,126 @@ def _strip_field_value_prefix(value: str | None) -> str | None:
         if candidate:
             return candidate
     return cleaned
+
+
+def _field_label_only(value: str | None) -> str | None:
+    cleaned = _clean_slot(value)
+    if not cleaned or not _FIELD_LABEL_ONLY_RE.match(cleaned):
+        return None
+    return re.sub(r"^the\s+", "", cleaned, flags=re.IGNORECASE).rstrip(":").strip()
+
+
+def _candidate_matches_replacement_shape(candidate: str, replacement: str) -> bool:
+    replacement_digits = re.findall(r"\d[\d,./-]*", replacement)
+    if not replacement_digits:
+        return True
+    candidate_digits = re.findall(r"\d[\d,./-]*", candidate)
+    return len(candidate_digits) == 1
+
+
+def _native_value_after_label(
+    pdf_bytes: bytes,
+    label: str,
+    *,
+    password: str | None,
+    page_number: int | None,
+) -> tuple[int, str] | None:
+    try:
+        document = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+    except Exception:
+        return None
+
+    if document.needs_pass:
+        if not password or not document.authenticate(password):
+            document.close()
+            return None
+
+    indexes = (
+        [page_number - 1]
+        if isinstance(page_number, int) and 1 <= page_number <= document.page_count
+        else list(range(document.page_count))
+    )
+    candidates: list[tuple[int, str]] = []
+    label_pattern = re.compile(
+        rf"^\s*{re.escape(label)}\s*[:\-]?\s+(.+?)\s*$",
+        re.IGNORECASE,
+    )
+    try:
+        for page_index in indexes:
+            page = document[page_index]
+            page_dict = page.get_text("dict")
+            for block in page_dict.get("blocks", []):
+                for line in block.get("lines", []):
+                    spans = [
+                        str(span.get("text") or "").strip()
+                        for span in line.get("spans", [])
+                        if str(span.get("text") or "").strip()
+                    ]
+                    if not spans:
+                        continue
+                    line_text = " ".join(spans)
+                    match = label_pattern.match(line_text)
+                    if not match:
+                        continue
+                    candidate = _clean_slot(match.group(1))
+                    if not candidate or candidate.casefold() == label.casefold():
+                        continue
+                    candidates.append((page_index + 1, candidate))
+    finally:
+        document.close()
+
+    unique: list[tuple[int, str]] = []
+    seen: set[tuple[int, str]] = set()
+    for candidate in candidates:
+        key = (candidate[0], candidate[1].casefold())
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(candidate)
+    return unique[0] if len(unique) == 1 else None
+
+
+def _resolve_native_field_targets(
+    pdf_bytes: bytes,
+    plan: dict[str, Any],
+    *,
+    password: str | None,
+) -> dict[str, Any] | None:
+    updated = deepcopy(plan)
+    operations = updated.get("operations")
+    if not isinstance(operations, list):
+        return None
+
+    for operation in operations:
+        if not isinstance(operation, dict):
+            return None
+        if str(operation.get("action") or "") != "replace_text":
+            continue
+        label = _field_label_only(str(operation.get("target_text") or ""))
+        if label is None:
+            continue
+        replacement = str(operation.get("replacement_text") or "").strip()
+        if not replacement:
+            return None
+        resolved = _native_value_after_label(
+            pdf_bytes,
+            label,
+            password=password,
+            page_number=(
+                operation.get("page")
+                if isinstance(operation.get("page"), int)
+                else None
+            ),
+        )
+        if resolved is None:
+            return None
+        page, old_value = resolved
+        if not _candidate_matches_replacement_shape(old_value, replacement):
+            return None
+        operation["page"] = page
+        operation["target_text"] = old_value
+
+    return updated
 
 
 def _page(instruction: str) -> int | None:
@@ -676,6 +812,14 @@ def try_local_pdf_edit(
 
     inspect_pdf(pdf_bytes, password)
     plan = deepcopy(prediction.plan)
+    resolved_plan = _resolve_native_field_targets(
+        pdf_bytes,
+        plan,
+        password=password,
+    )
+    if resolved_plan is None:
+        return None
+    plan = resolved_plan
     ocr_used = False
     validation = validate_pdf_edit_plan(
         pdf_bytes,
