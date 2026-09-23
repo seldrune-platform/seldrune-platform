@@ -27,6 +27,7 @@ from backend.app.models.seldrune_gpt_message import SeldruneGPTMessage
 from backend.app.models.task import Task
 from backend.app.models.tool_definition import ToolDefinition
 from backend.app.schemas.orchestration import AutonomousExecutionRequest, OrchestrationCreate
+from backend.app.services.ai_cost_governor import choose_cost_route
 from backend.app.services.audit import record_audit
 from backend.app.services.external_actions import default_external_action_catalog
 from backend.app.services.model_gateway import ModelGateway, ModelGatewayError
@@ -275,6 +276,9 @@ class SeldruneGPTPDFEditResponse(BaseModel):
     layout_integrity_score: int
     reconstruction_attempts: int = 1
     repair_passes: int = 0
+    estimated_ai_cost_usd: float | None = None
+    model_calls: int = 0
+    models_used: list[str] = Field(default_factory=list)
     verification_notes: list[str] = Field(default_factory=list)
 
 
@@ -440,6 +444,9 @@ class SeldruneGPTResponse(BaseModel):
     response_id: str | None
     input_tokens: int
     output_tokens: int
+    cached_input_tokens: int = 0
+    estimated_cost_usd: float | None = None
+    cost_tier: str = "configured"
     latency_ms: int
     provider: str
 
