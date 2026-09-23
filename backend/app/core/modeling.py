@@ -19,6 +19,9 @@ class ModelUsage:
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
+    cached_input_tokens: int = 0
+    cache_write_tokens: int = 0
+    estimated_cost_usd: float | None = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +49,12 @@ class ModelRequest:
     response_schema: dict[str, Any] | None = None
     input_images: tuple[ModelImageInput, ...] = ()
     input_files: tuple[ModelFileInput, ...] = ()
+    image_detail: str = "low"
+    pdf_detail: str = "low"
+    reasoning_effort: str | None = None
+    prompt_cache_key: str | None = None
+    max_estimated_cost_usd: float | None = None
+    exact_token_preflight: bool = False
 
 
 @dataclass(frozen=True)
