@@ -63,6 +63,21 @@ def _open_document(pdf_bytes: bytes, password: str | None = None) -> pymupdf.Doc
     return document
 
 
+def prepare_pdf_for_model(
+    pdf_bytes: bytes,
+    password: str | None = None,
+) -> bytes:
+    document = _open_document(pdf_bytes, password)
+    try:
+        return document.tobytes(
+            garbage=2,
+            deflate=True,
+            encryption=pymupdf.PDF_ENCRYPT_NONE,
+        )
+    finally:
+        document.close()
+
+
 def inspect_pdf(pdf_bytes: bytes, password: str | None = None) -> PDFInspection:
     document = _open_document(pdf_bytes, password)
     native_text_pages = 0
