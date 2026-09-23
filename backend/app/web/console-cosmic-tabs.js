@@ -1,22 +1,22 @@
 (() => {
   const WORKSPACES = [
     ["home", "Home", "⌂"],
-    ["operator", "Operator", "✦"],
-    ["operations", "Operations", "⌘"],
+    ["operator", "GPT", "✦"],
+    ["operations", "Work", "⌘"],
     ["media", "Media", "◉"],
-    ["intelligence", "Intelligence", "⬡"],
+    ["intelligence", "Insights", "⬡"],
     ["tools", "Tools", "⌁"],
     ["settings", "Settings", "⚙"],
   ];
 
   const DESCRIPTIONS = {
-    home: "Owner-level state, priorities, and shortcuts without engineering noise.",
-    operator: "Talk to Seldrune, issue governed orders, and create new missions.",
-    operations: "Execution runtime, approvals, active work, and delivery evidence.",
-    media: "Seldrune Face, LiveShift, and authorized real-time media controls.",
-    intelligence: "Agent evidence, incidents, governance history, and truth signals.",
-    tools: "External providers, credentials, action receipts, and tool execution.",
-    settings: "Portal experience, treasury, governance limits, and owner controls.",
+    home: "Your simple launch point for Seldrune.",
+    operator: "Chat, upload files, edit PDFs, and issue owner orders.",
+    operations: "See active work, approvals, and execution progress.",
+    media: "Open Seldrune Face and LiveShift controls.",
+    intelligence: "Review evidence, incidents, agents, and audit signals.",
+    tools: "Connect providers, manage credentials, and run tools.",
+    settings: "Portal appearance, limits, treasury, and owner controls.",
   };
 
   function initOwnerPortal() {
@@ -94,49 +94,117 @@
     };
 
     const home = document.createElement("section");
-    home.className = "owner-portal-home";
+    home.className = "owner-portal-home portal-depth-scene";
+    home.dataset.portalScene = "true";
     home.innerHTML = `
-      <article class="owner-hero-card owner-hero-primary">
-        <div class="owner-hero-copy">
-          <span class="owner-hero-kicker">OWNER COMMAND CENTER</span>
-          <h2>One portal. Every Seldrune operation.</h2>
-          <p>
-            Run the organization from outcome-focused workspaces while engineering
-            versions, internal milestones, and implementation detail remain behind
-            the backend boundary.
-          </p>
-          <div class="owner-hero-actions">
-            <button type="button" data-open-portal="operator">Speak to Seldrune</button>
-            <button type="button" class="ghost" data-open-portal="operations">
-              View operations
-            </button>
-          </div>
+      <div class="neural-grid-layer" aria-hidden="true">
+        <i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+
+      <button class="portal-quick-card portal-quick-gpt" type="button"
+              data-open-portal="operator" data-depth="1.05">
+        <span class="portal-quick-icon">✦</span>
+        <span><strong>GPT</strong><small>Chat with Seldrune</small></span>
+        <b>→</b>
+      </button>
+
+      <button class="portal-quick-card portal-quick-orders" type="button"
+              data-open-portal="operator" data-focus-target="#command" data-depth=".8">
+        <span class="portal-quick-icon">⌘</span>
+        <span><strong>Orders</strong><small>Run executive work</small></span>
+        <b>→</b>
+      </button>
+
+      <article class="portal-gateway-card" data-depth="1.35">
+        <div class="portal-gateway-copy">
+          <span>SELDRUNE OWNER PORTAL</span>
+          <h2>Enter Seldrune</h2>
+          <p>One intelligent gateway to chat, work, tools, files, media, and evidence.</p>
         </div>
-        <div class="owner-reactor" aria-hidden="true">
-          <i></i><i></i><i></i><b>STI</b>
-        </div>
-      </article>
-      <article class="owner-signal-card">
-        <span>OWNER ATTENTION</span>
-        <strong id="portal-attention-value">Checking</strong>
-        <small id="portal-attention-detail">
-          Reading approvals, incidents, and active execution.
-        </small>
-        <button type="button" class="ghost" data-open-portal="operations">
-          Open operations
+        <button class="portal-gateway" type="button" data-open-portal="operator"
+                aria-label="Enter Seldrune GPT">
+          <span class="portal-aura"></span>
+          <span class="portal-ring portal-ring-outer"></span>
+          <span class="portal-ring portal-ring-mid"></span>
+          <span class="portal-ring portal-ring-inner"></span>
+          <span class="portal-fractal">
+            <i></i><i></i><i></i><i></i><i></i><i></i>
+          </span>
+          <span class="portal-core">
+            <b>STI</b>
+            <small>ENTER</small>
+          </span>
+          <span class="portal-particles" aria-hidden="true"></span>
         </button>
+        <div class="portal-live-strip">
+          <span><i></i><strong id="portal-runtime-inline">Runtime checking</strong></span>
+          <span><strong id="portal-attention-value">Checking</strong><small id="portal-attention-detail">Owner attention</small></span>
+        </div>
       </article>
-      <article class="owner-signal-card">
-        <span>ACTION FABRIC</span>
+
+      <button class="portal-quick-card portal-quick-tools" type="button"
+              data-open-portal="tools" data-depth=".9">
+        <span class="portal-quick-icon">⌁</span>
+        <span><strong>Tools</strong><small>Connect & manage</small></span>
+        <b>→</b>
+      </button>
+
+      <button class="portal-quick-card portal-quick-files" type="button"
+              data-open-portal="operator" data-focus-target="#seldrune-gpt-dropzone"
+              data-depth="1.1">
+        <span class="portal-quick-icon">▣</span>
+        <span><strong>Files & PDF</strong><small>Upload, read, edit</small></span>
+        <b>→</b>
+      </button>
+
+      <article class="portal-status-card" data-depth=".55">
+        <span>System</span>
         <strong id="portal-tools-value">Governed</strong>
-        <small>
-          Provider actions require real tools and receipts. Missing integrations fail closed.
-        </small>
-        <button type="button" class="ghost" data-open-portal="tools">
-          Open tools
-        </button>
+        <small>Provider actions stay receipt-backed and credential-aware.</small>
+        <button type="button" class="ghost" data-open-portal="operations">View work</button>
       </article>`;
     panels.get("home")?.querySelector(".owner-portal-heading")?.after(home);
+
+    const particleRoot = home.querySelector(".portal-particles");
+    if (particleRoot) {
+      for (let index = 0; index < 22; index += 1) {
+        const particle = document.createElement("i");
+        particle.style.setProperty("--particle-index", String(index));
+        particleRoot.append(particle);
+      }
+    }
+
+    const scene = home;
+    const gateway = home.querySelector(".portal-gateway");
+    const motionReduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!motionReduced) {
+      scene.addEventListener("pointermove", event => {
+        const bounds = scene.getBoundingClientRect();
+        const x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+        const y = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
+        scene.style.setProperty("--cursor-x", `${(x * 100).toFixed(2)}%`);
+        scene.style.setProperty("--cursor-y", `${(y * 100).toFixed(2)}%`);
+        scene.style.setProperty("--portal-tilt-x", `${((.5 - y) * 8).toFixed(2)}deg`);
+        scene.style.setProperty("--portal-tilt-y", `${((x - .5) * 10).toFixed(2)}deg`);
+        scene.querySelectorAll("[data-depth]").forEach(node => {
+          const depth = Number(node.dataset.depth || 1);
+          const dx = (x - .5) * 16 * depth;
+          const dy = (y - .5) * 12 * depth;
+          node.style.setProperty("--depth-x", `${dx.toFixed(2)}px`);
+          node.style.setProperty("--depth-y", `${dy.toFixed(2)}px`);
+        });
+      });
+      scene.addEventListener("pointerleave", () => {
+        scene.style.setProperty("--portal-tilt-x", "0deg");
+        scene.style.setProperty("--portal-tilt-y", "0deg");
+        scene.querySelectorAll("[data-depth]").forEach(node => {
+          node.style.setProperty("--depth-x", "0px");
+          node.style.setProperty("--depth-y", "0px");
+        });
+      });
+    }
+    gateway?.addEventListener("focus", () => scene.classList.add("portal-keyboard-focus"));
+    gateway?.addEventListener("blur", () => scene.classList.remove("portal-keyboard-focus"));
 
     move("#overview", "home");
     move("#seldrune-gpt", "operator");
@@ -223,7 +291,16 @@
 
     document.addEventListener("click", event => {
       const trigger = event.target.closest("[data-open-portal]");
-      if (trigger) activate(trigger.dataset.openPortal);
+      if (!trigger) return;
+      activate(trigger.dataset.openPortal);
+      const focusTarget = trigger.dataset.focusTarget;
+      if (focusTarget) {
+        requestAnimationFrame(() => {
+          const target = document.querySelector(focusTarget);
+          target?.scrollIntoView({behavior: "smooth", block: "center"});
+          target?.focus?.({preventScroll: true});
+        });
+      }
     });
 
     window.addEventListener("hashchange", () => {
@@ -287,6 +364,14 @@
       runtimeState.dataset.state = degraded ? "degraded" : ready ? "ready" : "checking";
       runtimeModel.textContent =
         document.getElementById("runtime-version")?.textContent || "Seldrune runtime";
+      const inline = document.getElementById("portal-runtime-inline");
+      if (inline) {
+        inline.textContent = degraded
+          ? "Runtime attention"
+          : ready
+            ? "Runtime online"
+            : "Runtime checking";
+      }
     };
     if (runtime) {
       new MutationObserver(syncRuntime).observe(runtime, {
