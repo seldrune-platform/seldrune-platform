@@ -784,6 +784,11 @@ def edit_seldrune_gpt_pdf(
     safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip("-._") or "document"
     output_name = f"{safe_stem}-edited.pdf"
     summary = str(plan.get("summary") or "PDF edit completed.")
+    visual_summary = (
+        f"{edit_result.visual_fidelity_score}% visual fidelity"
+        if edit_result.visual_fidelity_score is not None
+        else "visual fidelity not machine-scored for this PDF type"
+    )
 
     record_audit(
         session,
@@ -824,8 +829,8 @@ def edit_seldrune_gpt_pdf(
             content=(
                 f"{summary} Created {output_name} with "
                 f"{edit_result.applied_edits} applied edits and "
-                f"{edit_result.verification_score}% content verification and "
-                f"{edit_result.visual_fidelity_score}% visual fidelity and "
+                f"{edit_result.verification_score}% content verification, "
+                f"{visual_summary}, and "
                 f"{selected_assessment.layout_integrity_score}% layout integrity"
                 + (
                     f" after {reconstruction_attempts} reconstruction attempts."
