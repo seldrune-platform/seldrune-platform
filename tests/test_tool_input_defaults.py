@@ -319,3 +319,18 @@ def test_owner_planner_schema_omits_runtime_defaulted_required_fields(
     assert response.status_code == 201
     assert observed["input_defaults"] == ["owner", "repo"]
     assert observed["input_schema"]["required"] == ["pull_number"]
+
+
+def test_seldrune_repository_is_the_final_github_runtime_default(monkeypatch) -> None:
+    for name in ("RENDER_GIT_REPO_SLUG", "RENDER_GIT_BRANCH"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(tool_input_defaults.settings, "github_default_owner", None)
+    monkeypatch.setattr(tool_input_defaults.settings, "github_default_repo", None)
+    monkeypatch.setattr(tool_input_defaults.settings, "github_default_ref", None)
+
+    targets = tool_input_defaults.production_runtime_targets()
+
+    assert targets["github_owner"] == "seldrune-platform"
+    assert targets["github_repo"] == "seldrune-platform"
+    assert targets["github_full_name"] == "seldrune-platform/seldrune-platform"
+    assert targets["github_ref"] == "main"
