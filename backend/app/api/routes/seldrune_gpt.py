@@ -678,8 +678,12 @@ def edit_seldrune_gpt_pdf(
     candidate_plan = plan
     reconstruction_attempts = 0
     last_diagnostics: list[str] = []
+    best_safe_result = None
+    best_safe_assessment = None
+    best_safe_plan = None
+    best_safe_quality = -1
 
-    for attempt_index in range(4):
+    for attempt_index in range(5):
         reconstruction_attempts = attempt_index + 1
         candidate_result = None
         candidate_assessment = None
@@ -712,7 +716,6 @@ def edit_seldrune_gpt_pdf(
                     for warning in candidate_result.warnings
                     if "target was not found" in warning
                     or "did not fit cleanly" in warning
-                    or "visual fidelity" in warning
                 )
 
                 content_verified = (
@@ -724,35 +727,51 @@ def edit_seldrune_gpt_pdf(
                         "content verification did not reach the required level"
                     )
 
-                if (
+                structurally_safe = (
                     candidate_assessment.safe_to_return
                     and content_verified
                     and not candidate_diagnostics
-                ):
-                    edit_result = candidate_result
-                    selected_assessment = candidate_assessment
-                    plan = candidate_plan
-                    break
+                )
+                if structurally_safe:
+                    fidelity = candidate_result.visual_fidelity_score
+                    quality = fidelity if fidelity is not None else 100
+                    if quality > best_safe_quality:
+                        best_safe_result = candidate_result
+                        best_safe_assessment = candidate_assessment
+                        best_safe_plan = candidate_plan
+                        best_safe_quality = quality
+
+                    if fidelity is None or fidelity >= 95:
+                        edit_result = candidate_result
+                        selected_assessment = candidate_assessment
+                        plan = candidate_plan
+                        break
+
+                    candidate_diagnostics.append(
+                        "candidate is structurally safe but original-look fidelity is "
+                        f"{fidelity}%; try to improve typography while keeping the same "
+                        "target geometry"
+                    )
         except PDFEditorError as exc:
             candidate_diagnostics.append(str(exc))
 
         last_diagnostics = list(dict.fromkeys(candidate_diagnostics))
-        if attempt_index >= 3:
+        if attempt_index >= 4:
             break
 
         rejection_text = (
             "\n- ".join(last_diagnostics[:30])
             if last_diagnostics
-            else "candidate did not satisfy strict visual integrity checks"
+            else "candidate can be improved"
         )
         retry_request = ModelRequest(
             provider=ModelProvider.OPENAI,
             model=settings.model_default,
             input_text=(
                 "Create a complete replacement edit plan against the ORIGINAL attached PDF. "
-                "The previous candidate was rejected and must not be repaired or layered.\n"
+                "Start from the untouched original; do not layer on a previous candidate.\n"
                 f"Owner instruction: {payload.instruction}\n\n"
-                f"Visual/layout rejection diagnostics:\n- {rejection_text}\n\n"
+                f"Previous candidate diagnostics:\n- {rejection_text}\n\n"
                 f"{profile}"
             ),
             instructions=(
@@ -763,10 +782,12 @@ def edit_seldrune_gpt_pdf(
                 "and alignment. If a value occurs more than once, explicitly choose its "
                 "occurrence or give a precise bbox from the original page. Never use fuzzy "
                 "numeric targets and never generate overlapping operations. For tables, keep "
-                "the replacement inside the same cell and "
-                "do not cross component labels, borders, or neighboring values. For scanned "
-                "content, derive the exact bbox and typography visually. Return a complete "
-                "new plan, not a delta or repair plan. Do not change unrelated content."
+                "the replacement inside the same cell and do not cross component labels, "
+                "borders, or neighboring values. If the previous candidate was already "
+                "structurally safe but had lower typography fidelity, keep its target "
+                "geometry and improve only font/style matching. For scanned content, derive "
+                "the exact bbox and typography visually. Return a complete new plan, not a "
+                "delta or repair plan. Do not change unrelated content."
             ),
             max_output_tokens=max(settings.model_max_output_tokens, 6000),
             response_schema=_PDF_EDIT_SCHEMA,
@@ -780,16 +801,29 @@ def edit_seldrune_gpt_pdf(
         except (ModelGatewayError, json.JSONDecodeError) as exc:
             last_diagnostics.append(f"AI re-planning failed: {exc}")
 
+    if edit_result is None and best_safe_result is not None:
+        edit_result = best_safe_result
+        selected_assessment = best_safe_assessment
+        plan = best_safe_plan
+        fidelity = edit_result.visual_fidelity_score
+        if fidelity is not None and fidelity < 95:
+            edit_result.warnings.append(
+                "Returned the best structurally safe AI edit after "
+                f"{reconstruction_attempts} reconstruction attempts. "
+                f"Original-look machine fidelity is {fidelity}%, so review typography "
+                "if pixel-level matching is critical."
+            )
+
     if edit_result is None or selected_assessment is None:
         detail = (
             "; ".join(last_diagnostics[:8])
             if last_diagnostics
-            else "visual integrity could not be verified"
+            else "layout integrity could not be verified"
         )
         raise HTTPException(
             status_code=422,
             detail=(
-                "AI PDF editor refused to return a visually unsafe edit. "
+                "AI PDF editor could not produce a layout-safe edited document. "
                 "The original PDF was preserved. " + detail
             ),
         )
