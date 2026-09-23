@@ -4,8 +4,8 @@ from backend.app.services.unarchi_benchmark import run_unarchi_ablation_benchmar
 def test_unarchi_ablation_benchmark_passes_all_scenarios() -> None:
     result = run_unarchi_ablation_benchmark()
 
-    assert result["scenario_count"] == 9
-    assert result["passed_scenarios"] == 9
+    assert result["scenario_count"] == 10
+    assert result["passed_scenarios"] == 10
     assert result["pass_rate"] == 1.0
     assert result["claims_phenomenal_consciousness"] is False
 
@@ -100,4 +100,20 @@ def test_unarchi_benchmark_covers_causal_hypothesis_revision() -> None:
     assert (
         world_model["temperature_confidence"]
         > world_model["pressure_confidence"]
+    )
+
+
+def test_unarchi_benchmark_covers_intervention_aware_self_world_revision() -> None:
+    result = run_unarchi_ablation_benchmark()
+    scenarios = {item["name"]: item for item in result["scenarios"]}
+
+    intervention = scenarios["intervention_aware_self_world_revision"]
+
+    assert intervention["passed"] is True
+    assert intervention["environment_held_constant"] is True
+    assert intervention["attribution"] == "self_intervention"
+    assert intervention["leader_is_self"] is True
+    assert (
+        intervention["self_confidence"]
+        > intervention["external_confidence"]
     )
