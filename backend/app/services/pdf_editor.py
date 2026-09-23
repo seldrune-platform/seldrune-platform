@@ -51,9 +51,9 @@ class PDFEditResult:
         return round((self.verified_operations / self.applied_edits) * 100)
 
     @property
-    def visual_fidelity_score(self) -> int:
+    def visual_fidelity_score(self) -> int | None:
         if not self.visual_fidelity_scores:
-            return 0
+            return None
         return round(sum(self.visual_fidelity_scores) / len(self.visual_fidelity_scores))
 
 
@@ -557,6 +557,61 @@ def _estimate_background(page: pymupdf.Page, rect: pymupdf.Rect) -> tuple[float,
     )
 
 
+def _operation_rgb(
+    value: Any,
+    fallback: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    if not isinstance(value, list) or len(value) != 3:
+        return fallback
+    try:
+        channels = tuple(max(0.0, min(1.0, float(item))) for item in value)
+    except (TypeError, ValueError):
+        return fallback
+    return channels  # type: ignore[return-value]
+
+
+def _visual_font_name(operation: dict[str, Any]) -> str:
+    family = str(operation.get("font_family_hint") or "Helvetica")
+    weight = str(operation.get("font_weight") or "regular").casefold()
+    style = str(operation.get("font_style") or "regular").casefold()
+    family_key = _font_key(family)
+    bold = weight == "bold" or "bold" in family_key
+    italic = style == "italic" or "italic" in family_key or "oblique" in family_key
+
+    if "times" in family_key or "serif" in family_key:
+        if bold and italic:
+            return "tibi"
+        if bold:
+            return "tibo"
+        if italic:
+            return "tiit"
+        return "tiro"
+    if "courier" in family_key or "mono" in family_key:
+        if bold and italic:
+            return "cobi"
+        if bold:
+            return "cobo"
+        if italic:
+            return "coit"
+        return "cour"
+    if bold and italic:
+        return "hebi"
+    if bold:
+        return "hebo"
+    if italic:
+        return "heit"
+    return "helv"
+
+
+def _operation_alignment(operation: dict[str, Any]) -> int:
+    value = str(operation.get("alignment") or "left").casefold()
+    return {
+        "left": pymupdf.TEXT_ALIGN_LEFT,
+        "center": pymupdf.TEXT_ALIGN_CENTER,
+        "right": pymupdf.TEXT_ALIGN_RIGHT,
+    }.get(value, pymupdf.TEXT_ALIGN_LEFT)
+
+
 def _normalized_bbox(page: pymupdf.Page, bbox: Any) -> pymupdf.Rect | None:
     if not isinstance(bbox, list) or len(bbox) != 4:
         return None
@@ -580,6 +635,9 @@ def _fit_textbox(
     *,
     font_size: float,
     color: tuple[float, float, float],
+    fontname: str = "helv",
+    align: int = pymupdf.TEXT_ALIGN_LEFT,
+    rotate: int = 0,
 ) -> bool:
     if not text:
         return True
@@ -591,8 +649,10 @@ def _fit_textbox(
             expanded,
             text,
             fontsize=trial_size,
+            fontname=fontname,
             color=color,
-            align=pymupdf.TEXT_ALIGN_LEFT,
+            align=align,
+            rotate=rotate,
             overlay=True,
         )
         if result >= 0:
@@ -873,7 +933,10 @@ def apply_pdf_edit_plan(
                 ] = []
                 for rectangle in rectangles:
                     if match_mode == "visual_bbox":
-                        background = _estimate_background(page, rectangle)
+                        background = _operation_rgb(
+                            operation.get("background_color"),
+                            _estimate_background(page, rectangle),
+                        )
                         prepared.append((rectangle, None, background))
                         page.add_redact_annot(rectangle, fill=background)
                     else:
@@ -922,13 +985,22 @@ def apply_pdf_edit_plan(
                                         f"is {fidelity}% on page {page_index + 1}."
                                     )
                         else:
-                            font_size, color = _style_near_rect(page, rectangle)
+                            inferred_size, inferred_color = _style_near_rect(page, rectangle)
+                            font_size = float(
+                                operation.get("font_size") or inferred_size
+                            )
+                            color = _operation_rgb(
+                                operation.get("text_color"),
+                                inferred_color,
+                            )
                             inserted = _fit_textbox(
                                 page,
                                 rectangle,
                                 replacement_text,
                                 font_size=font_size,
                                 color=color,
+                                fontname=_visual_font_name(operation),
+                                align=_operation_alignment(operation),
                             )
                         if not inserted:
                             warnings.append(
