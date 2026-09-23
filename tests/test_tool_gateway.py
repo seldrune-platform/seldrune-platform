@@ -233,13 +233,23 @@ def test_default_external_adapter_catalog_is_exposed(client: TestClient) -> None
         for item in response.json()
     }
     assert ("gmail", "send-message") in adapters
+    assert ("github", "repository-info") in adapters
+    assert ("github", "read-file") in adapters
+    assert ("github", "create-branch") in adapters
+    assert ("github", "upsert-file") in adapters
+    assert ("github", "get-pull-request") in adapters
+    assert ("github", "workflow-run-status") in adapters
     assert ("github", "create-issue") in adapters
     assert ("github", "comment") in adapters
     assert ("github", "create-pull-request") in adapters
     assert ("github", "merge-pull-request") in adapters
     assert ("github", "dispatch-workflow") in adapters
     assert ("render", "deploy-service") in adapters
+    assert ("render", "deploy-status") in adapters
+    assert ("internal", "json-validate") in adapters
+    assert ("internal", "csv-preview") in adapters
     assert adapters[("gmail", "send-message")]["credential_required"] is True
+    assert adapters[("internal", "json-validate")]["credential_required"] is False
 
 
 def test_builtin_adapter_enforces_minimum_risk(client: TestClient) -> None:
