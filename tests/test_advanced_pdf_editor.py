@@ -4,6 +4,7 @@ import pytest
 from backend.app.services.pdf_editor import (
     PDFEditorError,
     apply_pdf_edit_plan,
+    assess_pdf_edit_candidate,
     inspect_pdf,
     prepare_pdf_for_model,
 )
@@ -398,3 +399,168 @@ def test_visual_bbox_uses_ai_inferred_typography() -> None:
     output.close()
 
     assert result.visual_fidelity_score is None
+
+
+def _salary_offer_pdf() -> bytes:
+    document = pymupdf.open()
+    page = document.new_page(width=612, height=792)
+    page.insert_text((210, 92), "ANNEXURE - I", fontname="hebo", fontsize=12)
+    page.insert_text((190, 112), "SALARY OFFER SHEET", fontname="hebo", fontsize=12)
+    page.insert_text((50, 148), "Name: Giridharan V", fontsize=10)
+    page.insert_text((50, 164), "Location: Chennai", fontsize=10)
+    page.insert_text((50, 180), "Position: Assistant Manager", fontsize=10)
+    page.insert_text((50, 196), "Band: B2", fontsize=10)
+    page.insert_text((50, 212), "Career Stream: FUNCTION STREAM", fontsize=10)
+    page.insert_text((50, 228), "Rs. 1253181.00", fontsize=10)
+    page.insert_text(
+        (50, 252),
+        "Your compensation is as detailed below, subject to withholding taxes.",
+        fontsize=10,
+    )
+
+    left = 50
+    divider = 450
+    right = 562
+    top = 270
+    row_height = 24
+    rows = 6
+    page.draw_rect(
+        pymupdf.Rect(left, top, right, top + row_height * rows),
+        color=(0, 0, 0),
+        width=0.8,
+    )
+    page.draw_line(
+        pymupdf.Point(divider, top),
+        pymupdf.Point(divider, top + row_height * rows),
+        color=(0, 0, 0),
+        width=0.8,
+    )
+    for index in range(1, rows):
+        y = top + row_height * index
+        page.draw_line(
+            pymupdf.Point(left, y),
+            pymupdf.Point(right, y),
+            color=(0, 0, 0),
+            width=0.8,
+        )
+
+    page.insert_text((200, 287), "Components", fontname="hebo", fontsize=10)
+    page.insert_text((52, 311), "BASIC SALARY", fontsize=10)
+    page.insert_text((490, 311), "2105000.00", fontsize=10)
+    page.insert_text((52, 335), "HOUSE RENT ALLOWANCE", fontsize=10)
+    page.insert_text((490, 335), "0", fontsize=10)
+    page.insert_text((52, 359), "BONUS (estimated but paid as per Company policy)", fontsize=10)
+    page.insert_text((490, 359), "450000.00", fontsize=10)
+    page.insert_text((52, 383), "WIPRO BENEFITS PLAN as per Company policy", fontsize=10)
+    page.insert_text((490, 383), "0", fontsize=10)
+
+    output = document.tobytes()
+    document.close()
+    return output
+
+
+def test_salary_table_multi_edit_keeps_values_in_original_rows_without_overlap() -> None:
+    source = _salary_offer_pdf()
+    plan = {
+        "summary": "Update compensation figures",
+        "operations": [
+            {
+                "action": "replace_text",
+                "page": 1,
+                "target_text": "1253181.00",
+                "replacement_text": "2306900.00",
+                "text": None,
+                "bbox": None,
+                "occurrence": None,
+                "field_name": None,
+                "value": None,
+                "degrees": None,
+                "font_size": None,
+            },
+            {
+                "action": "replace_text",
+                "page": 1,
+                "target_text": "2105000.00",
+                "replacement_text": "2150000.00",
+                "text": None,
+                "bbox": None,
+                "occurrence": None,
+                "field_name": None,
+                "value": None,
+                "degrees": None,
+                "font_size": None,
+            },
+            {
+                "action": "replace_text",
+                "page": 1,
+                "target_text": "450000.00",
+                "replacement_text": "455000.00",
+                "text": None,
+                "bbox": None,
+                "occurrence": None,
+                "field_name": None,
+                "value": None,
+                "degrees": None,
+                "font_size": None,
+            },
+        ],
+    }
+
+    result = apply_pdf_edit_plan(source, plan)
+    assessment = assess_pdf_edit_candidate(
+        source,
+        result.data,
+        plan,
+        visual_fidelity_score=result.visual_fidelity_score,
+    )
+
+    output = pymupdf.open(stream=result.data, filetype="pdf")
+    page = output[0]
+    assert "2306900.00" in page.get_text()
+    assert "2150000.00" in page.get_text()
+    assert "455000.00" in page.get_text()
+    assert "1253181.00" not in page.get_text()
+    assert "2105000.00" not in page.get_text()
+    assert "450000.00" not in page.get_text()
+    assert len(page.get_drawings()) >= 7
+    output.close()
+
+    assert result.verification_score == 100
+    assert result.visual_fidelity_score == 100
+    assert assessment.safe_to_return is True
+    assert assessment.layout_integrity_score == 100
+    assert assessment.issues == ()
+
+
+def test_layout_gate_rejects_stacked_replacement_and_old_text_left_behind() -> None:
+    source = _text_pdf("Salary: 1000")
+    document = pymupdf.open(stream=source, filetype="pdf")
+    document[0].insert_text((72, 44), "2000", fontsize=11)
+    broken = document.tobytes()
+    document.close()
+
+    plan = {
+        "summary": "Update salary",
+        "operations": [
+            {
+                "action": "replace_text",
+                "page": 1,
+                "target_text": "1000",
+                "replacement_text": "2000",
+                "text": None,
+                "bbox": None,
+                "occurrence": None,
+                "field_name": None,
+                "value": None,
+                "degrees": None,
+                "font_size": None,
+            }
+        ],
+    }
+
+    assessment = assess_pdf_edit_candidate(source, broken, plan)
+
+    assert assessment.safe_to_return is False
+    assert assessment.layout_integrity_score < 100
+    assert any("old text remains" in issue for issue in assessment.issues)
+    assert any("drifted vertically" in issue for issue in assessment.issues)
