@@ -77,3 +77,73 @@ def test_gpt_attachment_parser_rejects_unsupported_type() -> None:
             ]
         )
     assert exc_info.value.status_code == 422
+
+
+def test_pdf_editor_replaces_existing_text() -> None:
+    import pymupdf
+
+    from backend.app.api.routes.seldrune_gpt import _apply_pdf_edit_plan
+
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), "Invoice date: 2025-09-23")
+    source = document.tobytes()
+    document.close()
+
+    edited, applied, warnings = _apply_pdf_edit_plan(
+        source,
+        {
+            "summary": "Updated invoice date.",
+            "operations": [
+                {
+                    "action": "replace_text",
+                    "page": 1,
+                    "target_text": "2025-09-23",
+                    "replacement_text": "2026-09-23",
+                    "text": None,
+                }
+            ],
+        },
+    )
+
+    output = pymupdf.open(stream=edited, filetype="pdf")
+    text = output[0].get_text()
+    output.close()
+
+    assert applied == 1
+    assert warnings == []
+    assert "2026-09-23" in text
+    assert "2025-09-23" not in text
+
+
+def test_pdf_editor_rejects_plan_when_target_is_missing() -> None:
+    import pymupdf
+    import pytest
+    from fastapi import HTTPException
+
+    from backend.app.api.routes.seldrune_gpt import _apply_pdf_edit_plan
+
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), "Hello Seldrune")
+    source = document.tobytes()
+    document.close()
+
+    with pytest.raises(HTTPException) as exc_info:
+        _apply_pdf_edit_plan(
+            source,
+            {
+                "summary": "Change missing text.",
+                "operations": [
+                    {
+                        "action": "replace_text",
+                        "page": 1,
+                        "target_text": "Not in document",
+                        "replacement_text": "Replacement",
+                        "text": None,
+                    }
+                ],
+            },
+        )
+
+    assert exc_info.value.status_code == 422
