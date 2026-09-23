@@ -59,13 +59,26 @@ def test_tool_bootstrap_activates_configured_provider_idempotently(
     assert first.status_code == 200
     first_body = first.json()
     assert first_body["created_references"] == ["github-tool-token"]
-    assert set(first_body["created_tools"]) == {
+    created = set(first_body["created_tools"])
+    assert {
+        "github-repository-info",
+        "github-read-file",
+        "github-create-branch",
+        "github-upsert-file",
+        "github-get-pull-request",
+        "github-workflow-run-status",
         "github-create-issue",
         "github-comment",
         "github-create-pull-request",
         "github-merge-pull-request",
         "github-dispatch-workflow",
-    }
+    } <= created
+    assert {
+        "internal-json-validate",
+        "internal-json-pretty",
+        "internal-sha256-text",
+        "internal-csv-preview",
+    } <= created
     assert "SELDRUNE_GMAIL_TOOL_CREDENTIAL" in first_body["missing_env_locators"]
     assert "SELDRUNE_RENDER_API_KEY" in first_body["missing_env_locators"]
     assert "github-test-token" not in str(first_body)
@@ -92,7 +105,7 @@ def test_tool_bootstrap_activates_configured_provider_idempotently(
     )
     assert tools.status_code == 200
     github_tools = [item for item in tools.json() if item["provider"] == "github"]
-    assert len(github_tools) == 5
+    assert len(github_tools) == 11
     dispatch = next(
         item for item in github_tools if item["action_name"] == "dispatch-workflow"
     )
@@ -129,8 +142,11 @@ def test_owner_command_auto_activates_configured_provider_tools(
     tools = client.get(tools_url, headers=headers)
     assert tools.status_code == 200
     render_tools = [item for item in tools.json() if item["provider"] == "render"]
-    assert len(render_tools) == 1
-    assert render_tools[0]["slug"] == "render-deploy-service"
+    assert len(render_tools) == 2
+    assert {item["slug"] for item in render_tools} == {
+        "render-deploy-service",
+        "render-deploy-status",
+    }
 
     second = client.post(
         command_url,
@@ -139,4 +155,4 @@ def test_owner_command_auto_activates_configured_provider_tools(
     )
     assert second.status_code == 201
     tools = client.get(tools_url, headers=headers).json()
-    assert len([item for item in tools if item["provider"] == "render"]) == 1
+    assert len([item for item in tools if item["provider"] == "render"]) == 2
