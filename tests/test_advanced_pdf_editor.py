@@ -8,8 +8,9 @@ from backend.app.services.pdf_editor import (
     apply_pdf_edit_plan,
     assess_pdf_edit_candidate,
     inspect_pdf,
-    validate_pdf_edit_plan,
     prepare_pdf_for_model,
+    render_pdf_pages_for_model,
+    validate_pdf_edit_plan,
 )
 
 
@@ -834,3 +835,96 @@ def test_low_typography_fidelity_alone_does_not_make_layout_unsafe() -> None:
     assert assessment.safe_to_return is True
     assert assessment.layout_integrity_score == 100
     assert assessment.issues == ()
+
+
+def _mixed_native_and_raster_pdf() -> bytes:
+    raster_document = pymupdf.open()
+    raster_page = raster_document.new_page(width=180, height=60)
+    raster_page.insert_text((18, 38), "OLD", fontname="hebo", fontsize=20)
+    raster_pixmap = raster_page.get_pixmap(alpha=False)
+    raster_png = raster_pixmap.tobytes("png")
+    raster_document.close()
+
+    document = pymupdf.open()
+    page = document.new_page(width=400, height=300)
+    page.insert_text((40, 45), "Compensation details", fontname="hebo", fontsize=12)
+    page.insert_image(
+        pymupdf.Rect(245, 80, 365, 125),
+        stream=raster_png,
+    )
+    output = document.tobytes()
+    document.close()
+    return output
+
+
+def test_page_renderer_produces_original_page_vision_previews() -> None:
+    source = _mixed_native_and_raster_pdf()
+
+    renders = render_pdf_pages_for_model(
+        source,
+        page_numbers=[1],
+        max_pages=2,
+    )
+
+    assert len(renders) == 1
+    assert renders[0].page_number == 1
+    assert renders[0].media_type == "image/jpeg"
+    assert renders[0].data.startswith(b"\xff\xd8")
+
+
+def test_visual_bbox_replacement_verifies_on_mixed_native_page() -> None:
+    source = _mixed_native_and_raster_pdf()
+    inspection = inspect_pdf(source)
+    assert inspection.native_text_pages == 1
+    assert inspection.image_only_pages == 0
+
+    plan = {
+        "summary": "Replace rasterized amount",
+        "operations": [
+            {
+                "action": "replace_text",
+                "page": 1,
+                "target_text": "OLD",
+                "replacement_text": "NEW",
+                "text": None,
+                "bbox": [610, 255, 915, 425],
+                "occurrence": None,
+                "field_name": None,
+                "value": None,
+                "degrees": None,
+                "font_size": 12,
+                "font_family_hint": "Helvetica",
+                "font_weight": "bold",
+                "font_style": "regular",
+                "alignment": "center",
+                "text_color": [0, 0, 0],
+                "background_color": [1, 1, 1],
+            }
+        ],
+    }
+
+    validation = validate_pdf_edit_plan(source, plan)
+    assert validation.valid is True
+
+    result = apply_pdf_edit_plan(source, plan)
+    assessment = assess_pdf_edit_candidate(
+        source,
+        result.data,
+        plan,
+        visual_fidelity_score=result.visual_fidelity_score,
+    )
+
+    output = pymupdf.open(stream=result.data, filetype="pdf")
+    output_text = output[0].get_text("text")
+    output.close()
+
+    assert "NEW" in output_text
+    assert result.applied_edits == 1
+    assert result.verified_operations == 1
+    assert result.verification_score == 100
+    assert assessment.safe_to_return is True
+    assert assessment.layout_integrity_score == 100
+    assert any(
+        "visual-region replacement verified" in note
+        for note in result.verification_notes
+    )
