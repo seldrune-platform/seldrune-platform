@@ -163,10 +163,27 @@ def _fuzzy_word_rectangles(
     return [_union_rect(rectangles)] if rectangles else []
 
 
+def _fuzzy_target_is_safe(target_text: str) -> bool:
+    normalized = _normalize_text(target_text)
+    compact = re.sub(r"\s+", "", normalized)
+    if len(compact) < 4:
+        return False
+    meaningful = [char for char in compact if char.isalnum()]
+    if not meaningful:
+        return False
+    digit_ratio = sum(char.isdigit() for char in meaningful) / len(meaningful)
+    # Amounts, IDs, dates, percentages and short numeric cells must match exactly.
+    # Fuzzy matching on values such as 0 / 450000 / 2150000 can select the wrong
+    # salary row and is unsafe for structured documents.
+    return digit_ratio < 0.55
+
+
 def _locate_text(page: pymupdf.Page, target_text: str) -> tuple[list[pymupdf.Rect], str]:
     exact = list(page.search_for(target_text))
     if exact:
         return exact, "exact"
+    if not _fuzzy_target_is_safe(target_text):
+        return [], "missing"
     fuzzy = _fuzzy_word_rectangles(page, target_text)
     if fuzzy:
         return fuzzy, "fuzzy"
@@ -819,6 +836,130 @@ def _verify_text_change(
 
 
 @dataclass(frozen=True)
+class PDFPlanValidation:
+    valid: bool
+    issues: tuple[str, ...]
+
+
+def _rect_overlap_ratio(a: pymupdf.Rect, b: pymupdf.Rect) -> float:
+    intersection = _rect_intersection_area(a, b)
+    if intersection <= 0:
+        return 0.0
+    smaller = max(1.0, min(a.width * a.height, b.width * b.height))
+    return intersection / smaller
+
+
+def _nearby_text_context(page: pymupdf.Page, rect: pymupdf.Rect) -> str:
+    region = _expanded_rect(
+        page,
+        rect,
+        x_pad=max(30.0, rect.width * 2.0),
+        y_pad=max(10.0, rect.height * 1.4),
+    )
+    return " ".join(page.get_textbox(region).split())[:220]
+
+
+def validate_pdf_edit_plan(
+    pdf_bytes: bytes,
+    plan: dict[str, Any],
+    *,
+    password: str | None = None,
+) -> PDFPlanValidation:
+    document = _open_document(pdf_bytes, password)
+    operations = plan.get("operations")
+    if not isinstance(operations, list):
+        document.close()
+        return PDFPlanValidation(False, ("edit plan operations are invalid",))
+
+    issues: list[str] = []
+    resolved: list[tuple[int, int, pymupdf.Rect, str]] = []
+
+    for op_index, operation in enumerate(operations, start=1):
+        if not isinstance(operation, dict):
+            issues.append(f"operation {op_index}: malformed operation")
+            continue
+        action = str(operation.get("action") or "")
+        if action not in {"replace_text", "redact_text"}:
+            continue
+
+        indexes = _page_indexes(document, operation.get("page"))
+        if not indexes:
+            issues.append(f"operation {op_index}: invalid page")
+            continue
+
+        target_text = str(operation.get("target_text") or "").strip()
+        occurrence = operation.get("occurrence")
+        bbox = operation.get("bbox")
+
+        for page_index in indexes:
+            page = document[page_index]
+            rectangles: list[pymupdf.Rect] = []
+            mode = "visual_bbox"
+            if target_text:
+                rectangles, mode = _locate_text(page, target_text)
+            if not rectangles:
+                visual_rect = _normalized_bbox(page, bbox)
+                if visual_rect is not None:
+                    rectangles = [visual_rect]
+                    mode = "visual_bbox"
+
+            if not rectangles:
+                issues.append(
+                    f"operation {op_index}: target {target_text!r} was not found "
+                    f"on original page {page_index + 1}; use the exact source value "
+                    "or a precise bbox"
+                )
+                continue
+
+            if isinstance(occurrence, int) and occurrence >= 1:
+                if occurrence > len(rectangles):
+                    issues.append(
+                        f"operation {op_index}: occurrence {occurrence} exceeds "
+                        f"{len(rectangles)} match(es) on page {page_index + 1}"
+                    )
+                    continue
+                rectangles = rectangles[occurrence - 1 : occurrence]
+            elif len(rectangles) > 1 and mode != "visual_bbox":
+                contexts = [
+                    _nearby_text_context(page, rectangle)
+                    for rectangle in rectangles[:4]
+                ]
+                issues.append(
+                    f"operation {op_index}: target {target_text!r} is ambiguous with "
+                    f"{len(rectangles)} matches on page {page_index + 1}; choose an "
+                    f"occurrence or bbox. Nearby contexts: {' || '.join(contexts)}"
+                )
+                continue
+
+            for rectangle in rectangles:
+                resolved.append(
+                    (
+                        op_index,
+                        page_index,
+                        pymupdf.Rect(rectangle),
+                        target_text or mode,
+                    )
+                )
+
+    for left_index in range(len(resolved)):
+        op_a, page_a, rect_a, label_a = resolved[left_index]
+        for right_index in range(left_index + 1, len(resolved)):
+            op_b, page_b, rect_b, label_b = resolved[right_index]
+            if page_a != page_b or op_a == op_b:
+                continue
+            ratio = _rect_overlap_ratio(rect_a, rect_b)
+            if ratio >= 0.20:
+                issues.append(
+                    f"operations {op_a} and {op_b} overlap on page {page_a + 1} "
+                    f"({label_a!r} vs {label_b!r}); combine or target them separately"
+                )
+
+    document.close()
+    unique = tuple(dict.fromkeys(issues))
+    return PDFPlanValidation(valid=not unique, issues=unique)
+
+
+@dataclass(frozen=True)
 class PDFEditAssessment:
     safe_to_return: bool
     layout_integrity_score: int
@@ -851,6 +992,27 @@ def _nearest_rect(
         key=lambda item: abs((item.x0 + item.x1) / 2 - (target.x0 + target.x1) / 2)
         + abs((item.y0 + item.y1) / 2 - (target.y0 + target.y1) / 2),
     )
+
+
+def _local_replacement_rect(
+    page: pymupdf.Page,
+    rectangles: list[pymupdf.Rect],
+    target: pymupdf.Rect,
+) -> pymupdf.Rect | None:
+    if not rectangles:
+        return None
+    local_region = _expanded_rect(
+        page,
+        target,
+        x_pad=max(20.0, target.width * 1.5),
+        y_pad=max(8.0, target.height * 1.2),
+    )
+    local = [
+        rectangle
+        for rectangle in rectangles
+        if _rect_intersection_area(rectangle, local_region) > 0
+    ]
+    return _nearest_rect(local, target)
 
 
 def _protected_word_rectangles(
@@ -954,10 +1116,15 @@ def assess_pdf_edit_candidate(
                     continue
 
                 replacement_matches = list(output_page.search_for(replacement_text))
-                replacement_rect = _nearest_rect(replacement_matches, target_rect)
+                replacement_rect = _local_replacement_rect(
+                    output_page,
+                    replacement_matches,
+                    target_rect,
+                )
                 if replacement_rect is None:
                     issues.append(
-                        f"operation {op_index}: replacement text is not detectable"
+                        f"operation {op_index}: replacement text is not detectable "
+                        "near the original target region"
                     )
                     continue
 
