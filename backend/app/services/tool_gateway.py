@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import base64
+import csv
+import hashlib
+import io
+import json
 from datetime import UTC, datetime
 from typing import Any, Callable
 from uuid import UUID
@@ -85,10 +90,236 @@ def _text_stats(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _json_validate(payload: dict[str, Any]) -> dict[str, Any]:
+    value = payload.get("value")
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError as exc:
+            return {
+                "valid": False,
+                "error": exc.msg,
+                "line": exc.lineno,
+                "column": exc.colno,
+            }
+    elif isinstance(value, (dict, list, int, float, bool)) or value is None:
+        parsed = value
+    else:
+        raise ToolGatewayError("value must be JSON-compatible or a JSON string")
+    return {
+        "valid": True,
+        "type": type(parsed).__name__,
+        "value": parsed,
+    }
+
+
+def _json_pretty(payload: dict[str, Any]) -> dict[str, Any]:
+    value = payload.get("value")
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ToolGatewayError(f"Invalid JSON: {exc.msg}") from exc
+    try:
+        rendered = json.dumps(
+            value,
+            indent=2,
+            sort_keys=bool(payload.get("sort_keys", False)),
+            ensure_ascii=False,
+        )
+    except (TypeError, ValueError) as exc:
+        raise ToolGatewayError("value is not JSON serializable") from exc
+    return {"text": rendered}
+
+
+def _sha256_text(payload: dict[str, Any]) -> dict[str, Any]:
+    text = payload.get("text")
+    if not isinstance(text, str):
+        raise ToolGatewayError("text must be a string")
+    return {
+        "algorithm": "sha256",
+        "digest": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+    }
+
+
+def _base64_encode(payload: dict[str, Any]) -> dict[str, Any]:
+    text = payload.get("text")
+    if not isinstance(text, str):
+        raise ToolGatewayError("text must be a string")
+    return {"base64": base64.b64encode(text.encode("utf-8")).decode("ascii")}
+
+
+def _base64_decode(payload: dict[str, Any]) -> dict[str, Any]:
+    value = payload.get("base64")
+    if not isinstance(value, str):
+        raise ToolGatewayError("base64 must be a string")
+    try:
+        decoded = base64.b64decode(value, validate=True).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ToolGatewayError("base64 must contain valid UTF-8 data") from exc
+    return {"text": decoded}
+
+
+def _text_replace(payload: dict[str, Any]) -> dict[str, Any]:
+    text = payload.get("text")
+    old = payload.get("old")
+    new = payload.get("new", "")
+    if not isinstance(text, str) or not isinstance(old, str) or not isinstance(new, str):
+        raise ToolGatewayError("text, old, and new must be strings")
+    if not old:
+        raise ToolGatewayError("old must be a non-empty string")
+    count_value = payload.get("count")
+    count = -1
+    if count_value is not None:
+        try:
+            count = int(count_value)
+        except (TypeError, ValueError) as exc:
+            raise ToolGatewayError("count must be an integer") from exc
+        if count < 0:
+            raise ToolGatewayError("count must be zero or positive")
+    result = text.replace(old, new, count)
+    return {
+        "text": result,
+        "replacements": text.count(old) if count < 0 else min(text.count(old), count),
+    }
+
+
+def _csv_preview(payload: dict[str, Any]) -> dict[str, Any]:
+    text = payload.get("text")
+    if not isinstance(text, str):
+        raise ToolGatewayError("text must be a string")
+    delimiter = payload.get("delimiter", ",")
+    if not isinstance(delimiter, str) or len(delimiter) != 1:
+        raise ToolGatewayError("delimiter must be one character")
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+    rows: list[list[str]] = []
+    for index, row in enumerate(reader):
+        if index >= 100:
+            break
+        rows.append(row)
+    return {
+        "rows": rows,
+        "row_count_previewed": len(rows),
+        "truncated": len(text.splitlines()) > len(rows),
+    }
+
+
 _INTERNAL_ACTIONS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "echo": _echo,
     "text-stats": _text_stats,
+    "json-validate": _json_validate,
+    "json-pretty": _json_pretty,
+    "sha256-text": _sha256_text,
+    "base64-encode": _base64_encode,
+    "base64-decode": _base64_decode,
+    "text-replace": _text_replace,
+    "csv-preview": _csv_preview,
 }
+
+
+_INTERNAL_ACTION_CATALOG: tuple[dict[str, Any], ...] = (
+    {
+        "action_name": "echo",
+        "name": "Internal · Echo",
+        "description": "Return structured input unchanged for deterministic handoffs.",
+        "input_schema": {"type": "object"},
+    },
+    {
+        "action_name": "text-stats",
+        "name": "Internal · Text statistics",
+        "description": "Count characters, words, and lines in text.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"text": {"type": "string"}},
+            "required": ["text"],
+        },
+    },
+    {
+        "action_name": "json-validate",
+        "name": "Internal · JSON validate",
+        "description": "Validate and parse JSON-compatible data.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"value": {}},
+            "required": ["value"],
+        },
+    },
+    {
+        "action_name": "json-pretty",
+        "name": "Internal · JSON format",
+        "description": "Render JSON-compatible data as readable deterministic text.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "value": {},
+                "sort_keys": {"type": "boolean"},
+            },
+            "required": ["value"],
+        },
+    },
+    {
+        "action_name": "sha256-text",
+        "name": "Internal · SHA-256",
+        "description": "Calculate a SHA-256 digest for UTF-8 text.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"text": {"type": "string"}},
+            "required": ["text"],
+        },
+    },
+    {
+        "action_name": "base64-encode",
+        "name": "Internal · Base64 encode",
+        "description": "Encode UTF-8 text as Base64.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"text": {"type": "string"}},
+            "required": ["text"],
+        },
+    },
+    {
+        "action_name": "base64-decode",
+        "name": "Internal · Base64 decode",
+        "description": "Decode Base64 data that represents UTF-8 text.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"base64": {"type": "string"}},
+            "required": ["base64"],
+        },
+    },
+    {
+        "action_name": "text-replace",
+        "name": "Internal · Text replace",
+        "description": "Replace literal text deterministically.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string"},
+                "old": {"type": "string"},
+                "new": {"type": "string"},
+                "count": {"type": "integer"},
+            },
+            "required": ["text", "old", "new"],
+        },
+    },
+    {
+        "action_name": "csv-preview",
+        "name": "Internal · CSV preview",
+        "description": "Parse up to 100 CSV rows for structured inspection.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string"},
+                "delimiter": {"type": "string"},
+            },
+            "required": ["text"],
+        },
+    },
+)
+
+
+def internal_action_catalog() -> list[dict[str, Any]]:
+    return [dict(item) for item in _INTERNAL_ACTION_CATALOG]
 
 
 def allowed_internal_actions() -> tuple[str, ...]:
