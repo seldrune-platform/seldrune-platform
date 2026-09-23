@@ -15,6 +15,8 @@ from backend.app.models.task import Task
 from backend.app.models.tool_definition import ToolDefinition
 from backend.app.models.tool_run import ToolRun
 from backend.app.schemas.tooling import (
+    ProviderCredentialPublic,
+    ProviderCredentialUpsert,
     ToolDefinitionCreate,
     ToolDefinitionPublic,
     ToolRunCreate,
@@ -24,6 +26,7 @@ from backend.app.schemas.tooling import (
 from backend.app.services.audit import record_audit
 from backend.app.services.external_actions import default_external_action_catalog
 from backend.app.services.provider_preflight import preflight_configured_providers
+from backend.app.services.secret_vault import encrypt_secret_value, vault_locator
 from backend.app.services.tool_bootstrap import (
     configured_external_tool_status,
     ensure_configured_external_tools,
@@ -76,6 +79,100 @@ def _get_run(session: SessionDep, organization_id: UUID, run_id: UUID) -> ToolRu
 
 def _gateway_conflict(exc: ToolGatewayError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
+
+
+def _provider_catalog_item(provider: str) -> dict[str, Any]:
+    item = next(
+        (
+            entry
+            for entry in default_external_action_catalog()
+            if entry["provider"] == provider
+        ),
+        None,
+    )
+    if item is None:
+        raise HTTPException(status_code=422, detail="Unsupported built-in provider")
+    return item
+
+
+@router.post(
+    "/{organization_id}/tool-bootstrap/credentials",
+    response_model=ProviderCredentialPublic,
+)
+def upsert_provider_credential(
+    organization_id: UUID,
+    payload: ProviderCredentialUpsert,
+    _membership: ToolsManageDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> ProviderCredentialPublic:
+    item = _provider_catalog_item(payload.provider)
+    credential_slug = str(item["credential_slug"])
+    reference = session.scalar(
+        select(SecretReference).where(
+            SecretReference.organization_id == organization_id,
+            SecretReference.slug == credential_slug,
+        )
+    )
+    encrypted = encrypt_secret_value(payload.secret_value)
+    if reference is None:
+        reference = SecretReference(
+            organization_id=organization_id,
+            created_by_user_id=current_user.id,
+            name=str(item["credential_name"]),
+            slug=credential_slug,
+            provider="vault",
+            locator=vault_locator(),
+            encrypted_value=encrypted,
+            status="active",
+        )
+        session.add(reference)
+        session.flush()
+        action = "tool_bootstrap.provider_credential_created"
+    else:
+        reference.provider = "vault"
+        reference.locator = vault_locator()
+        reference.encrypted_value = encrypted
+        reference.status = "active"
+        action = "tool_bootstrap.provider_credential_rotated"
+
+    record_audit(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+        action=action,
+        resource_type="secret_reference",
+        resource_id=str(reference.id),
+        details={
+            "provider": payload.provider,
+            "credential_slug": credential_slug,
+        },
+    )
+    ensure_configured_external_tools(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+    )
+    session.commit()
+    session.refresh(reference)
+    active_tools = list(
+        session.scalars(
+            select(ToolDefinition).where(
+                ToolDefinition.organization_id == organization_id,
+                ToolDefinition.provider == payload.provider,
+                ToolDefinition.status == ToolStatus.ACTIVE.value,
+            )
+        )
+    )
+    return ProviderCredentialPublic(
+        provider=payload.provider,
+        configured=True,
+        credential_slug=credential_slug,
+        reference_id=reference.id,
+        tool_count=len(active_tools),
+    )
 
 
 @router.post(
