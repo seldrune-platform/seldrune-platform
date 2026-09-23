@@ -9,17 +9,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  probe:
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    steps:
-      - name: CircleCI runner probe
-        run: |
-          echo "circleci-runner-ok"
-          python3 --version
-
   test:
-    needs: probe
     runs-on: ubuntu-latest
     timeout-minutes: 8
 
