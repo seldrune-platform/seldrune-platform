@@ -34,6 +34,7 @@ from backend.app.services.owner_action_compiler import required_external_tool_ac
 from backend.app.services.pdf_editor import (
     PDFEditorError,
     apply_pdf_edit_plan,
+    assess_pdf_edit_candidate,
     inspect_pdf,
     prepare_pdf_for_model,
 )
@@ -269,6 +270,8 @@ class SeldruneGPTPDFEditResponse(BaseModel):
     verified_operations: int
     verification_score: int
     visual_fidelity_score: int | None
+    layout_integrity_score: int
+    reconstruction_attempts: int = 1
     repair_passes: int = 0
     verification_notes: list[str] = Field(default_factory=list)
 
@@ -667,123 +670,116 @@ def edit_seldrune_gpt_pdf(
         ) from exc
 
     edit_result = None
-    apply_error: str | None = None
+    selected_assessment = None
     candidate_plan = plan
-    for planning_attempt in range(3):
+    reconstruction_attempts = 0
+    last_diagnostics: list[str] = []
+
+    for attempt_index in range(4):
+        reconstruction_attempts = attempt_index + 1
+        candidate_result = None
+        candidate_assessment = None
+        candidate_diagnostics: list[str] = []
+
         try:
-            edit_result = apply_pdf_edit_plan(
+            candidate_result = apply_pdf_edit_plan(
                 pdf_bytes,
                 candidate_plan,
                 password=payload.password,
             )
-            plan = candidate_plan
-            break
-        except PDFEditorError as exc:
-            apply_error = str(exc)
-            if planning_attempt >= 2:
-                break
-            recovery_request = ModelRequest(
-                provider=ModelProvider.OPENAI,
-                model=settings.model_default,
-                input_text=(
-                    "The previous automatic PDF edit plan could not be applied. "
-                    "Re-plan the owner's request without asking the owner for manual "
-                    "coordinates or editing details.\n"
-                    f"Owner instruction: {payload.instruction}\n"
-                    f"Engine result: {apply_error}\n\n{profile}"
-                ),
-                instructions=(
-                    "Re-inspect the attached PDF and produce a new deterministic edit plan. "
-                    "Derive any needed bbox, occurrence, field name, placement, font family, "
-                    "weight/style, point size, alignment, foreground color, and background "
-                    "color "
-                    "from the document yourself. Preserve the owner's requested wording "
-                    "exactly. Use a visual bbox for scanned/image content and fuzzy/native "
-                    "targets for searchable content. Return only operations that implement "
-                    "the owner's request."
-                ),
-                max_output_tokens=max(settings.model_max_output_tokens, 6000),
-                response_schema=_PDF_EDIT_SCHEMA,
-                input_files=input_files,
+            candidate_assessment = assess_pdf_edit_candidate(
+                pdf_bytes,
+                candidate_result.data,
+                candidate_plan,
+                password=payload.password,
+                visual_fidelity_score=candidate_result.visual_fidelity_score,
             )
-            try:
-                recovery_result, _recovery_latency = ModelGateway(settings).generate(
-                    recovery_request
+            candidate_diagnostics.extend(candidate_assessment.issues)
+            candidate_diagnostics.extend(
+                warning
+                for warning in candidate_result.warnings
+                if "target was not found" in warning
+                or "did not fit cleanly" in warning
+                or "visual fidelity" in warning
+            )
+
+            content_verified = (
+                candidate_result.verification_score == 100
+                or inspection.image_only_pages > 0
+            )
+            if not content_verified:
+                candidate_diagnostics.append(
+                    "content verification did not reach the required level"
                 )
-                candidate_plan = json.loads(recovery_result.output_text)
-            except (ModelGatewayError, json.JSONDecodeError):
-                continue
 
-    if edit_result is None:
-        raise HTTPException(
-            status_code=422,
-            detail=apply_error or "AI PDF editor could not apply the requested edit",
-        )
+            if (
+                candidate_assessment.safe_to_return
+                and content_verified
+                and not candidate_diagnostics
+            ):
+                edit_result = candidate_result
+                selected_assessment = candidate_assessment
+                plan = candidate_plan
+                break
+        except PDFEditorError as exc:
+            candidate_diagnostics.append(str(exc))
 
-    repair_passes = 0
-    previous_unresolved: tuple[str, ...] | None = None
-    for _repair_attempt in range(3):
-        unresolved = [
-            warning
-            for warning in edit_result.warnings
-            if "target was not found" in warning
-            or "form field" in warning
-            or "did not fit cleanly" in warning
-        ]
-        unresolved_key = tuple(sorted(unresolved))
-        if not unresolved or unresolved_key == previous_unresolved:
+        last_diagnostics = list(dict.fromkeys(candidate_diagnostics))
+        if attempt_index >= 3:
             break
-        previous_unresolved = unresolved_key
 
-        repair_file = ModelFileInput(
-            filename=f"repair-{payload.pdf.name}",
-            media_type="application/pdf",
-            data_base64=base64.b64encode(edit_result.data).decode("ascii"),
+        rejection_text = (
+            "\n- ".join(last_diagnostics[:30])
+            if last_diagnostics
+            else "candidate did not satisfy strict visual integrity checks"
         )
-        repair_request = ModelRequest(
+        retry_request = ModelRequest(
             provider=ModelProvider.OPENAI,
             model=settings.model_default,
             input_text=(
-                "Continue editing the current PDF until the owner's original instruction "
-                "is satisfied. Repair only unresolved edits.\n"
-                f"Owner instruction: {payload.instruction}\n"
-                "Unresolved results:\n- " + "\n- ".join(unresolved[:30])
+                "Create a complete replacement edit plan against the ORIGINAL attached PDF. "
+                "The previous candidate was rejected and must not be repaired or layered.\n"
+                f"Owner instruction: {payload.instruction}\n\n"
+                f"Visual/layout rejection diagnostics:\n- {rejection_text}\n\n"
+                f"{profile}"
             ),
             instructions=(
-                "Act as an autonomous repair editor. Inspect the current PDF and derive "
-                "coordinates, target text, occurrence, field names, placement, font family, "
-                "weight/style, sizing, alignment, and colors "
-                "yourself. Do not ask the owner for a manual edit plan. Do not repeat edits "
-                "that already succeeded. Preserve unrelated document content and keep the "
-                "owner's requested replacement wording exact."
+                "Re-plan the edit from the untouched original PDF. Every requested change "
+                "must be applied exactly once. Do not place replacement text above, below, "
+                "or on top of an existing value. For native text, identify the exact original "
+                "target and occurrence and let the engine reuse its font, baseline, color, "
+                "and alignment. For tables, keep the replacement inside the same cell and "
+                "do not cross component labels, borders, or neighboring values. For scanned "
+                "content, derive the exact bbox and typography visually. Return a complete "
+                "new plan, not a delta or repair plan. Do not change unrelated content."
             ),
             max_output_tokens=max(settings.model_max_output_tokens, 6000),
             response_schema=_PDF_EDIT_SCHEMA,
-            input_files=(repair_file,),
+            input_files=input_files,
         )
         try:
-            repair_model_result, _repair_latency = ModelGateway(settings).generate(
-                repair_request
+            retry_model_result, _retry_latency = ModelGateway(settings).generate(
+                retry_request
             )
-            repair_plan = json.loads(repair_model_result.output_text)
-            repair_result = apply_pdf_edit_plan(edit_result.data, repair_plan)
-        except (ModelGatewayError, json.JSONDecodeError, PDFEditorError):
-            break
+            candidate_plan = json.loads(retry_model_result.output_text)
+        except (ModelGatewayError, json.JSONDecodeError) as exc:
+            last_diagnostics.append(f"AI re-planning failed: {exc}")
 
-        repair_passes += 1
-        edit_result.data = repair_result.data
-        edit_result.applied_edits += repair_result.applied_edits
-        edit_result.verified_operations += repair_result.verified_operations
-        edit_result.verification_notes.extend(repair_result.verification_notes)
-        repaired_warning_set = {
-            item
-            for item in repair_result.warnings
-            if item not in unresolved
-        }
-        edit_result.warnings = [
-            item for item in edit_result.warnings if item not in unresolved
-        ] + sorted(repaired_warning_set)
+    if edit_result is None or selected_assessment is None:
+        detail = (
+            "; ".join(last_diagnostics[:8])
+            if last_diagnostics
+            else "visual integrity could not be verified"
+        )
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "AI PDF editor refused to return a visually unsafe edit. "
+                "The original PDF was preserved. " + detail
+            ),
+        )
 
+    repair_passes = max(0, reconstruction_attempts - 1)
     stem = payload.pdf.name.rsplit(".", 1)[0]
     safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip("-._") or "document"
     output_name = f"{safe_stem}-edited.pdf"
@@ -805,6 +801,8 @@ def edit_seldrune_gpt_pdf(
             "verified_operations": edit_result.verified_operations,
             "verification_score": edit_result.verification_score,
             "visual_fidelity_score": edit_result.visual_fidelity_score,
+            "layout_integrity_score": selected_assessment.layout_integrity_score,
+            "reconstruction_attempts": reconstruction_attempts,
             "repair_passes": repair_passes,
             "warnings": edit_result.warnings[:20],
             "model": result.model,
@@ -827,8 +825,13 @@ def edit_seldrune_gpt_pdf(
                 f"{summary} Created {output_name} with "
                 f"{edit_result.applied_edits} applied edits and "
                 f"{edit_result.verification_score}% content verification and "
-                f"{edit_result.visual_fidelity_score}% visual fidelity"
-                + (f" after {repair_passes} automatic repair pass(es)." if repair_passes else ".")
+                f"{edit_result.visual_fidelity_score}% visual fidelity and "
+                f"{selected_assessment.layout_integrity_score}% layout integrity"
+                + (
+                    f" after {reconstruction_attempts} reconstruction attempts."
+                    if reconstruction_attempts > 1
+                    else "."
+                )
             ),
             model=result.model,
             response_id=result.response_id,
@@ -852,6 +855,8 @@ def edit_seldrune_gpt_pdf(
         verified_operations=edit_result.verified_operations,
         verification_score=edit_result.verification_score,
         visual_fidelity_score=edit_result.visual_fidelity_score,
+        layout_integrity_score=selected_assessment.layout_integrity_score,
+        reconstruction_attempts=reconstruction_attempts,
         repair_passes=repair_passes,
         verification_notes=edit_result.verification_notes,
     )
