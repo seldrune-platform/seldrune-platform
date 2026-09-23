@@ -34,6 +34,13 @@ class PDFInspection:
         return "hybrid"
 
 
+@dataclass(frozen=True)
+class PDFPageRender:
+    page_number: int
+    media_type: str
+    data: bytes
+
+
 @dataclass
 class PDFEditResult:
     data: bytes
@@ -109,6 +116,47 @@ def inspect_pdf(pdf_bytes: bytes, password: str | None = None) -> PDFInspection:
     )
     document.close()
     return inspection
+
+
+def render_pdf_pages_for_model(
+    pdf_bytes: bytes,
+    password: str | None = None,
+    *,
+    page_numbers: list[int] | tuple[int, ...] | None = None,
+    max_pages: int = 10,
+    max_long_edge: int = 1400,
+) -> tuple[PDFPageRender, ...]:
+    document = _open_document(pdf_bytes, password)
+    try:
+        if page_numbers:
+            requested = [
+                number
+                for number in dict.fromkeys(int(item) for item in page_numbers)
+                if 1 <= number <= document.page_count
+            ]
+        else:
+            requested = list(range(1, document.page_count + 1))
+        requested = requested[: max(1, max_pages)]
+
+        rendered: list[PDFPageRender] = []
+        for page_number in requested:
+            page = document[page_number - 1]
+            longest = max(float(page.rect.width), float(page.rect.height), 1.0)
+            scale = min(2.0, max(1.0, float(max_long_edge) / longest))
+            pixmap = page.get_pixmap(
+                matrix=pymupdf.Matrix(scale, scale),
+                alpha=False,
+            )
+            rendered.append(
+                PDFPageRender(
+                    page_number=page_number,
+                    media_type="image/jpeg",
+                    data=pixmap.tobytes("jpeg", jpg_quality=80),
+                )
+            )
+        return tuple(rendered)
+    finally:
+        document.close()
 
 
 def _normalize_text(value: str) -> str:
