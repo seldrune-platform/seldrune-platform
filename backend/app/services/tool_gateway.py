@@ -16,7 +16,7 @@ from backend.app.models.secret_reference import SecretReference
 from backend.app.models.tool_definition import ToolDefinition
 from backend.app.models.tool_run import ToolRun
 from backend.app.services.audit import record_audit
-from backend.app.services.secret_resolution import SecretResolutionError, resolve_secret
+from backend.app.services.secret_vault import SecretVaultError, resolve_secret
 from backend.app.services.tool_input_defaults import apply_external_action_input_defaults
 
 
@@ -417,7 +417,7 @@ def execute_tool_run(
                     raise ToolGatewayError("Credential reference is unavailable")
                 try:
                     credential = resolve_secret(reference)
-                except SecretResolutionError as exc:
+                except SecretVaultError as exc:
                     raise ToolGatewayError("Credential could not be resolved") from exc
             output = action(run.input_data, credential)
         _validate_external_evidence(tool, output)
