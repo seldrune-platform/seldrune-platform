@@ -316,8 +316,16 @@ def github_get_pull_request(
         "merged": bool(data.get("merged")),
         "mergeable": data.get("mergeable"),
         "draft": bool(data.get("draft")),
-        "head_sha": ((data.get("head") or {}).get("sha") if isinstance(data.get("head"), dict) else None),
-        "base_ref": ((data.get("base") or {}).get("ref") if isinstance(data.get("base"), dict) else None),
+        "head_sha": (
+            (data.get("head") or {}).get("sha")
+            if isinstance(data.get("head"), dict)
+            else None
+        ),
+        "base_ref": (
+            (data.get("base") or {}).get("ref")
+            if isinstance(data.get("base"), dict)
+            else None
+        ),
         "html_url": data.get("html_url"),
         "evidence": {
             "receipt_id": f"github-pull-state:{pull_id}:{data.get('updated_at') or pull_number}",
