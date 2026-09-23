@@ -8,6 +8,12 @@
   let providerPreflight = null;
   let toolDefaults = [];
 
+  const BUILTIN_PROVIDER_BY_SECRET_SLUG = {
+    'gmail-tool-credential': 'gmail',
+    'github-tool-token': 'github',
+    'render-api-key': 'render',
+  };
+
   function setStatus(message) {
     const element = byId('tool-control-status');
     if (element) element.textContent = message;
@@ -90,6 +96,17 @@
           'Connect this provider in Owner Credential Vault or add its environment/AWS secret.';
       }
       card.append(top, meta, detail);
+      if (provider.reference_id) {
+        const actions = document.createElement('div');
+        actions.className = 'tool-row-actions';
+        const disconnect = document.createElement('button');
+        disconnect.type = 'button';
+        disconnect.className = 'ghost';
+        disconnect.dataset.providerDisconnect = provider.provider;
+        disconnect.textContent = 'Disconnect';
+        actions.append(disconnect);
+        card.append(actions);
+      }
       root.append(card);
     });
   }
@@ -123,6 +140,17 @@
       const detail = document.createElement('p');
       detail.textContent = provider.detail || 'No provider detail returned.';
       card.append(top, detail);
+      if (provider.status === 'credential_invalid') {
+        const actions = document.createElement('div');
+        actions.className = 'tool-row-actions';
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'ghost';
+        remove.dataset.providerDisconnect = provider.provider;
+        remove.textContent = 'Remove invalid credential';
+        actions.append(remove);
+        card.append(actions);
+      }
 
       const identityEntries = Object.entries(provider.identity || {})
         .filter(([, value]) => value !== null && value !== undefined && value !== '');
@@ -183,7 +211,16 @@
       top.append(name, createPill(secret.status, secret.status === 'active' ? '' : 'pending'));
       const meta = document.createElement('small');
       meta.textContent = `${secret.slug} · ${secret.provider} · ${secret.locator}`;
-      row.append(top, meta);
+      const actions = document.createElement('div');
+      actions.className = 'tool-row-actions';
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'ghost';
+      remove.dataset.secretRemove = secret.id;
+      remove.dataset.secretSlug = secret.slug;
+      remove.textContent = secret.status === 'disabled' ? 'Remove reference' : 'Remove';
+      actions.append(remove);
+      row.append(top, meta, actions);
       root.append(row);
     });
     if (!secrets.length) clearAndMessage(root, 'No credential references.');
@@ -363,35 +400,53 @@
     event.currentTarget.textContent = reveal ? 'Hide' : 'Show';
   });
 
-  byId('provider-vault-form')?.addEventListener('submit', async event => {
-    event.preventDefault();
+  async function saveProviderCredential({verified}) {
     const provider = byId('provider-vault-provider')?.value || '';
     const secretInput = byId('provider-vault-secret');
     const secretValue = secretInput?.value || '';
     const vaultStatus = byId('provider-vault-status');
     if (!provider || !secretValue) return;
-    const submit = event.currentTarget.querySelector('button[type="submit"]');
-    submit.disabled = true;
-    if (vaultStatus) vaultStatus.textContent = `Encrypting and activating ${provider}…`;
+
+    const verifiedButton = byId('provider-vault-verified');
+    const manualButton = byId('provider-vault-manual');
+    if (verifiedButton) verifiedButton.disabled = true;
+    if (manualButton) manualButton.disabled = true;
+    if (vaultStatus) {
+      vaultStatus.textContent = verified
+        ? `Authenticating ${provider} before saving…`
+        : `Saving ${provider} credential manually…`;
+    }
     try {
-      const result = await api('/tool-bootstrap/credentials', {
-        method: 'POST',
-        body: JSON.stringify({
-          provider,
-          secret_value: secretValue,
-        }),
-      });
+      const result = await api(
+        verified
+          ? '/tool-bootstrap/credentials/verified'
+          : '/tool-bootstrap/credentials',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            provider,
+            secret_value: secretValue,
+          }),
+        }
+      );
       if (secretInput) {
         secretInput.value = '';
         secretInput.type = 'password';
       }
       const toggle = byId('provider-vault-toggle');
       if (toggle) toggle.textContent = 'Show';
+      const identity = result.verification?.identity || {};
+      const identityText = Object.values(identity).filter(Boolean).join(' · ');
       if (vaultStatus) {
         vaultStatus.textContent =
-          `${provider.toUpperCase()} connected · ${result.tool_count} active tools.`;
+          `${provider.toUpperCase()} connected · ${result.tool_count} active tools`
+          + (identityText ? ` · ${identityText}` : '.');
       }
-      toast(`${provider.toUpperCase()} credential saved and activated`);
+      toast(
+        verified
+          ? `${provider.toUpperCase()} verified and connected`
+          : `${provider.toUpperCase()} credential saved manually`
+      );
       await loadToolControl();
       try {
         providerPreflight = await api('/tool-bootstrap/preflight', {
@@ -403,10 +458,100 @@
         console.warn('Provider preflight after credential save failed', preflightError);
       }
     } catch (error) {
-      if (vaultStatus) vaultStatus.textContent = `Credential save failed: ${error.message}`;
+      if (vaultStatus) {
+        vaultStatus.textContent =
+          `${verified ? 'Authentication' : 'Credential save'} failed: ${error.message}`;
+      }
       toast(error.message);
     } finally {
-      submit.disabled = false;
+      if (verifiedButton) verifiedButton.disabled = false;
+      if (manualButton) manualButton.disabled = false;
+    }
+  }
+
+  byId('provider-vault-form')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    await saveProviderCredential({verified: true});
+  });
+
+  byId('provider-vault-manual')?.addEventListener('click', async () => {
+    await saveProviderCredential({verified: false});
+  });
+
+  async function disconnectProvider(provider) {
+    if (!provider) return;
+    if (!window.confirm(
+      `Disconnect ${provider.toUpperCase()} and disable its Seldrune tools?`
+    )) return;
+    try {
+      const result = await api(
+        `/tool-bootstrap/credentials/${encodeURIComponent(provider)}`,
+        {method: 'DELETE'}
+      );
+      toast(result.detail || `${provider.toUpperCase()} disconnected`);
+      providerPreflight = null;
+      await loadToolControl();
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+
+  byId('tool-provider-readiness')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-provider-disconnect]');
+    if (button) disconnectProvider(button.dataset.providerDisconnect);
+  });
+
+  byId('tool-provider-preflight-results')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-provider-disconnect]');
+    if (button) disconnectProvider(button.dataset.providerDisconnect);
+  });
+
+  byId('secret-reference-list')?.addEventListener('click', async event => {
+    const button = event.target.closest('[data-secret-remove]');
+    if (!button) return;
+    const secret = secrets.find(item => item.id === button.dataset.secretRemove);
+    if (!secret) return;
+    const builtInProvider = BUILTIN_PROVIDER_BY_SECRET_SLUG[secret.slug];
+    if (builtInProvider) {
+      await disconnectProvider(builtInProvider);
+      return;
+    }
+    if (!window.confirm(`Remove credential reference "${secret.name}"?`)) return;
+    button.disabled = true;
+    try {
+      await api(`/secret-references/${secret.id}`, {method: 'DELETE'});
+      toast('Credential reference removed');
+      await loadToolControl();
+    } catch (error) {
+      button.disabled = false;
+      toast(error.message);
+    }
+  });
+
+  byId('tool-clean-invalid')?.addEventListener('click', async event => {
+    if (!window.confirm(
+      'Verify configured providers and remove only credentials explicitly rejected as invalid?'
+    )) return;
+    event.currentTarget.disabled = true;
+    setStatus('Checking providers and removing rejected credentials…');
+    try {
+      const result = await api('/tool-bootstrap/credentials/cleanup-invalid', {
+        method: 'POST',
+        body: '{}',
+      });
+      const removed = result.removed?.length || 0;
+      toast(
+        removed
+          ? `Removed ${removed} invalid provider credential${removed === 1 ? '' : 's'}`
+          : 'No provider credentials were explicitly rejected as invalid'
+      );
+      providerPreflight = null;
+      await loadToolControl();
+    } catch (error) {
+      toast(error.message);
+      setStatus(`Credential cleanup failed: ${error.message}`);
+    } finally {
+      event.currentTarget.disabled = false;
     }
   });
 
