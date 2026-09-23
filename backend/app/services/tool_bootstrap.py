@@ -23,6 +23,7 @@ from backend.app.services.audit import record_audit
 from backend.app.services.external_actions import default_external_action_catalog
 from backend.app.services.secret_vault import SecretVaultError, resolve_secret
 from backend.app.services.tool_gateway import internal_action_catalog
+from backend.app.services.tool_input_defaults import production_runtime_targets
 
 
 
@@ -268,6 +269,7 @@ def configured_external_tool_status(
         "ready_actions": ready_actions,
         "missing_actions": total_actions - ready_actions,
         "fully_ready": bool(total_actions) and ready_actions == total_actions,
+        "runtime_targets": production_runtime_targets(),
     }
 
 
