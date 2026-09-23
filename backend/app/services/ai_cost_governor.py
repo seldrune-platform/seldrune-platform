@@ -60,11 +60,22 @@ def estimate_model_cost(
         0,
         input_tokens - cached_input_tokens - cache_write_tokens,
     )
+    long_context = input_tokens > 272_000
+    input_multiplier = 2.0 if long_context else 1.0
+    output_multiplier = 1.5 if long_context else 1.0
     return round(
-        (uncached_input_tokens / 1_000_000) * price.input_per_million
-        + (cached_input_tokens / 1_000_000) * price.cached_input_per_million
-        + (cache_write_tokens / 1_000_000) * price.cache_write_per_million
-        + (output_tokens / 1_000_000) * price.output_per_million,
+        (uncached_input_tokens / 1_000_000)
+        * price.input_per_million
+        * input_multiplier
+        + (cached_input_tokens / 1_000_000)
+        * price.cached_input_per_million
+        * input_multiplier
+        + (cache_write_tokens / 1_000_000)
+        * price.cache_write_per_million
+        * input_multiplier
+        + (output_tokens / 1_000_000)
+        * price.output_per_million
+        * output_multiplier,
         8,
     )
 
