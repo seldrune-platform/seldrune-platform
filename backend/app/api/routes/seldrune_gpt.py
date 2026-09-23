@@ -641,7 +641,7 @@ def edit_seldrune_gpt_pdf(
     try:
         plan = json.loads(result.output_text)
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=502, detail="Model returned an invalid PDF edit plan") from exc
+        raise HTTPException(\n            status_code=502,\n            detail="Model returned an invalid PDF edit plan",\n        ) from exc
 
     try:
         pdf_bytes = base64.b64decode(payload.pdf.data_base64, validate=True)
