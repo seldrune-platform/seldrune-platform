@@ -15,10 +15,13 @@
   const dropzone = document.querySelector('#seldrune-gpt-dropzone');
   const attachmentList = document.querySelector('#seldrune-gpt-attachments');
   const attachmentSummary = document.querySelector('#seldrune-gpt-attachment-summary');
+  const pdfPasswordWrap = document.querySelector('#seldrune-gpt-pdf-password-wrap');
+  const pdfPassword = document.querySelector('#seldrune-gpt-pdf-password');
 
   const MAX_FILES = 6;
   const MAX_FILE_BYTES = 8 * 1024 * 1024;
-  const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
+  const MAX_PDF_EDIT_BYTES = 25 * 1024 * 1024;
+  const MAX_TOTAL_BYTES = 32 * 1024 * 1024;
   const attachments = [];
 
   const MIME_BY_EXTENSION = {
@@ -107,6 +110,7 @@
   function clearAttachments() {
     attachments.splice(0);
     if (fileInput) fileInput.value = '';
+    if (pdfPassword) pdfPassword.value = '';
     renderAttachments();
   }
 
@@ -135,6 +139,8 @@
     attachmentSummary.textContent = attachments.length
       ? `${attachments.length} attached · ${formatBytes(total)}`
       : 'No attachments';
+    const hasPdf = attachments.some(item => item.media_type === 'application/pdf');
+    pdfPasswordWrap?.classList.toggle('hidden', !hasPdf);
   }
 
   function fileToBase64(file) {
@@ -175,8 +181,13 @@
         status.textContent = `Unsupported attachment: ${file.name}`;
         continue;
       }
-      if (file.size > MAX_FILE_BYTES) {
-        status.textContent = `${file.name} exceeds the 8 MB per-file limit.`;
+      const fileLimit = mediaType === 'application/pdf'
+        ? MAX_PDF_EDIT_BYTES
+        : MAX_FILE_BYTES;
+      if (file.size > fileLimit) {
+        status.textContent = mediaType === 'application/pdf'
+          ? `${file.name} exceeds the 25 MB advanced PDF limit.`
+          : `${file.name} exceeds the 8 MB per-file limit.`;
         continue;
       }
       try {
@@ -290,6 +301,7 @@
             media_type: pdf.media_type,
             data_base64: pdf.data_base64,
           },
+          password: pdfPassword?.value || null,
         }),
       });
       clearAttachments();
@@ -298,13 +310,29 @@
       const warningText = (result.warnings || []).length
         ? ` Warnings: ${result.warnings.join('; ')}`
         : '';
+      const verification = Number.isFinite(result.verification_score)
+        ? `${result.verification_score}% machine-verified`
+        : 'verification unavailable';
+      const profile = [
+        result.document_type || 'PDF',
+        `${result.page_count || 0} pages`,
+        result.image_only_pages
+          ? `${result.image_only_pages} scanned/image pages`
+          : 'native text',
+        result.form_fields
+          ? `${result.form_fields} form fields`
+          : null,
+        result.repair_passes
+          ? `${result.repair_passes} visual repair pass`
+          : null,
+      ].filter(Boolean).join(' · ');
       addDownloadMessage(
-        'Seldrune GPT',
-        `${result.summary || 'PDF edit completed.'} Applied edits: ${result.applied_edits || 0}.${warningText}`,
+        'Seldrune GPT · Advanced PDF',
+        `${result.summary || 'PDF edit completed.'} Applied edits: ${result.applied_edits || 0}. ${verification}. ${profile}.${warningText}`,
         result.filename,
         result.data_base64,
       );
-      status.textContent = `PDF ready · ${result.applied_edits || 0} edits · ${result.filename}`;
+      status.textContent = `PDF ready · ${verification} · ${result.filename}`;
     } catch (error) {
       addMessage('System', `PDF edit failed: ${error.message}`);
       status.textContent = 'PDF edit failed. The original attachment is still available.';
