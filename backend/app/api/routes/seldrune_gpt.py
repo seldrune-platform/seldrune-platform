@@ -268,6 +268,7 @@ class SeldruneGPTPDFEditResponse(BaseModel):
     form_fields: int
     verified_operations: int
     verification_score: int
+    visual_fidelity_score: int
     repair_passes: int = 0
     verification_notes: list[str] = Field(default_factory=list)
 
@@ -608,7 +609,9 @@ def edit_seldrune_gpt_pdf(
             "interactive field, add_text/add_note when new visible text is requested, and "
             "rotate_page when rotation is requested. When replacement text is longer than "
             "the original, preserve the owner's exact requested wording and let the editing "
-            "engine adapt layout/font size rather than shortening or refusing it. Resolve "
+            "engine preserve the original font resource, point size, color, baseline, "
+            "alignment, and surrounding layout rather than substituting generic typography. "
+            "Resolve "
             "repeated targets from the owner's context and occurrence. Never require a "
             "manual edit plan from the owner."
         ),
@@ -764,6 +767,7 @@ def edit_seldrune_gpt_pdf(
             "applied_edits": edit_result.applied_edits,
             "verified_operations": edit_result.verified_operations,
             "verification_score": edit_result.verification_score,
+            "visual_fidelity_score": edit_result.visual_fidelity_score,
             "repair_passes": repair_passes,
             "warnings": edit_result.warnings[:20],
             "model": result.model,
@@ -785,7 +789,8 @@ def edit_seldrune_gpt_pdf(
             content=(
                 f"{summary} Created {output_name} with "
                 f"{edit_result.applied_edits} applied edits and "
-                f"{edit_result.verification_score}% machine verification"
+                f"{edit_result.verification_score}% content verification and "
+                f"{edit_result.visual_fidelity_score}% visual fidelity"
                 + (f" after {repair_passes} automatic repair pass(es)." if repair_passes else ".")
             ),
             model=result.model,
@@ -809,6 +814,7 @@ def edit_seldrune_gpt_pdf(
         form_fields=edit_result.inspection.form_fields,
         verified_operations=edit_result.verified_operations,
         verification_score=edit_result.verification_score,
+        visual_fidelity_score=edit_result.visual_fidelity_score,
         repair_passes=repair_passes,
         verification_notes=edit_result.verification_notes,
     )
