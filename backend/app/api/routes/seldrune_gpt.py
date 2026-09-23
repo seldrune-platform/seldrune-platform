@@ -852,13 +852,14 @@ def edit_seldrune_gpt_pdf(
         if not referenced_pages:
             referenced_pages = [
                 render.page_number for render in initial_page_renders
-            ]
+            ] or list(range(1, min(inspection.page_count, 4) + 1))
         try:
             retry_page_renders = render_pdf_pages_for_model(
                 pdf_bytes,
                 payload.password,
                 page_numbers=referenced_pages,
-                max_pages=10,
+                max_pages=4,
+                max_long_edge=1200,
             )
         except PDFEditorError:
             retry_page_renders = initial_page_renders
@@ -874,14 +875,27 @@ def edit_seldrune_gpt_pdf(
             str(render.page_number) for render in retry_page_renders
         ) or "none"
 
+        retry_route = choose_cost_route(
+            settings,
+            purpose="pdf",
+            text=payload.instruction,
+            attempt=attempt_index + 1,
+            has_images=bool(retry_images),
+            has_files=False,
+        )
+        remaining_pdf_budget = max(
+            0.001,
+            settings.ai_pdf_max_total_usd - total_ai_cost,
+        )
         retry_request = ModelRequest(
             provider=ModelProvider.OPENAI,
-            model=settings.model_default,
+            model=retry_route.model,
             input_text=(
-                "Create a complete replacement edit plan against the ORIGINAL attached PDF. "
-                "Start from the untouched original; do not layer on a previous candidate.\n"
+                "Create a complete replacement edit plan against the ORIGINAL PDF using "
+                "the attached page previews. Do not layer on a previous candidate.\n"
                 f"Owner instruction: {payload.instruction}\n\n"
                 f"Previous candidate diagnostics:\n- {rejection_text}\n\n"
+                f"Previous plan JSON:\n{json.dumps(candidate_plan, separators=(',', ':'))}\n\n"
                 f"{profile}\n"
                 "Rendered ORIGINAL page previews are attached after this text in page "
                 f"order: {retry_visual_pages}. For every missing/search-invisible target, "
@@ -903,18 +917,36 @@ def edit_seldrune_gpt_pdf(
                 "the exact bbox and typography visually. Return a complete new plan, not a "
                 "delta or repair plan. Do not change unrelated content."
             ),
-            max_output_tokens=max(settings.model_max_output_tokens, 6000),
+            max_output_tokens=retry_route.max_output_tokens,
             response_schema=_PDF_EDIT_SCHEMA,
             input_images=retry_images,
-            input_files=input_files,
+            input_files=(),
+            image_detail="high",
+            pdf_detail=retry_route.pdf_detail,
+            reasoning_effort=retry_route.reasoning_effort,
+            prompt_cache_key=(
+                f"seldrune:{organization_id}:pdf-repair:{payload.pdf.name}"
+            ),
+            max_estimated_cost_usd=min(
+                retry_route.request_budget_usd,
+                remaining_pdf_budget,
+            ),
+            exact_token_preflight=True,
         )
         try:
             retry_model_result, _retry_latency = ModelGateway(settings).generate(
                 retry_request
             )
+            model_calls += 1
+            models_used.add(retry_model_result.model)
+            total_ai_cost += float(
+                retry_model_result.usage.estimated_cost_usd or 0.0
+            )
             candidate_plan = json.loads(retry_model_result.output_text)
         except (ModelGatewayError, json.JSONDecodeError) as exc:
             last_diagnostics.append(f"AI re-planning failed: {exc}")
+            if "cost governor" in str(exc).casefold():
+                break
 
     if edit_result is None and best_safe_result is not None:
         edit_result = best_safe_result
@@ -975,6 +1007,9 @@ def edit_seldrune_gpt_pdf(
             "repair_passes": repair_passes,
             "warnings": edit_result.warnings[:20],
             "model": result.model,
+            "models_used": sorted(models_used),
+            "model_calls": model_calls,
+            "estimated_ai_cost_usd": round(total_ai_cost, 8),
         },
     )
     session.add(
@@ -1027,6 +1062,9 @@ def edit_seldrune_gpt_pdf(
         layout_integrity_score=selected_assessment.layout_integrity_score,
         reconstruction_attempts=reconstruction_attempts,
         repair_passes=repair_passes,
+        estimated_ai_cost_usd=round(total_ai_cost, 8),
+        model_calls=model_calls,
+        models_used=sorted(models_used),
         verification_notes=edit_result.verification_notes,
     )
 
