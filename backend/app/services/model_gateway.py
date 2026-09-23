@@ -179,6 +179,10 @@ class ModelGateway:
                 "instructions": request.instructions,
                 "max_output_tokens": request.max_output_tokens,
             }
+            if decision.tier == "economy":
+                response_args["reasoning"] = {"effort": "low"}
+            elif decision.tier == "balanced":
+                response_args["reasoning"] = {"effort": "medium"}
             if request.response_schema is not None:
                 response_args["text"] = {
                     "format": {
