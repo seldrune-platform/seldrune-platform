@@ -55,6 +55,9 @@ class ModelResult:
     output_text: str
     response_id: str | None = None
     usage: ModelUsage = field(default_factory=ModelUsage)
+    estimated_cost_usd: float | None = None
+    routed_from_model: str | None = None
+    cache_hit: bool = False
 
 
 class ModelGatewayError(RuntimeError):
