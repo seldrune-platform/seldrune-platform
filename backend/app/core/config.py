@@ -38,8 +38,21 @@ class Settings(BaseSettings):
     agent_auto_grant_production_tools: bool = False
     model_provider: str = "mock"
     model_default: str = "mock-v1"
+    model_economy: str = "gpt-5.6-luna"
+    model_balanced: str = "gpt-5.6-terra"
+    model_premium: str = "gpt-5.6-sol"
     model_timeout_seconds: float = 60.0
     model_max_output_tokens: int = 1200
+    ai_cost_governor_enabled: bool = True
+    ai_request_max_usd: float = 0.15
+    ai_pdf_request_max_usd: float = 0.10
+    ai_pdf_max_total_usd: float = 0.25
+    ai_pdf_max_attempts: int = 3
+    ai_pdf_max_output_tokens: int = 3200
+    ai_image_detail: str = "low"
+    ai_pdf_detail: str = "low"
+    ai_prompt_cache_enabled: bool = True
+    ai_exact_token_preflight: bool = True
     project_estimated_cost_per_step_usd: float = 0.05
     knowledge_retrieval_limit: int = 6
     knowledge_context_max_chars: int = 6000
@@ -77,6 +90,22 @@ class Settings(BaseSettings):
             raise ValueError("SELDRUNE_MODEL_TIMEOUT_SECONDS must be positive")
         if self.model_max_output_tokens <= 0:
             raise ValueError("SELDRUNE_MODEL_MAX_OUTPUT_TOKENS must be positive")
+        if self.ai_request_max_usd <= 0:
+            raise ValueError("SELDRUNE_AI_REQUEST_MAX_USD must be positive")
+        if self.ai_pdf_request_max_usd <= 0:
+            raise ValueError("SELDRUNE_AI_PDF_REQUEST_MAX_USD must be positive")
+        if self.ai_pdf_max_total_usd <= 0:
+            raise ValueError("SELDRUNE_AI_PDF_MAX_TOTAL_USD must be positive")
+        if not 1 <= self.ai_pdf_max_attempts <= 5:
+            raise ValueError("SELDRUNE_AI_PDF_MAX_ATTEMPTS must be between 1 and 5")
+        if not 256 <= self.ai_pdf_max_output_tokens <= 12000:
+            raise ValueError(
+                "SELDRUNE_AI_PDF_MAX_OUTPUT_TOKENS must be between 256 and 12000"
+            )
+        if self.ai_image_detail not in {"low", "high", "auto", "original"}:
+            raise ValueError("SELDRUNE_AI_IMAGE_DETAIL is invalid")
+        if self.ai_pdf_detail not in {"low", "high", "auto"}:
+            raise ValueError("SELDRUNE_AI_PDF_DETAIL is invalid")
         if self.project_estimated_cost_per_step_usd < 0:
             raise ValueError("SELDRUNE_PROJECT_ESTIMATED_COST_PER_STEP_USD cannot be negative")
         if not 1 <= self.knowledge_retrieval_limit <= 25:
