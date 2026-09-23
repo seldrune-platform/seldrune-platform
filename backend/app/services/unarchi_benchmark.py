@@ -5,7 +5,7 @@ from typing import Any
 from backend.app.services.unarchi_engine import UnarchiEngine
 
 
-BENCHMARK_VERSION = "unarchi-ablation-v0.7"
+BENCHMARK_VERSION = "unarchi-ablation-v0.8"
 
 
 def _failure_sensitization() -> dict[str, Any]:
@@ -401,6 +401,74 @@ def _causal_hypothesis_revision() -> dict[str, Any]:
         "leader_is_temperature": leader is temperature,
     }
 
+
+
+def _intervention_aware_self_world_revision() -> dict[str, Any]:
+    engine = UnarchiEngine()
+    self_hypothesis = engine.add_causal_hypothesis(
+        statement="Strict validation changes the outcome.",
+        predictions={
+            "intervention:enable strict validation":
+                "strict validation blocks invalid output"
+        },
+        confidence=0.5,
+        scope="self",
+    )
+    external_hypothesis = engine.add_causal_hypothesis(
+        statement="External data quality alone determines the outcome.",
+        predictions={
+            "intervention:enable strict validation":
+                "external data quality remains unchanged"
+        },
+        confidence=0.5,
+        scope="external",
+    )
+    prediction = engine.predict_action(
+        action="enable strict validation",
+        expected_success=0.7,
+        expected_information_gain=0.8,
+        risk=0.1,
+    )
+    trial = engine.plan_self_intervention(
+        action="enable strict validation",
+        context="controlled local validation test",
+        environment_signature="dataset:v1",
+        baseline_outcome="invalid output passes",
+        risk=0.1,
+        linked_prediction_id=prediction.id,
+    )
+    before = (
+        self_hypothesis.confidence,
+        external_hypothesis.confidence,
+    )
+    observed = engine.observe_self_intervention(
+        trial.id,
+        observed_outcome="strict validation blocks invalid output",
+        environment_signature="dataset:v1",
+    )
+    leader = engine.leading_causal_hypothesis()
+    narrative = engine.build_metacognitive_narrative("intervention")
+
+    return {
+        "name": "intervention_aware_self_world_revision",
+        "expected_direction": "controlled_self_intervention_separates_self_from_world_cause",
+        "passed": (
+            before == (0.5, 0.5)
+            and observed.environment_held_constant is True
+            and observed.attribution == "self_intervention"
+            and self_hypothesis.confidence > external_hypothesis.confidence
+            and leader is self_hypothesis
+            and "intervention:0" in narrative.evidence_refs
+            and "prediction:0" in narrative.evidence_refs
+            and narrative.unsupported_claims == 0
+        ),
+        "environment_held_constant": observed.environment_held_constant,
+        "attribution": observed.attribution,
+        "self_confidence": self_hypothesis.confidence,
+        "external_confidence": external_hypothesis.confidence,
+        "leader_is_self": leader is self_hypothesis,
+    }
+
 def run_unarchi_ablation_benchmark() -> dict[str, Any]:
     scenarios = [
         _failure_sensitization(),
@@ -412,6 +480,7 @@ def run_unarchi_ablation_benchmark() -> dict[str, Any]:
         _metacognitive_retrospective_fidelity(),
         _conflict_arbitration_self_correction(),
         _causal_hypothesis_revision(),
+        _intervention_aware_self_world_revision(),
     ]
     passed = sum(bool(item["passed"]) for item in scenarios)
     return {
