@@ -22,6 +22,24 @@ html[data-portal-theme="aurora"]{
   --portal-line:rgba(110,255,219,.2);--portal-text:#effffb;--portal-muted:#8fbeb4;
   --portal-accent:#5affcf;--portal-accent-2:#67a8ff;
 }
+
+/* Owner Portal is the only navigation shell once initialized. The legacy
+   sidebar/header remain in the HTML as a pre-JS fallback, but must not compete
+   with the portal after enhancement. */
+body.owner-portal #console-view{
+  grid-template-columns:minmax(0,1fr);
+}
+body.owner-portal #console-view>aside{
+  display:none!important;
+}
+body.owner-portal #console-view>main{
+  max-width:none;
+  width:100%;
+}
+body.owner-portal #console-view>main>header:not(.owner-portal-bar){
+  display:none!important;
+}
+
 body.owner-portal{
   color:var(--portal-text);
   background:
