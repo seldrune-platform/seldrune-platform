@@ -49,7 +49,7 @@ class ModelGateway:
             raise ModelGatewayError("An OpenAI model must be configured")
 
         model_input: Any = request.input_text
-        if request.input_images:
+        if request.input_images or request.input_files:
             content: list[dict[str, Any]] = [
                 {"type": "input_text", "text": request.input_text}
             ]
@@ -60,6 +60,14 @@ class ModelGateway:
                         "image_url": (
                             f"data:{image.media_type};base64,{image.data_base64}"
                         ),
+                    }
+                )
+            for file_input in request.input_files:
+                content.append(
+                    {
+                        "type": "input_file",
+                        "file_data": file_input.data_base64,
+                        "filename": file_input.filename,
                     }
                 )
             model_input = [{"role": "user", "content": content}]
