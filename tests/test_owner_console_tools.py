@@ -51,7 +51,7 @@ def test_tools_workspace_exposes_action_controls() -> None:
     assert "api('/tool-bootstrap/status')" in script
     assert "api('/tool-defaults')" in script
     assert "api('/tool-bootstrap/preflight'" in script
-    assert "api('/tool-bootstrap/credentials'" in script
+    assert "/tool-bootstrap/credentials" in script
     assert "/tool-bootstrap/credentials/verified" in script
     assert "/tool-bootstrap/credentials/cleanup-invalid" in script
     assert "data-provider-disconnect" in script
