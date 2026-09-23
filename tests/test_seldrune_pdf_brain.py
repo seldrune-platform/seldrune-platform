@@ -203,3 +203,48 @@ def test_pdf_brain_natural_instruction_applies_without_external_ai() -> None:
     output.close()
     assert "2026-09-23" in text
     assert "2025-09-23" not in text
+
+
+def test_pdf_brain_resolves_unique_native_field_label_value() -> None:
+    source = _text_pdf("Joining date: 2025-09-23")
+
+    local = try_local_pdf_edit(
+        source,
+        "change joining date to 2026-10-01",
+    )
+
+    assert local is not None
+    assert local.result.verification_score == 100
+    output = pymupdf.open(stream=local.result.data, filetype="pdf")
+    text = output[0].get_text()
+    output.close()
+    assert "Joining date" in text
+    assert "2026-10-01" in text
+    assert "2025-09-23" not in text
+
+
+def test_pdf_brain_refuses_ambiguous_native_field_label_values() -> None:
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), "Status: Pending")
+    page.insert_text((72, 120), "Status: Approved")
+    source = document.tobytes()
+    document.close()
+
+    local = try_local_pdf_edit(
+        source,
+        "change status to Final",
+    )
+
+    assert local is None
+
+
+def test_pdf_brain_does_not_replace_unresolved_field_label_itself() -> None:
+    source = _text_pdf("Joining date")
+
+    local = try_local_pdf_edit(
+        source,
+        "change joining date to 2026-10-01",
+    )
+
+    assert local is None
