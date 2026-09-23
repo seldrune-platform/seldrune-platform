@@ -182,8 +182,6 @@
       "<span>Execution truth · governed actions · evidence first</span>";
     root.after(footer);
 
-    const preferenceKey = "seldrune.portal.defaultWorkspace";
-
     function activate(id, updateHash = true) {
       if (!panels.has(id)) id = "home";
       document.querySelectorAll(".owner-portal-tab").forEach(button => {
@@ -195,7 +193,6 @@
         panel.classList.toggle("active", panelId === id);
       });
       if (updateHash) history.replaceState(null, "", `#${id}`);
-      localStorage.setItem("seldrune.portal.lastWorkspace", id);
       if (id === "operator") {
         requestAnimationFrame(() => {
           document.getElementById("seldrune-gpt-input")?.focus();
@@ -300,17 +297,13 @@
     }
     syncRuntime();
 
-    const requested = location.hash.slice(1);
-    const preferred = localStorage.getItem(preferenceKey);
-    const last = localStorage.getItem("seldrune.portal.lastWorkspace");
-    const initial = panels.has(requested)
-      ? requested
-      : panels.has(preferred)
-        ? preferred
-        : panels.has(last)
-          ? last
-          : "home";
-    activate(initial, false);
+    // A fresh Owner Console session always starts from a single stable Home page.
+    // Workspace hashes are useful while navigating, but must not turn into a
+    // persistent alternate landing page across reloads.
+    if (location.hash) {
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+    activate("home", false);
 
     window.seldrunePortal = {
       activate,
