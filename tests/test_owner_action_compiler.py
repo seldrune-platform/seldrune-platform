@@ -173,3 +173,71 @@ def test_existing_planned_tool_is_not_duplicated() -> None:
     assert steps == planned
     assert metadata["mode"] == "planner-only"
     assert metadata["added_tool_slugs"] == []
+
+
+def test_repository_check_compiles_to_repository_info_tool() -> None:
+    tools = [
+        _tool(
+            "github-repository-info",
+            "github",
+            "repository-info",
+            [],
+            defaults=["owner", "repo"],
+        )
+    ]
+    steps, metadata = compile_required_external_action_steps(
+        "Check repository",
+        available_tools=tools,
+        planned_steps=_generic_plan(),
+    )
+    assert metadata["mode"] == "direct-tool-plan"
+    assert len(steps) == 1
+    assert steps[0].tool_slug == "github-repository-info"
+    assert steps[0].tool_input == {}
+
+
+def test_read_repository_file_uses_default_repo_and_ref() -> None:
+    tools = [
+        _tool(
+            "github-read-file",
+            "github",
+            "read-file",
+            ["path"],
+            defaults=["owner", "repo", "ref"],
+        )
+    ]
+    steps, metadata = compile_required_external_action_steps(
+        "Read file backend/app/main.py",
+        available_tools=tools,
+        planned_steps=_generic_plan(),
+    )
+    assert metadata["mode"] == "direct-tool-plan"
+    assert steps[0].tool_input == {"path": "backend/app/main.py"}
+
+
+def test_deploy_status_does_not_trigger_a_new_deploy() -> None:
+    tools = [
+        _tool(
+            "render-deploy-status",
+            "render",
+            "deploy-status",
+            ["deploy_id"],
+            defaults=["service_id"],
+        ),
+        _tool(
+            "render-deploy-service",
+            "render",
+            "deploy-service",
+            [],
+            defaults=["service_id"],
+        ),
+    ]
+    steps, metadata = compile_required_external_action_steps(
+        "Check deploy status dep-abc123",
+        available_tools=tools,
+        planned_steps=_generic_plan(),
+    )
+    assert metadata["required_actions"] == ["render:deploy-status"]
+    assert len(steps) == 1
+    assert steps[0].tool_slug == "render-deploy-status"
+    assert steps[0].tool_input == {"deploy_id": "dep-abc123"}
