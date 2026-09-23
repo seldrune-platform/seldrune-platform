@@ -7,6 +7,7 @@
   let bootstrapStatus = null;
   let providerPreflight = null;
   let toolDefaults = [];
+  let invalidCredentialCleanupAttempted = false;
 
   const BUILTIN_PROVIDER_BY_SECRET_SLUG = {
     'gmail-tool-credential': 'gmail',
@@ -355,6 +356,27 @@
     credential.required = Boolean(adapter.credential_required);
   }
 
+  async function cleanupInvalidCredentials({silent = false} = {}) {
+    const result = await api('/tool-bootstrap/credentials/cleanup-invalid', {
+      method: 'POST',
+      body: '{}',
+    });
+    const removed = result.removed?.length || 0;
+    if (!silent) {
+      toast(
+        removed
+          ? `Removed ${removed} invalid provider credential${removed === 1 ? '' : 's'}`
+          : 'No provider credentials were explicitly rejected as invalid'
+      );
+    } else if (removed) {
+      toast(
+        `Automatically removed ${removed} invalid provider credential`
+        + (removed === 1 ? '' : 's')
+      );
+    }
+    return result;
+  }
+
   async function loadToolControl() {
     if (!document.getElementById('tool-control') || !state?.org) return;
     setStatus('Synchronizing universal tool fabric…');
@@ -387,6 +409,17 @@
       setStatus(
         `Universal action fabric synchronized · ${tools.length} tools available.`
       );
+      if (!invalidCredentialCleanupAttempted) {
+        invalidCredentialCleanupAttempted = true;
+        try {
+          const cleanup = await cleanupInvalidCredentials({silent: true});
+          if ((cleanup.removed?.length || 0) > 0) {
+            await loadToolControl();
+          }
+        } catch (cleanupError) {
+          console.warn('Automatic invalid credential cleanup was unavailable', cleanupError);
+        }
+      }
     } catch (error) {
       setStatus(error.message);
     }
@@ -535,16 +568,8 @@
     event.currentTarget.disabled = true;
     setStatus('Checking providers and removing rejected credentials…');
     try {
-      const result = await api('/tool-bootstrap/credentials/cleanup-invalid', {
-        method: 'POST',
-        body: '{}',
-      });
+      const result = await cleanupInvalidCredentials();
       const removed = result.removed?.length || 0;
-      toast(
-        removed
-          ? `Removed ${removed} invalid provider credential${removed === 1 ? '' : 's'}`
-          : 'No provider credentials were explicitly rejected as invalid'
-      );
       providerPreflight = null;
       await loadToolControl();
     } catch (error) {
