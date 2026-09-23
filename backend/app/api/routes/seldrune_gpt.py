@@ -740,6 +740,8 @@ def edit_seldrune_gpt_pdf(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     total_ai_cost = float(result.usage.estimated_cost_usd or 0.0)
+    final_model = result.model
+    final_response_id = result.response_id
     total_input_tokens = result.usage.input_tokens
     total_output_tokens = result.usage.output_tokens
     total_cached_input_tokens = result.usage.cached_input_tokens
@@ -950,6 +952,8 @@ def edit_seldrune_gpt_pdf(
             )
             model_calls += 1
             models_used.add(retry_model_result.model)
+            final_model = retry_model_result.model
+            final_response_id = retry_model_result.response_id
             total_ai_cost += float(
                 retry_model_result.usage.estimated_cost_usd or 0.0
             )
@@ -1022,7 +1026,7 @@ def edit_seldrune_gpt_pdf(
             "reconstruction_attempts": reconstruction_attempts,
             "repair_passes": repair_passes,
             "warnings": edit_result.warnings[:20],
-            "model": result.model,
+            "model": final_model,
             "models_used": sorted(models_used),
             "model_calls": model_calls,
             "estimated_ai_cost_usd": round(total_ai_cost, 8),
@@ -1053,8 +1057,8 @@ def edit_seldrune_gpt_pdf(
                     else "."
                 )
             ),
-            model=result.model,
-            response_id=result.response_id,
+            model=final_model,
+            response_id=final_response_id,
             input_tokens=total_input_tokens,
             output_tokens=total_output_tokens,
             cached_input_tokens=total_cached_input_tokens,
@@ -1071,8 +1075,8 @@ def edit_seldrune_gpt_pdf(
         summary=summary,
         applied_edits=edit_result.applied_edits,
         warnings=edit_result.warnings,
-        model=result.model,
-        response_id=result.response_id,
+        model=final_model,
+        response_id=final_response_id,
         document_type=edit_result.inspection.document_type,
         page_count=edit_result.inspection.page_count,
         native_text_pages=edit_result.inspection.native_text_pages,
