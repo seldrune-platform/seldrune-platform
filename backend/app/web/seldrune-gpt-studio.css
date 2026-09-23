@@ -1,0 +1,38 @@
+.gpt-studio{overflow:hidden;padding:0!important}
+.gpt-studio-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding:26px 28px 18px;border-bottom:1px solid var(--portal-line)}
+.gpt-studio-head h2{margin:4px 0 8px;font-size:clamp(26px,3vw,42px);letter-spacing:-.035em}
+.gpt-studio-head p{max-width:840px;color:var(--portal-muted);line-height:1.65}
+.gpt-studio-runtime{min-width:170px;display:grid;gap:6px;justify-items:end}
+.gpt-studio-runtime>span{font-size:9px;letter-spacing:.18em;color:var(--portal-muted)}
+.gpt-studio-runtime>strong{font-size:15px;color:var(--portal-accent)}
+.gpt-studio-body{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:620px}
+.gpt-studio-sidebar{display:flex;flex-direction:column;gap:8px;padding:18px;border-right:1px solid var(--portal-line);background:rgba(255,255,255,.015)}
+.gpt-quick-prompt{width:100%;text-align:left;padding:12px 13px;border:1px solid rgba(255,255,255,.07);border-radius:12px;background:rgba(255,255,255,.025);color:var(--portal-text);font-size:12px}
+.gpt-quick-prompt:hover{border-color:color-mix(in srgb,var(--portal-accent) 45%,transparent);background:color-mix(in srgb,var(--portal-accent) 7%,transparent)}
+.gpt-capability-note{margin-top:auto;padding:14px;border:1px solid var(--portal-line);border-radius:14px;background:rgba(0,0,0,.16)}
+.gpt-capability-note span{display:block;margin-bottom:6px;font-size:9px;letter-spacing:.16em;color:var(--portal-accent)}
+.gpt-capability-note small{display:block;color:var(--portal-muted);font-size:10px;line-height:1.5}
+.gpt-studio-main{display:grid;grid-template-rows:minmax(340px,1fr) auto auto;min-width:0}
+.gpt-thread{padding:22px;overflow:auto;max-height:620px;display:flex;flex-direction:column;gap:12px}
+.gpt-thread .command-card{max-width:min(82%,900px);margin:0;border:1px solid var(--portal-line);border-radius:18px;background:rgba(255,255,255,.025)}
+.gpt-thread .command-card[data-role="user"]{align-self:flex-end;background:color-mix(in srgb,var(--portal-accent-2) 12%,transparent)}
+.gpt-thread .command-card[data-role="assistant"]{align-self:flex-start}
+.gpt-thread .command-card p{white-space:pre-wrap;overflow-wrap:anywhere}
+.gpt-composer{padding:0 20px 12px}
+.gpt-dropzone{border:1px solid var(--portal-line);border-radius:18px;background:rgba(3,10,24,.72);box-shadow:inset 0 1px rgba(255,255,255,.035);transition:border-color .16s ease,box-shadow .16s ease}
+.gpt-dropzone.dragging{border-color:var(--portal-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--portal-accent) 12%,transparent)}
+.gpt-dropzone textarea{width:100%;min-height:116px;resize:vertical;padding:16px 16px 8px;border:0!important;background:transparent!important;color:var(--portal-text);outline:0;box-shadow:none!important}
+.gpt-composer-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 10px 10px;border-top:1px solid rgba(255,255,255,.055)}
+.gpt-composer-tools,.gpt-composer-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gpt-composer-tools>span{font-size:10px;color:var(--portal-muted)}
+.gpt-attachments{display:flex;flex-wrap:wrap;gap:7px;padding:10px 10px 0}
+.gpt-attachments:empty{display:none}
+.gpt-attachment-chip{display:flex;align-items:center;gap:8px;max-width:280px;padding:7px 9px;border:1px solid var(--portal-line);border-radius:999px;background:rgba(255,255,255,.035);font-size:10px}
+.gpt-attachment-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gpt-attachment-chip small{color:var(--portal-muted);white-space:nowrap}
+.gpt-attachment-chip button{width:22px;height:22px;padding:0;border-radius:50%;display:grid;place-items:center}
+.gpt-studio-foot{display:flex;justify-content:space-between;gap:16px;padding:0 22px 20px}
+.gpt-studio-foot p{margin:0;color:var(--portal-muted);font-size:10px;line-height:1.5}
+#gpt-studio-foot,#seldrune-gpt-status{color:var(--portal-accent)}
+@media(max-width:900px){.gpt-studio-body{grid-template-columns:1fr}.gpt-studio-sidebar{display:grid;grid-template-columns:1fr 1fr;border-right:0;border-bottom:1px solid var(--portal-line)}.gpt-capability-note{grid-column:1/-1;margin-top:0}.gpt-studio-head{display:block}.gpt-studio-runtime{margin-top:14px;justify-items:start}.gpt-thread{max-height:520px}}
+@media(max-width:600px){.gpt-studio-head{padding:20px 18px 14px}.gpt-studio-sidebar{grid-template-columns:1fr;padding:12px}.gpt-composer{padding:0 12px 10px}.gpt-composer-bar{align-items:flex-start;flex-direction:column}.gpt-composer-actions{width:100%}.gpt-composer-actions button{flex:1}.gpt-studio-foot{display:block;padding:0 14px 16px}.gpt-studio-foot p+ p{margin-top:6px}.gpt-thread{padding:14px}.gpt-thread .command-card{max-width:94%}}
