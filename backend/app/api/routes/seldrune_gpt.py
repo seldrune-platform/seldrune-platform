@@ -32,6 +32,10 @@ from backend.app.services.audit import record_audit
 from backend.app.services.external_actions import default_external_action_catalog
 from backend.app.services.model_gateway import ModelGateway, ModelGatewayError
 from backend.app.services.owner_action_compiler import required_external_tool_actions
+from backend.app.services.pdf_editor import (
+    apply_advanced_pdf_edit_plan,
+    build_pdf_visual_context,
+)
 from backend.app.services.tool_bootstrap import (
     configured_external_tool_status,
     ensure_configured_external_tools,
@@ -252,6 +256,12 @@ class SeldruneGPTPDFEditResponse(BaseModel):
     data_base64: str
     summary: str
     applied_edits: int
+    verified_edits: int
+    verification_status: str
+    strategy: str
+    scanned_pages: list[int] = Field(default_factory=list)
+    rendered_pages: list[int] = Field(default_factory=list)
+    verification: list[dict] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     model: str
     response_id: str | None = None
@@ -264,19 +274,55 @@ _PDF_EDIT_SCHEMA: dict = {
         "summary": {"type": "string"},
         "operations": {
             "type": "array",
-            "maxItems": 50,
+            "maxItems": 80,
             "items": {
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["replace_text", "redact_text", "add_note"],
+                        "enum": [
+                            "replace_text",
+                            "redact_text",
+                            "visual_replace",
+                            "place_text",
+                            "set_form_field",
+                            "rotate_page",
+                        ],
                     },
                     "page": {"type": ["integer", "null"], "minimum": 1},
                     "target_text": {"type": ["string", "null"]},
                     "replacement_text": {"type": ["string", "null"]},
                     "text": {"type": ["string", "null"]},
+                    "rect_norm": {
+                        "type": ["array", "null"],
+                        "items": {"type": "number", "minimum": 0, "maximum": 1},
+                        "minItems": 4,
+                        "maxItems": 4,
+                    },
+                    "font_size": {"type": ["number", "null"], "minimum": 4},
+                    "text_color": {
+                        "type": ["array", "null"],
+                        "items": {"type": "number", "minimum": 0, "maximum": 1},
+                        "minItems": 3,
+                        "maxItems": 3,
+                    },
+                    "background_color": {
+                        "type": ["array", "null"],
+                        "items": {"type": "number", "minimum": 0, "maximum": 1},
+                        "minItems": 3,
+                        "maxItems": 3,
+                    },
+                    "alignment": {
+                        "type": ["string", "null"],
+                        "enum": ["left", "center", "right", None],
+                    },
+                    "field_name": {"type": ["string", "null"]},
+                    "field_value": {"type": ["string", "null"]},
+                    "rotation": {
+                        "type": ["integer", "null"],
+                        "enum": [0, 90, 180, 270, None],
+                    },
                 },
                 "required": [
                     "action",
@@ -284,6 +330,14 @@ _PDF_EDIT_SCHEMA: dict = {
                     "target_text",
                     "replacement_text",
                     "text",
+                    "rect_norm",
+                    "font_size",
+                    "text_color",
+                    "background_color",
+                    "alignment",
+                    "field_name",
+                    "field_value",
+                    "rotation",
                 ],
             },
         },
@@ -614,23 +668,58 @@ def edit_seldrune_gpt_pdf(
     if payload.pdf.media_type.lower().strip() != "application/pdf":
         raise HTTPException(status_code=422, detail="PDF editor accepts one PDF file")
 
+    try:
+        pdf_bytes = base64.b64decode(payload.pdf.data_base64, validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise HTTPException(status_code=422, detail="Invalid PDF encoding") from exc
+
+    visual_context = build_pdf_visual_context(pdf_bytes)
     _images, input_files, _names = _model_attachments([payload.pdf])
+    rendered_description = (
+        ", ".join(str(page) for page in visual_context.rendered_pages)
+        if visual_context.rendered_pages
+        else "none"
+    )
+    scanned_description = (
+        ", ".join(str(page) for page in visual_context.scanned_pages)
+        if visual_context.scanned_pages
+        else "none detected"
+    )
+
     request = ModelRequest(
         provider=ModelProvider.OPENAI,
         model=settings.model_default,
         input_text=(
-            "Edit the attached PDF according to this owner instruction:\n"
+            "OWNER PDF EDIT INSTRUCTION:\n"
             + payload.instruction
+            + "\n\nPDF PAGE PROFILE:\n"
+            + visual_context.profile_text
+            + "\n\nRendered page images attached in this exact page order: "
+            + rendered_description
+            + ". Pages detected as scanned/image-dominant: "
+            + scanned_description
+            + "."
         ),
         instructions=(
-            "Create a deterministic PDF edit plan. Prefer replace_text for changing "
-            "existing visible text, redact_text for removing text, and add_note only "
-            "when new text should be added. For replace/redact, copy target_text exactly "
-            "from the PDF so a text search can find it. Page numbers are 1-based. "
-            "Do not invent edits beyond the owner's instruction."
+            "You are Seldrune's precision PDF edit planner. Produce only the minimum "
+            "operations required by the owner's instruction. For normal selectable "
+            "text, prefer replace_text or redact_text and copy target_text exactly "
+            "from the PDF. For scanned/image-only or hard-layout content, use "
+            "visual_replace with rect_norm=[x0,y0,x1,y1] normalized from 0 to 1 "
+            "against the full page; use the rendered page image to estimate the exact "
+            "region and visual style. Use place_text only for genuinely new text. "
+            "Use set_form_field for AcroForm fields and rotate_page only when requested. "
+            "Preserve wording, layout, size, alignment, and colors unless the owner "
+            "explicitly asks to change them. Do not invent edits. If the requested "
+            "target cannot be identified confidently, return no operation for it rather "
+            "than guessing. Page numbers are 1-based. text_color/background_color are "
+            "RGB arrays normalized 0..1; leave them null when the engine should infer "
+            "the existing style/background. Every nullable schema field must still be "
+            "present with null when unused."
         ),
-        max_output_tokens=min(settings.model_max_output_tokens, 4000),
+        max_output_tokens=min(settings.model_max_output_tokens, 7000),
         response_schema=_PDF_EDIT_SCHEMA,
+        input_images=visual_context.images,
         input_files=input_files,
     )
     try:
@@ -646,12 +735,26 @@ def edit_seldrune_gpt_pdf(
             detail="Model returned an invalid PDF edit plan",
         ) from exc
 
-    try:
-        pdf_bytes = base64.b64decode(payload.pdf.data_base64, validate=True)
-    except (ValueError, binascii.Error) as exc:
-        raise HTTPException(status_code=422, detail="Invalid PDF encoding") from exc
+    (
+        edited_pdf,
+        applied_edits,
+        verified_edits,
+        warnings,
+        verification,
+    ) = apply_advanced_pdf_edit_plan(pdf_bytes, plan)
 
-    edited_pdf, applied_edits, warnings = _apply_pdf_edit_plan(pdf_bytes, plan)
+    verification_status = (
+        "verified"
+        if verified_edits == applied_edits and not any(
+            not item.get("verified") for item in verification
+        )
+        else "partial_verification"
+    )
+    if verification_status != "verified":
+        warnings.append(
+            "Some edits could not be independently verified; review the output before use."
+        )
+
     stem = payload.pdf.name.rsplit(".", 1)[0]
     safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip("-._") or "document"
     output_name = f"{safe_stem}-edited.pdf"
@@ -668,6 +771,10 @@ def edit_seldrune_gpt_pdf(
             "source_filename": payload.pdf.name,
             "output_filename": output_name,
             "applied_edits": applied_edits,
+            "verified_edits": verified_edits,
+            "verification_status": verification_status,
+            "scanned_pages": list(visual_context.scanned_pages),
+            "rendered_pages": list(visual_context.rendered_pages),
             "warnings": warnings[:20],
             "model": result.model,
         },
@@ -677,9 +784,7 @@ def edit_seldrune_gpt_pdf(
             organization_id=organization_id,
             user_id=current_user.id,
             role="user",
-            content=(
-                f"{payload.instruction}\n[PDF edit: {payload.pdf.name}]"
-            ),
+            content=f"{payload.instruction}\n[Advanced PDF edit: {payload.pdf.name}]",
         )
     )
     session.add(
@@ -688,7 +793,8 @@ def edit_seldrune_gpt_pdf(
             user_id=current_user.id,
             role="assistant",
             content=(
-                f"{summary} Created {output_name} with {applied_edits} applied edits."
+                f"{summary} Created {output_name} with {applied_edits} applied edits; "
+                f"{verified_edits} independently verified."
             ),
             model=result.model,
             response_id=result.response_id,
@@ -701,6 +807,12 @@ def edit_seldrune_gpt_pdf(
         data_base64=base64.b64encode(edited_pdf).decode("ascii"),
         summary=summary,
         applied_edits=applied_edits,
+        verified_edits=verified_edits,
+        verification_status=verification_status,
+        strategy="hybrid-text-vision-form-verified",
+        scanned_pages=list(visual_context.scanned_pages),
+        rendered_pages=list(visual_context.rendered_pages),
+        verification=verification,
         warnings=warnings,
         model=result.model,
         response_id=result.response_id,
