@@ -6,6 +6,7 @@ from typing import Any
 from backend.app.core.config import settings
 from backend.app.core.modeling import ModelGatewayError, ModelProvider, ModelRequest
 from backend.app.core.orchestration import PlannedStep
+from backend.app.services.ai_cost_governor import choose_cost_route
 from backend.app.services.model_gateway import ModelGateway
 
 _ALLOWED_CAPABILITIES = (
@@ -392,9 +393,14 @@ def build_live_plan(
             },
         )
 
+    route = choose_cost_route(
+        settings,
+        purpose="planner",
+        text=objective,
+    )
     request = ModelRequest(
         provider=provider,
-        model=settings.model_default,
+        model=route.model,
         instructions=(
             "You are Seldrune's governed planning engine. Convert the owner's objective "
             "into the smallest sufficient sequence of executable steps. Obey explicit "
@@ -406,12 +412,16 @@ def build_live_plan(
             "Do not claim work happened."
         ),
         input_text=_planner_input(objective, adaptive_guidance, available_tools),
-        max_output_tokens=min(settings.model_max_output_tokens, 1200),
+        max_output_tokens=route.max_output_tokens,
         metadata={
             "purpose": "owner_command_planning",
             "adaptive_planning": bool(guidance_metadata["applied"]),
         },
         response_schema=_plan_schema(expected_count, available_tool_slugs),
+        reasoning_effort=route.reasoning_effort,
+        prompt_cache_key="seldrune:owner-command-planner",
+        max_estimated_cost_usd=route.request_budget_usd,
+        exact_token_preflight=True,
     )
     try:
         result, latency_ms = (gateway or ModelGateway(settings)).generate(request)
@@ -458,7 +468,7 @@ def build_live_plan(
             {
                 "mode": "fallback",
                 "provider": provider.value,
-                "model": settings.model_default,
+                "model": route.model,
                 "reason": str(exc)[:160],
                 "adaptive_planning": guidance_metadata,
             },
