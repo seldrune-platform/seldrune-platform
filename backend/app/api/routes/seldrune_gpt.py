@@ -268,7 +268,7 @@ class SeldruneGPTPDFEditResponse(BaseModel):
     form_fields: int
     verified_operations: int
     verification_score: int
-    visual_fidelity_score: int
+    visual_fidelity_score: int | None
     repair_passes: int = 0
     verification_notes: list[str] = Field(default_factory=list)
 
@@ -310,7 +310,32 @@ _PDF_EDIT_SCHEMA: dict = {
                     "field_name": {"type": ["string", "null"]},
                     "value": {"type": ["string", "null"]},
                     "degrees": {"type": ["integer", "null"]},
-                    "font_size": {"type": ["number", "null"], "minimum": 4, "maximum": 72},
+                    "font_size": {"type": ["number", "null"], "minimum": 4, "maximum": 144},
+                    "font_family_hint": {"type": ["string", "null"]},
+                    "font_weight": {
+                        "type": ["string", "null"],
+                        "enum": ["regular", "bold", None],
+                    },
+                    "font_style": {
+                        "type": ["string", "null"],
+                        "enum": ["regular", "italic", None],
+                    },
+                    "alignment": {
+                        "type": ["string", "null"],
+                        "enum": ["left", "center", "right", None],
+                    },
+                    "text_color": {
+                        "type": ["array", "null"],
+                        "items": {"type": "number", "minimum": 0, "maximum": 1},
+                        "minItems": 3,
+                        "maxItems": 3,
+                    },
+                    "background_color": {
+                        "type": ["array", "null"],
+                        "items": {"type": "number", "minimum": 0, "maximum": 1},
+                        "minItems": 3,
+                        "maxItems": 3,
+                    },
                 },
                 "required": [
                     "action",
@@ -324,6 +349,12 @@ _PDF_EDIT_SCHEMA: dict = {
                     "value",
                     "degrees",
                     "font_size",
+                    "font_family_hint",
+                    "font_weight",
+                    "font_style",
+                    "alignment",
+                    "text_color",
+                    "background_color",
                 ],
             },
         },
@@ -605,7 +636,10 @@ def edit_seldrune_gpt_pdf(
             "change. Use page numbers starting at 1. Prefer replace_text/redact_text for "
             "native text and derive exact target_text from the document. For scanned, "
             "image-only, or visually positioned content, inspect the PDF visually and derive "
-            "the normalized 0..1000 bbox yourself. Use fill_form when the target is an "
+            "the normalized 0..1000 bbox yourself. For image/scanned text also infer "
+            "font_family_hint, font_weight, font_style, font_size, alignment, text_color, "
+            "and background_color from the original visual appearance. Use fill_form when "
+            "the target is an "
             "interactive field, add_text/add_note when new visible text is requested, and "
             "rotate_page when rotation is requested. When replacement text is longer than "
             "the original, preserve the owner's exact requested wording and let the editing "
@@ -660,7 +694,9 @@ def edit_seldrune_gpt_pdf(
                 ),
                 instructions=(
                     "Re-inspect the attached PDF and produce a new deterministic edit plan. "
-                    "Derive any needed bbox, occurrence, field name, placement, and font size "
+                    "Derive any needed bbox, occurrence, field name, placement, font family, "
+                    "weight/style, point size, alignment, foreground color, and background "
+                    "color "
                     "from the document yourself. Preserve the owner's requested wording "
                     "exactly. Use a visual bbox for scanned/image content and fuzzy/native "
                     "targets for searchable content. Return only operations that implement "
@@ -715,7 +751,8 @@ def edit_seldrune_gpt_pdf(
             ),
             instructions=(
                 "Act as an autonomous repair editor. Inspect the current PDF and derive "
-                "coordinates, target text, occurrence, field names, placement, and sizing "
+                "coordinates, target text, occurrence, field names, placement, font family, "
+                "weight/style, sizing, alignment, and colors "
                 "yourself. Do not ask the owner for a manual edit plan. Do not repeat edits "
                 "that already succeeded. Preserve unrelated document content and keep the "
                 "owner's requested replacement wording exact."
