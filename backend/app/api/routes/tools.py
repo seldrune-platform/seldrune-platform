@@ -25,7 +25,10 @@ from backend.app.schemas.tooling import (
 )
 from backend.app.services.audit import record_audit
 from backend.app.services.external_actions import default_external_action_catalog
-from backend.app.services.provider_preflight import preflight_configured_providers
+from backend.app.services.provider_preflight import (
+    preflight_configured_providers,
+    preflight_provider_credential,
+)
 from backend.app.services.secret_vault import encrypt_secret_value, vault_locator
 from backend.app.services.tool_bootstrap import (
     configured_external_tool_status,
@@ -97,18 +100,15 @@ def _provider_catalog_item(provider: str) -> dict[str, Any]:
     return item
 
 
-@router.post(
-    "/{organization_id}/tool-bootstrap/credentials",
-    response_model=ProviderCredentialPublic,
-)
-def upsert_provider_credential(
+def _save_provider_credential(
+    *,
     organization_id: UUID,
-    payload: ProviderCredentialUpsert,
-    _membership: ToolsManageDep,
-    current_user: CurrentUserDep,
+    provider: str,
+    secret_value: str,
+    actor_user_id: UUID,
     session: SessionDep,
 ) -> ProviderCredentialPublic:
-    item = _provider_catalog_item(payload.provider)
+    item = _provider_catalog_item(provider)
     credential_slug = str(item["credential_slug"])
     reference = session.scalar(
         select(SecretReference).where(
@@ -116,11 +116,11 @@ def upsert_provider_credential(
             SecretReference.slug == credential_slug,
         )
     )
-    encrypted = encrypt_secret_value(payload.secret_value)
+    encrypted = encrypt_secret_value(secret_value)
     if reference is None:
         reference = SecretReference(
             organization_id=organization_id,
-            created_by_user_id=current_user.id,
+            created_by_user_id=actor_user_id,
             name=str(item["credential_name"]),
             slug=credential_slug,
             provider="vault",
@@ -141,19 +141,19 @@ def upsert_provider_credential(
     record_audit(
         session,
         organization_id=organization_id,
-        actor_user_id=current_user.id,
+        actor_user_id=actor_user_id,
         action=action,
         resource_type="secret_reference",
         resource_id=str(reference.id),
         details={
-            "provider": payload.provider,
+            "provider": provider,
             "credential_slug": credential_slug,
         },
     )
     ensure_configured_external_tools(
         session,
         organization_id=organization_id,
-        actor_user_id=current_user.id,
+        actor_user_id=actor_user_id,
     )
     session.commit()
     session.refresh(reference)
@@ -161,18 +161,221 @@ def upsert_provider_credential(
         session.scalars(
             select(ToolDefinition).where(
                 ToolDefinition.organization_id == organization_id,
-                ToolDefinition.provider == payload.provider,
+                ToolDefinition.provider == provider,
                 ToolDefinition.status == ToolStatus.ACTIVE.value,
             )
         )
     )
     return ProviderCredentialPublic(
-        provider=payload.provider,
+        provider=provider,
         configured=True,
         credential_slug=credential_slug,
         reference_id=reference.id,
         tool_count=len(active_tools),
     )
+
+
+def _disconnect_provider_credential(
+    *,
+    organization_id: UUID,
+    provider: str,
+    actor_user_id: UUID,
+    session: SessionDep,
+    reason: str,
+) -> dict[str, Any]:
+    item = _provider_catalog_item(provider)
+    credential_slug = str(item["credential_slug"])
+    reference = session.scalar(
+        select(SecretReference).where(
+            SecretReference.organization_id == organization_id,
+            SecretReference.slug == credential_slug,
+        )
+    )
+    if reference is None:
+        return {
+            "provider": provider,
+            "removed": False,
+            "disabled_tools": [],
+            "detail": "No Seldrune credential is configured for this provider.",
+        }
+
+    disabled_tools = list(
+        session.scalars(
+            select(ToolDefinition).where(
+                ToolDefinition.organization_id == organization_id,
+                ToolDefinition.provider == provider,
+            )
+        )
+    )
+    for tool in disabled_tools:
+        tool.status = ToolStatus.DISABLED.value
+        if tool.credential_reference_id == reference.id:
+            tool.credential_reference_id = None
+
+    reference.encrypted_value = None
+    reference.status = "disabled"
+    record_audit(
+        session,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
+        action="tool_bootstrap.provider_credential_disconnected",
+        resource_type="secret_reference",
+        resource_id=str(reference.id),
+        details={
+            "provider": provider,
+            "credential_slug": credential_slug,
+            "reason": reason,
+            "disabled_tools": sorted(tool.slug for tool in disabled_tools),
+            "external_secret_not_deleted": reference.provider != "vault",
+        },
+    )
+    session.commit()
+    return {
+        "provider": provider,
+        "removed": True,
+        "disabled_tools": sorted(tool.slug for tool in disabled_tools),
+        "external_secret_not_deleted": reference.provider != "vault",
+        "detail": (
+            "Credential removed from the Seldrune vault and provider tools disabled."
+            if reference.provider == "vault"
+            else (
+                "Credential reference disabled in Seldrune. Remove the underlying "
+                "environment/AWS secret separately if it should no longer exist."
+            )
+        ),
+    }
+
+
+@router.post(
+    "/{organization_id}/tool-bootstrap/credentials",
+    response_model=ProviderCredentialPublic,
+)
+def upsert_provider_credential(
+    organization_id: UUID,
+    payload: ProviderCredentialUpsert,
+    _membership: ToolsManageDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> ProviderCredentialPublic:
+    return _save_provider_credential(
+        organization_id=organization_id,
+        provider=payload.provider,
+        secret_value=payload.secret_value,
+        actor_user_id=current_user.id,
+        session=session,
+    )
+
+
+@router.post(
+    "/{organization_id}/tool-bootstrap/credentials/verified",
+    response_model=dict[str, Any],
+)
+def verify_and_store_provider_credential(
+    organization_id: UUID,
+    payload: ProviderCredentialUpsert,
+    _membership: ToolsManageDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    verification = preflight_provider_credential(
+        payload.provider,
+        payload.secret_value,
+    )
+    if not verification["verified"]:
+        record_audit(
+            session,
+            organization_id=organization_id,
+            actor_user_id=current_user.id,
+            action="tool_bootstrap.provider_credential_verification_failed",
+            resource_type="organization",
+            resource_id=str(organization_id),
+            details={
+                "provider": payload.provider,
+                "status": verification["status"],
+                "http_status": verification["http_status"],
+            },
+        )
+        session.commit()
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Provider authentication failed; credential was not saved.",
+                "verification": verification,
+            },
+        )
+
+    saved = _save_provider_credential(
+        organization_id=organization_id,
+        provider=payload.provider,
+        secret_value=payload.secret_value,
+        actor_user_id=current_user.id,
+        session=session,
+    )
+    return {
+        "provider": saved.provider,
+        "configured": saved.configured,
+        "credential_slug": saved.credential_slug,
+        "reference_id": str(saved.reference_id),
+        "tool_count": saved.tool_count,
+        "verification": verification,
+    }
+
+
+@router.delete(
+    "/{organization_id}/tool-bootstrap/credentials/{provider}",
+    response_model=dict[str, Any],
+)
+def disconnect_provider_credential(
+    organization_id: UUID,
+    provider: str,
+    _membership: ToolsManageDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    return _disconnect_provider_credential(
+        organization_id=organization_id,
+        provider=provider,
+        actor_user_id=current_user.id,
+        session=session,
+        reason="owner_requested",
+    )
+
+
+@router.post(
+    "/{organization_id}/tool-bootstrap/credentials/cleanup-invalid",
+    response_model=dict[str, Any],
+)
+def cleanup_invalid_provider_credentials(
+    organization_id: UUID,
+    _membership: ToolsManageDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    results = preflight_configured_providers(
+        session,
+        organization_id=organization_id,
+    )
+    invalid_providers = sorted(
+        item["provider"]
+        for item in results
+        if item["status"] == "credential_invalid"
+    )
+    removed: list[dict[str, Any]] = []
+    for provider in invalid_providers:
+        removed.append(
+            _disconnect_provider_credential(
+                organization_id=organization_id,
+                provider=provider,
+                actor_user_id=current_user.id,
+                session=session,
+                reason="remote_provider_rejected_credential",
+            )
+        )
+    return {
+        "checked": len(results),
+        "invalid": invalid_providers,
+        "removed": removed,
+    }
 
 
 @router.post(
