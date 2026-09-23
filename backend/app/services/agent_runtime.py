@@ -212,7 +212,7 @@ def execute_agent_task(
         reasoning_effort=route.reasoning_effort,
         prompt_cache_key=f"seldrune:{task.organization_id}:agent:{agent.id}",
         max_estimated_cost_usd=route.request_budget_usd,
-        exact_token_preflight=True,
+        exact_token_preflight=False,
     )
 
     try:
