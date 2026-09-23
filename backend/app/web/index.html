@@ -37,8 +37,9 @@
     <button type="button" class="gpt-quick-prompt" data-gpt-prompt="Analyze the attached files and extract the most important findings, risks, and next actions.">Analyze attachments</button>
     <div class="gpt-capability-note">
       <span>ATTACHMENTS</span>
-      <small>Up to 6 files · 8 MB each · 20 MB total</small>
-      <small>PNG · JPG · WEBP · GIF · PDF · TXT · MD · CSV · JSON · DOCX · XLSX · PPTX</small>\n      <small>PDF edits return a downloadable edited copy.</small>
+      <small>Chat attachments: up to 6 files · 8 MB each · 20 MB total</small>
+      <small>PNG · JPG · WEBP · GIF · PDF · TXT · MD · CSV · JSON · DOCX · XLSX · PPTX</small>
+      <small>Advanced PDF editor: one PDF up to 25 MB · native, scanned, hybrid, forms.</small>
     </div>
   </aside>
   <div class="gpt-studio-main">
@@ -54,6 +55,11 @@
             <input id="seldrune-gpt-files" type="file" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,text/csv,application/json,.docx,.xlsx,.pptx">
             <button id="seldrune-gpt-attach" type="button" class="ghost">＋ Attach</button>
             <span id="seldrune-gpt-attachment-summary">No attachments</span>
+            <label id="seldrune-gpt-pdf-password-wrap" class="gpt-pdf-password hidden">
+              <span>PDF password</span>
+              <input id="seldrune-gpt-pdf-password" type="password" maxlength="256"
+                     autocomplete="off" placeholder="Optional">
+            </label>
           </div>
           <div class="gpt-composer-actions">
             <button id="seldrune-gpt-chat" type="submit">Chat <span>→</span></button>
