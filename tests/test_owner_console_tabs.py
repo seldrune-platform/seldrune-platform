@@ -48,7 +48,8 @@ def test_portal_controller_defines_owner_workspaces_and_fixed_home():
     assert 'move("#face-v01-mission", "media")' in js
     assert 'move("#tool-control", "tools")' in js
     assert 'portalSettings.id = "portal-settings"' in js
-    assert 'activate("home", false)' in js
+    assert 'workspace: "home", depth: 0' in js
+    assert 'activate("home", {historyMode: "none", scroll: false})' in js
     assert "seldrune.portal.lastWorkspace" not in js
 
 
