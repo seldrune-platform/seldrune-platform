@@ -6,6 +6,7 @@ from backend.app.services.pdf_editor import (
     apply_pdf_edit_plan,
     assess_pdf_edit_candidate,
     inspect_pdf,
+    validate_pdf_edit_plan,
     prepare_pdf_for_model,
 )
 
@@ -564,3 +565,134 @@ def test_layout_gate_rejects_stacked_replacement_and_old_text_left_behind() -> N
     assert assessment.layout_integrity_score < 100
     assert any("old text remains" in issue for issue in assessment.issues)
     assert any("drifted vertically" in issue for issue in assessment.issues)
+
+
+def test_plan_validation_rejects_ambiguous_repeated_numeric_target() -> None:
+    document = pymupdf.open()
+    page = document.new_page(width=400, height=300)
+    page.insert_text((60, 90), "HOUSE RENT ALLOWANCE", fontsize=10)
+    page.insert_text((330, 90), "0", fontsize=10)
+    page.insert_text((60, 120), "WIPRO BENEFITS PLAN", fontsize=10)
+    page.insert_text((330, 120), "0", fontsize=10)
+    source = document.tobytes()
+    document.close()
+
+    validation = validate_pdf_edit_plan(
+        source,
+        {
+            "summary": "Change one allowance",
+            "operations": [
+                {
+                    "action": "replace_text",
+                    "page": 1,
+                    "target_text": "0",
+                    "replacement_text": "15000",
+                    "text": None,
+                    "bbox": None,
+                    "occurrence": None,
+                    "field_name": None,
+                    "value": None,
+                    "degrees": None,
+                    "font_size": None,
+                }
+            ],
+        },
+    )
+
+    assert validation.valid is False
+    assert any("ambiguous with 2 matches" in issue for issue in validation.issues)
+    assert any("occurrence or bbox" in issue for issue in validation.issues)
+
+
+def test_plan_validation_rejects_overlapping_original_targets() -> None:
+    document = pymupdf.open()
+    page = document.new_page(width=500, height=300)
+    page.insert_text((60, 100), "Annual package 2306900.00", fontsize=11)
+    source = document.tobytes()
+    document.close()
+
+    validation = validate_pdf_edit_plan(
+        source,
+        {
+            "summary": "Conflicting edits",
+            "operations": [
+                {
+                    "action": "replace_text",
+                    "page": 1,
+                    "target_text": "Annual package 2306900.00",
+                    "replacement_text": "Annual package 2400000.00",
+                    "text": None,
+                    "bbox": None,
+                    "occurrence": None,
+                    "field_name": None,
+                    "value": None,
+                    "degrees": None,
+                    "font_size": None,
+                },
+                {
+                    "action": "replace_text",
+                    "page": 1,
+                    "target_text": "2306900.00",
+                    "replacement_text": "2400000.00",
+                    "text": None,
+                    "bbox": None,
+                    "occurrence": None,
+                    "field_name": None,
+                    "value": None,
+                    "degrees": None,
+                    "font_size": None,
+                },
+            ],
+        },
+    )
+
+    assert validation.valid is False
+    assert any("overlap on page 1" in issue for issue in validation.issues)
+
+
+def test_layout_gate_ignores_same_replacement_text_far_from_target() -> None:
+    source_document = pymupdf.open()
+    source_page = source_document.new_page(width=400, height=400)
+    source_page.insert_text((60, 80), "Salary: 1000", fontsize=11)
+    source_page.insert_text((60, 320), "Reference value: 2000", fontsize=11)
+    source = source_document.tobytes()
+    source_document.close()
+
+    edited_document = pymupdf.open(stream=source, filetype="pdf")
+    edited_page = edited_document[0]
+    target = edited_page.search_for("1000")[0]
+    edited_page.add_redact_annot(target, fill=False)
+    edited_page.apply_redactions(
+        images=pymupdf.PDF_REDACT_IMAGE_NONE,
+        graphics=pymupdf.PDF_REDACT_LINE_ART_NONE,
+    )
+    broken = edited_document.tobytes()
+    edited_document.close()
+
+    plan = {
+        "summary": "Update salary",
+        "operations": [
+            {
+                "action": "replace_text",
+                "page": 1,
+                "target_text": "1000",
+                "replacement_text": "2000",
+                "text": None,
+                "bbox": None,
+                "occurrence": None,
+                "field_name": None,
+                "value": None,
+                "degrees": None,
+                "font_size": None,
+            }
+        ],
+    }
+
+    assessment = assess_pdf_edit_candidate(source, broken, plan)
+
+    assert assessment.safe_to_return is False
+    assert any(
+        "replacement text is not detectable near the original target region" in issue
+        for issue in assessment.issues
+    )
+    assert not any("drifted vertically" in issue for issue in assessment.issues)
