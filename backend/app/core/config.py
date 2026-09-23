@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     ai_max_request_cost_usd: float = 0.25
     ai_default_scope_budget_usd: float = 1.0
     ai_cache_ttl_seconds: int = 900
+    ai_max_paid_retries_per_scope: int = 2
     project_estimated_cost_per_step_usd: float = 0.05
     knowledge_retrieval_limit: int = 6
     knowledge_context_max_chars: int = 6000
@@ -107,6 +108,10 @@ class Settings(BaseSettings):
             raise ValueError("SELDRUNE_AI_DEFAULT_SCOPE_BUDGET_USD must be positive")
         if self.ai_cache_ttl_seconds < 0:
             raise ValueError("SELDRUNE_AI_CACHE_TTL_SECONDS cannot be negative")
+        if not 0 <= self.ai_max_paid_retries_per_scope <= 5:
+            raise ValueError(
+                "SELDRUNE_AI_MAX_PAID_RETRIES_PER_SCOPE must be between 0 and 5"
+            )
         if self.project_estimated_cost_per_step_usd < 0:
             raise ValueError("SELDRUNE_PROJECT_ESTIMATED_COST_PER_STEP_USD cannot be negative")
         if not 1 <= self.knowledge_retrieval_limit <= 25:
