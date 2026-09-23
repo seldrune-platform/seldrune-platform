@@ -28,7 +28,7 @@ _TOOL_INTENTS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
     (
         "github",
         "create-branch",
-        re.compile(r"\b(create|open)\b.{0,40}\bbranch\b", re.I),
+        re.compile(r"\b(?:create|open)\s+(?:a\s+)?branch\b", re.I),
     ),
     (
         "github",
