@@ -634,10 +634,15 @@ def edit_seldrune_gpt_pdf(
     try:
         inspection = inspect_pdf(pdf_bytes, payload.password)
         model_pdf_bytes = prepare_pdf_for_model(pdf_bytes, payload.password)
-        initial_page_renders = render_pdf_pages_for_model(
-            pdf_bytes,
-            payload.password,
-            max_pages=8,
+        initial_page_renders = (
+            render_pdf_pages_for_model(
+                pdf_bytes,
+                payload.password,
+                max_pages=4,
+                max_long_edge=1100,
+            )
+            if inspection.image_only_pages > 0
+            else ()
         )
     except PDFEditorError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -668,9 +673,17 @@ def edit_seldrune_gpt_pdf(
         f"image_only_pages={inspection.image_only_pages}; "
         f"form_fields={inspection.form_fields}."
     )
+    pdf_route = choose_cost_route(
+        settings,
+        purpose="pdf",
+        text=payload.instruction,
+        attempt=0,
+        has_images=bool(initial_images),
+        has_files=True,
+    )
     request = ModelRequest(
         provider=ModelProvider.OPENAI,
-        model=settings.model_default,
+        model=pdf_route.model,
         input_text=(
             "Edit the attached PDF according to this owner instruction:\n"
             f"{payload.instruction}\n\n{profile}\n"
@@ -702,15 +715,25 @@ def edit_seldrune_gpt_pdf(
             "repeated targets from the owner's context and occurrence. Never require a "
             "manual edit plan from the owner."
         ),
-        max_output_tokens=max(settings.model_max_output_tokens, 6000),
+        max_output_tokens=pdf_route.max_output_tokens,
         response_schema=_PDF_EDIT_SCHEMA,
         input_images=initial_images,
         input_files=input_files,
+        image_detail=pdf_route.image_detail,
+        pdf_detail=pdf_route.pdf_detail,
+        reasoning_effort=pdf_route.reasoning_effort,
+        prompt_cache_key=f"seldrune:{organization_id}:pdf:{payload.pdf.name}",
+        max_estimated_cost_usd=pdf_route.request_budget_usd,
+        exact_token_preflight=True,
     )
     try:
         result, _latency_ms = ModelGateway(settings).generate(request)
     except ModelGatewayError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    total_ai_cost = float(result.usage.estimated_cost_usd or 0.0)
+    model_calls = 1
+    models_used: set[str] = {result.model}
 
     try:
         plan = json.loads(result.output_text)
@@ -730,7 +753,7 @@ def edit_seldrune_gpt_pdf(
     best_safe_plan = None
     best_safe_quality = -1
 
-    for attempt_index in range(5):
+    for attempt_index in range(settings.ai_pdf_max_attempts):
         reconstruction_attempts = attempt_index + 1
         candidate_result = None
         candidate_assessment = None
@@ -803,7 +826,13 @@ def edit_seldrune_gpt_pdf(
             candidate_diagnostics.append(str(exc))
 
         last_diagnostics = list(dict.fromkeys(candidate_diagnostics))
-        if attempt_index >= 4:
+        if attempt_index >= settings.ai_pdf_max_attempts - 1:
+            break
+        if total_ai_cost >= settings.ai_pdf_max_total_usd:
+            last_diagnostics.append(
+                "AI cost governor stopped additional PDF reconstruction attempts "
+                f"after USD {total_ai_cost:.4f} estimated spend"
+            )
             break
 
         rejection_text = (
