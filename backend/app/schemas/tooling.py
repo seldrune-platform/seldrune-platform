@@ -3,6 +3,20 @@ from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
+
+
+class ProviderCredentialUpsert(BaseModel):
+    provider: Literal["github", "render", "gmail"]
+    secret_value: str = Field(min_length=8, max_length=20000)
+
+
+class ProviderCredentialPublic(BaseModel):
+    provider: str
+    configured: bool
+    credential_slug: str
+    reference_id: UUID
+    tool_count: int
 
 
 class ToolDefinitionCreate(BaseModel):
