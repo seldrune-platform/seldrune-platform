@@ -18,6 +18,24 @@ services:
         value: openai
       - key: SELDRUNE_MODEL_DEFAULT
         value: gpt-5.6-sol
+      - key: SELDRUNE_AI_COST_GOVERNOR_ENABLED
+        value: true
+      - key: SELDRUNE_AI_DEFAULT_TIER
+        value: economy
+      - key: SELDRUNE_AI_ECONOMY_MODEL
+        value: gpt-5.6-luna
+      - key: SELDRUNE_AI_BALANCED_MODEL
+        value: gpt-5.6-terra
+      - key: SELDRUNE_AI_PREMIUM_MODEL
+        value: gpt-5.6-sol
+      - key: SELDRUNE_AI_MAX_REQUEST_COST_USD
+        value: 0.25
+      - key: SELDRUNE_AI_DEFAULT_SCOPE_BUDGET_USD
+        value: 1.0
+      - key: SELDRUNE_AI_MAX_PAID_RETRIES_PER_SCOPE
+        value: 2
+      - key: SELDRUNE_AI_CACHE_TTL_SECONDS
+        value: 900
       - key: OPENAI_API_KEY
         sync: false
       - key: SELDRUNE_GMAIL_TOOL_CREDENTIAL
@@ -55,6 +73,24 @@ services:
         value: openai
       - key: SELDRUNE_MODEL_DEFAULT
         value: gpt-5.6-sol
+      - key: SELDRUNE_AI_COST_GOVERNOR_ENABLED
+        value: true
+      - key: SELDRUNE_AI_DEFAULT_TIER
+        value: economy
+      - key: SELDRUNE_AI_ECONOMY_MODEL
+        value: gpt-5.6-luna
+      - key: SELDRUNE_AI_BALANCED_MODEL
+        value: gpt-5.6-terra
+      - key: SELDRUNE_AI_PREMIUM_MODEL
+        value: gpt-5.6-sol
+      - key: SELDRUNE_AI_MAX_REQUEST_COST_USD
+        value: 0.25
+      - key: SELDRUNE_AI_DEFAULT_SCOPE_BUDGET_USD
+        value: 1.0
+      - key: SELDRUNE_AI_MAX_PAID_RETRIES_PER_SCOPE
+        value: 2
+      - key: SELDRUNE_AI_CACHE_TTL_SECONDS
+        value: 900
       - key: OPENAI_API_KEY
         sync: false
       - key: SELDRUNE_GMAIL_TOOL_CREDENTIAL
