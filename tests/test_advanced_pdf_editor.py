@@ -3,6 +3,8 @@ import pytest
 
 from backend.app.services.pdf_editor import (
     PDFEditorError,
+    PDFTextStyle,
+    _replacement_visual_fidelity,
     apply_pdf_edit_plan,
     assess_pdf_edit_candidate,
     inspect_pdf,
@@ -696,3 +698,104 @@ def test_layout_gate_ignores_same_replacement_text_far_from_target() -> None:
         for issue in assessment.issues
     )
     assert not any("drifted vertically" in issue for issue in assessment.issues)
+
+
+def test_fidelity_accepts_embedded_font_alias_when_metrics_match() -> None:
+    document = pymupdf.open()
+    page = document.new_page(width=400, height=220)
+    page.insert_text(
+        pymupdf.Point(100, 100),
+        "ALIAS",
+        fontname="helv",
+        fontsize=14,
+        color=(0.2, 0.3, 0.4),
+    )
+    target = page.search_for("ALIAS")[0]
+    style = PDFTextStyle(
+        font_name="ABCDEF+CorporateSans",
+        font_size=14.0,
+        color=(0.2, 0.3, 0.4),
+        origin=(100.0, 100.0),
+        line_rect=pymupdf.Rect(target),
+        target_rect=pymupdf.Rect(target),
+        alignment=pymupdf.TEXT_ALIGN_LEFT,
+        rotation=0,
+        font_alias="helv",
+        font_buffer=None,
+        exact_font_reusable=True,
+    )
+
+    score, note = _replacement_visual_fidelity(page, "ALIAS", style)
+    document.close()
+
+    assert score == 100
+    assert "font=yes" in note
+    assert "width=yes" in note
+    assert "size=yes" in note
+    assert "color=yes" in note
+    assert "baseline=yes" in note
+    assert "anchor=yes" in note
+
+
+def test_fidelity_rejects_unknown_font_without_metric_equivalence() -> None:
+    document = pymupdf.open()
+    page = document.new_page(width=400, height=220)
+    page.insert_text(
+        pymupdf.Point(100, 100),
+        "DIFFERENT",
+        fontname="helv",
+        fontsize=14,
+        color=(0.2, 0.3, 0.4),
+    )
+    target = page.search_for("DIFFERENT")[0]
+    style = PDFTextStyle(
+        font_name="ABCDEF+CorporateSans",
+        font_size=14.0,
+        color=(0.2, 0.3, 0.4),
+        origin=(100.0, 100.0),
+        line_rect=pymupdf.Rect(target),
+        target_rect=pymupdf.Rect(target),
+        alignment=pymupdf.TEXT_ALIGN_LEFT,
+        rotation=0,
+        font_alias="cour",
+        font_buffer=None,
+        exact_font_reusable=False,
+    )
+
+    score, note = _replacement_visual_fidelity(page, "DIFFERENT", style)
+    document.close()
+
+    assert score < 100
+    assert "font=no" in note
+
+
+def test_fidelity_uses_rgb_channel_tolerance_not_integer_distance() -> None:
+    document = pymupdf.open()
+    page = document.new_page(width=400, height=220)
+    page.insert_text(
+        pymupdf.Point(90, 110),
+        "COLOR",
+        fontname="hebo",
+        fontsize=12,
+        color=(0.25, 0.5, 0.75),
+    )
+    target = page.search_for("COLOR")[0]
+    style = PDFTextStyle(
+        font_name="Helvetica-Bold",
+        font_size=12.0,
+        color=(0.25, 0.5, 0.75),
+        origin=(90.0, 110.0),
+        line_rect=pymupdf.Rect(target),
+        target_rect=pymupdf.Rect(target),
+        alignment=pymupdf.TEXT_ALIGN_LEFT,
+        rotation=0,
+        font_alias="hebo",
+        font_buffer=None,
+        exact_font_reusable=False,
+    )
+
+    score, note = _replacement_visual_fidelity(page, "COLOR", style)
+    document.close()
+
+    assert score == 100
+    assert "color=yes" in note
