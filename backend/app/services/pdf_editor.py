@@ -850,6 +850,44 @@ def _replacement_visual_fidelity(
     )
 
     output_origin = best_span.get("origin")
+    # PyMuPDF can merge newly inserted text into the surrounding line span.
+    # In that case span.origin is the beginning of the whole line, not the
+    # replacement. Resolve the first character that actually intersects the
+    # replacement search rectangle and use its origin for geometry checks.
+    try:
+        raw = page.get_text("rawdict")
+    except Exception:
+        raw = {}
+    replacement_char_origin: tuple[float, float] | None = None
+    for block in raw.get("blocks", []):
+        if block.get("type", 0) != 0:
+            continue
+        for line in block.get("lines", []):
+            for span in line.get("spans", []):
+                for char in span.get("chars", []):
+                    char_rect = pymupdf.Rect(char.get("bbox", (0, 0, 0, 0)))
+                    if _rect_intersection_area(char_rect, target) <= 0:
+                        continue
+                    char_origin = char.get("origin")
+                    if (
+                        isinstance(char_origin, (list, tuple))
+                        and len(char_origin) == 2
+                    ):
+                        replacement_char_origin = (
+                            float(char_origin[0]),
+                            float(char_origin[1]),
+                        )
+                        break
+                if replacement_char_origin is not None:
+                    break
+            if replacement_char_origin is not None:
+                break
+        if replacement_char_origin is not None:
+            break
+
+    if replacement_char_origin is not None:
+        output_origin = replacement_char_origin
+
     baseline_match = False
     anchor_match = False
     if isinstance(output_origin, (list, tuple)) and len(output_origin) == 2:
