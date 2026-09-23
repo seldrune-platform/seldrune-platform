@@ -1652,8 +1652,8 @@ def apply_pdf_edit_plan(
                             verified += visual_verified
                             verification_notes.append(
                                 f"Operation {op_index}, page {page_index + 1}: "
-                                "visual-region edit replacement verified near the "
-                                "AI-located bbox."
+                                "visual-region edit applied; visual-region replacement "
+                                "verified near the AI-located bbox."
                             )
                         else:
                             warnings.append(
