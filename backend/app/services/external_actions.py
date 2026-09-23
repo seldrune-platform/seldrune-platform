@@ -106,6 +106,259 @@ def _github_headers(token: str) -> dict[str, str]:
     }
 
 
+
+def github_repository_info(
+    payload: dict[str, Any],
+    credential: str | None,
+) -> dict[str, Any]:
+    token = _credential(credential, "GitHub")
+    owner = quote(_text(payload, "owner"), safe="")
+    repo = quote(_text(payload, "repo"), safe="")
+    response = httpx.get(
+        f"https://api.github.com/repos/{owner}/{repo}",
+        headers=_github_headers(token),
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    data = _json_response(response, "GitHub")
+    repository_id = data.get("id")
+    if not repository_id:
+        raise ToolGatewayError("GitHub repository response did not include an id")
+    return {
+        "repository_id": repository_id,
+        "full_name": data.get("full_name"),
+        "default_branch": data.get("default_branch"),
+        "private": bool(data.get("private")),
+        "archived": bool(data.get("archived")),
+        "html_url": data.get("html_url"),
+        "evidence": {
+            "receipt_id": f"github-repository:{repository_id}",
+            "provider": "github",
+        },
+    }
+
+
+def github_read_file(
+    payload: dict[str, Any],
+    credential: str | None,
+) -> dict[str, Any]:
+    token = _credential(credential, "GitHub")
+    owner = quote(_text(payload, "owner"), safe="")
+    repo = quote(_text(payload, "repo"), safe="")
+    path = quote(_text(payload, "path"), safe="/")
+    ref = _text(payload, "ref", required=False)
+    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+    if ref:
+        url += f"?ref={quote(ref, safe='/-._')}"
+    response = httpx.get(
+        url,
+        headers=_github_headers(token),
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    data = _json_response(response, "GitHub")
+    if data.get("type") != "file":
+        raise ToolGatewayError("GitHub content path is not a file")
+    encoded = data.get("content")
+    decoded: str | None = None
+    if data.get("encoding") == "base64" and isinstance(encoded, str):
+        try:
+            raw = base64.b64decode(encoded, validate=False)
+            decoded = raw.decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            decoded = None
+    if decoded is not None and len(decoded) > 200_000:
+        decoded = decoded[:200_000]
+    return {
+        "path": data.get("path"),
+        "sha": data.get("sha"),
+        "size": data.get("size"),
+        "content": decoded,
+        "content_truncated": bool(decoded is not None and data.get("size", 0) > 200_000),
+        "html_url": data.get("html_url"),
+        "evidence": {
+            "receipt_id": f"github-file:{data.get('sha') or path}",
+            "provider": "github",
+        },
+    }
+
+
+def github_create_branch(
+    payload: dict[str, Any],
+    credential: str | None,
+) -> dict[str, Any]:
+    token = _credential(credential, "GitHub")
+    owner = quote(_text(payload, "owner"), safe="")
+    repo = quote(_text(payload, "repo"), safe="")
+    branch = _text(payload, "branch")
+    ref = _text(payload, "ref")
+    if branch in {"main", "master"}:
+        raise ToolGatewayError("Refusing to create or overwrite a protected default branch")
+    base_response = httpx.get(
+        f"https://api.github.com/repos/{owner}/{repo}/git/ref/heads/{quote(ref, safe='/-._')}",
+        headers=_github_headers(token),
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    base = _json_response(base_response, "GitHub")
+    target = base.get("object") or {}
+    sha = target.get("sha") if isinstance(target, dict) else None
+    if not sha:
+        raise ToolGatewayError("GitHub base branch response did not include a commit sha")
+    response = httpx.post(
+        f"https://api.github.com/repos/{owner}/{repo}/git/refs",
+        headers=_github_headers(token),
+        json={"ref": f"refs/heads/{branch}", "sha": sha},
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    data = _json_response(response, "GitHub")
+    created_ref = data.get("ref")
+    object_data = data.get("object") or {}
+    created_sha = object_data.get("sha") if isinstance(object_data, dict) else None
+    return {
+        "branch": branch,
+        "ref": created_ref,
+        "sha": created_sha or sha,
+        "base_ref": ref,
+        "evidence": {
+            "receipt_id": f"github-branch:{created_sha or sha}:{branch}",
+            "provider": "github",
+        },
+    }
+
+
+def github_upsert_file(
+    payload: dict[str, Any],
+    credential: str | None,
+) -> dict[str, Any]:
+    token = _credential(credential, "GitHub")
+    owner = quote(_text(payload, "owner"), safe="")
+    repo = quote(_text(payload, "repo"), safe="")
+    path = quote(_text(payload, "path"), safe="/")
+    branch = _text(payload, "branch")
+    base_ref = _text(payload, "base_ref", required=False)
+    if branch in {"main", "master"} or (base_ref and branch == base_ref):
+        raise ToolGatewayError(
+            "Direct file writes to the protected/default branch are not allowed; "
+            "create a feature branch and open a pull request"
+        )
+    message = _text(payload, "message")
+    content = _text(payload, "content")
+    existing_sha: str | None = None
+    lookup = httpx.get(
+        (
+            f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+            f"?ref={quote(branch, safe='/-._')}"
+        ),
+        headers=_github_headers(token),
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    if lookup.status_code == 200:
+        existing = _json_response(lookup, "GitHub")
+        raw_sha = existing.get("sha")
+        existing_sha = str(raw_sha) if raw_sha else None
+    elif lookup.status_code != 404:
+        _json_response(lookup, "GitHub")
+
+    body: dict[str, Any] = {
+        "message": message,
+        "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+        "branch": branch,
+    }
+    if existing_sha:
+        body["sha"] = existing_sha
+
+    response = httpx.put(
+        f"https://api.github.com/repos/{owner}/{repo}/contents/{path}",
+        headers=_github_headers(token),
+        json=body,
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    data = _json_response(response, "GitHub")
+    commit = data.get("commit") or {}
+    content_meta = data.get("content") or {}
+    commit_sha = commit.get("sha") if isinstance(commit, dict) else None
+    content_sha = content_meta.get("sha") if isinstance(content_meta, dict) else None
+    if not commit_sha:
+        raise ToolGatewayError("GitHub file update response did not include a commit sha")
+    return {
+        "path": content_meta.get("path") if isinstance(content_meta, dict) else None,
+        "branch": branch,
+        "commit_sha": commit_sha,
+        "content_sha": content_sha,
+        "updated_existing": existing_sha is not None,
+        "html_url": content_meta.get("html_url") if isinstance(content_meta, dict) else None,
+        "evidence": {
+            "receipt_id": f"github-commit:{commit_sha}",
+            "provider": "github",
+        },
+    }
+
+
+def github_get_pull_request(
+    payload: dict[str, Any],
+    credential: str | None,
+) -> dict[str, Any]:
+    token = _credential(credential, "GitHub")
+    owner = quote(_text(payload, "owner"), safe="")
+    repo = quote(_text(payload, "repo"), safe="")
+    pull_number = _integer(payload, "pull_number")
+    response = httpx.get(
+        f"https://api.github.com/repos/{owner}/{repo}/pulls/{pull_number}",
+        headers=_github_headers(token),
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    data = _json_response(response, "GitHub")
+    pull_id = data.get("id")
+    if not pull_id:
+        raise ToolGatewayError("GitHub pull request response did not include an id")
+    return {
+        "pull_request_id": pull_id,
+        "number": data.get("number"),
+        "state": data.get("state"),
+        "merged": bool(data.get("merged")),
+        "mergeable": data.get("mergeable"),
+        "draft": bool(data.get("draft")),
+        "head_sha": ((data.get("head") or {}).get("sha") if isinstance(data.get("head"), dict) else None),
+        "base_ref": ((data.get("base") or {}).get("ref") if isinstance(data.get("base"), dict) else None),
+        "html_url": data.get("html_url"),
+        "evidence": {
+            "receipt_id": f"github-pull-state:{pull_id}:{data.get('updated_at') or pull_number}",
+            "provider": "github",
+        },
+    }
+
+
+def github_workflow_run_status(
+    payload: dict[str, Any],
+    credential: str | None,
+) -> dict[str, Any]:
+    token = _credential(credential, "GitHub")
+    owner = quote(_text(payload, "owner"), safe="")
+    repo = quote(_text(payload, "repo"), safe="")
+    run_id = _integer(payload, "run_id")
+    response = httpx.get(
+        f"https://api.github.com/repos/{owner}/{repo}/actions/runs/{run_id}",
+        headers=_github_headers(token),
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    data = _json_response(response, "GitHub")
+    provider_run_id = data.get("id")
+    if not provider_run_id:
+        raise ToolGatewayError("GitHub workflow response did not include a run id")
+    return {
+        "run_id": provider_run_id,
+        "name": data.get("name"),
+        "status": data.get("status"),
+        "conclusion": data.get("conclusion"),
+        "head_sha": data.get("head_sha"),
+        "html_url": data.get("html_url"),
+        "evidence": {
+            "receipt_id": (
+                f"github-workflow-state:{provider_run_id}:"
+                f"{data.get('updated_at') or data.get('status') or 'unknown'}"
+            ),
+            "provider": "github",
+        },
+    }
+
 def github_create_issue(
     payload: dict[str, Any],
     credential: str | None,
@@ -347,6 +600,41 @@ def render_deploy_service(
         },
     }
 
+
+
+def render_deploy_status(
+    payload: dict[str, Any],
+    credential: str | None,
+) -> dict[str, Any]:
+    token = _credential(credential, "Render")
+    service_id = quote(_text(payload, "service_id"), safe="")
+    deploy_id = quote(_text(payload, "deploy_id"), safe="")
+    response = httpx.get(
+        f"https://api.render.com/v1/services/{service_id}/deploys/{deploy_id}",
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {token}",
+        },
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    data = _json_response(response, "Render")
+    provider_deploy_id = data.get("id")
+    if not provider_deploy_id:
+        raise ToolGatewayError("Render deploy response did not include a deploy id")
+    return {
+        "deploy_id": str(provider_deploy_id),
+        "status": data.get("status"),
+        "commit": data.get("commit"),
+        "created_at": data.get("createdAt"),
+        "updated_at": data.get("updatedAt"),
+        "evidence": {
+            "receipt_id": (
+                f"render-deploy-state:{provider_deploy_id}:"
+                f"{data.get('updatedAt') or data.get('status') or 'unknown'}"
+            ),
+            "provider": "render",
+        },
+    }
 
 DEFAULT_EXTERNAL_ACTION_CATALOG: tuple[dict[str, Any], ...] = (
     {
