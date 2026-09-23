@@ -278,7 +278,7 @@
     }
 
     const pdf = pdfAttachments[0];
-    setBusy(true, 'Seldrune GPT is editing the PDF…');
+    setBusy(true, 'Seldrune GPT is analyzing layout, scans, forms, and visual regions…');
     addMessage('You', `${instruction}\nPDF edit: ${pdf.name}`, 'user');
     try {
       const result = await api('/gpt/pdf/edit', {
@@ -298,13 +298,18 @@
       const warningText = (result.warnings || []).length
         ? ` Warnings: ${result.warnings.join('; ')}`
         : '';
+      const verified = result.verified_edits || 0;
+      const applied = result.applied_edits || 0;
+      const scanText = (result.scanned_pages || []).length
+        ? ` Scanned pages detected: ${result.scanned_pages.join(', ')}.`
+        : '';
       addDownloadMessage(
-        'Seldrune GPT',
-        `${result.summary || 'PDF edit completed.'} Applied edits: ${result.applied_edits || 0}.${warningText}`,
+        'Seldrune GPT · Advanced PDF',
+        `${result.summary || 'PDF edit completed.'} Applied: ${applied}. Independently verified: ${verified}. Status: ${result.verification_status || 'unknown'}.${scanText}${warningText}`,
         result.filename,
         result.data_base64,
       );
-      status.textContent = `PDF ready · ${result.applied_edits || 0} edits · ${result.filename}`;
+      status.textContent = `PDF ready · ${verified}/${applied} edits verified · ${result.filename}`;
     } catch (error) {
       addMessage('System', `PDF edit failed: ${error.message}`);
       status.textContent = 'PDF edit failed. The original attachment is still available.';
