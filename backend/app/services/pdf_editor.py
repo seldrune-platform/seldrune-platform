@@ -1288,12 +1288,18 @@ def assess_pdf_edit_candidate(
             source_page = original[page_index]
             output_page = edited[page_index]
             target_rectangles: list[pymupdf.Rect] = []
+            target_mode = "native_text"
             if target_text:
-                target_rectangles, _mode = _locate_text(source_page, target_text)
+                target_rectangles, locate_mode = _locate_text(
+                    source_page,
+                    target_text,
+                )
+                target_mode = locate_mode
             if not target_rectangles:
                 visual_rect = _normalized_bbox(source_page, operation.get("bbox"))
                 if visual_rect is not None:
                     target_rectangles = [visual_rect]
+                    target_mode = "visual_bbox"
 
             if isinstance(occurrence, int) and occurrence >= 1:
                 target_rectangles = target_rectangles[occurrence - 1 : occurrence]
@@ -1333,16 +1339,37 @@ def assess_pdf_edit_candidate(
                     )
                     continue
 
-                vertical_drift = abs(
-                    (replacement_rect.y0 + replacement_rect.y1) / 2
-                    - (target_rect.y0 + target_rect.y1) / 2
-                )
-                max_vertical_drift = max(2.5, target_rect.height * 0.35)
-                if vertical_drift > max_vertical_drift:
-                    issues.append(
-                        f"operation {op_index}: replacement drifted vertically "
-                        f"{vertical_drift:.1f}pt"
+                if target_mode == "visual_bbox":
+                    allowed_region = _expanded_rect(
+                        output_page,
+                        target_rect,
+                        x_pad=max(3.0, target_rect.width * 0.08),
+                        y_pad=max(3.0, target_rect.height * 0.08),
                     )
+                    overlap = _rect_intersection_area(
+                        replacement_rect,
+                        allowed_region,
+                    )
+                    replacement_area = max(
+                        1.0,
+                        replacement_rect.width * replacement_rect.height,
+                    )
+                    if overlap / replacement_area < 0.90:
+                        issues.append(
+                            f"operation {op_index}: replacement escaped the "
+                            "AI-located visual region"
+                        )
+                else:
+                    vertical_drift = abs(
+                        (replacement_rect.y0 + replacement_rect.y1) / 2
+                        - (target_rect.y0 + target_rect.y1) / 2
+                    )
+                    max_vertical_drift = max(2.5, target_rect.height * 0.35)
+                    if vertical_drift > max_vertical_drift:
+                        issues.append(
+                            f"operation {op_index}: replacement drifted vertically "
+                            f"{vertical_drift:.1f}pt"
+                        )
 
                 for protected in _protected_word_rectangles(source_page, target_rect):
                     intersection = _rect_intersection_area(replacement_rect, protected)
@@ -1625,7 +1652,8 @@ def apply_pdf_edit_plan(
                             verified += visual_verified
                             verification_notes.append(
                                 f"Operation {op_index}, page {page_index + 1}: "
-                                "visual-region replacement verified near the AI-located bbox."
+                                "visual-region edit replacement verified near the "
+                                "AI-located bbox."
                             )
                         else:
                             warnings.append(
