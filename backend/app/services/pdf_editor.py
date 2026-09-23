@@ -462,6 +462,7 @@ def apply_pdf_edit_plan(
                     visual_rect = _normalized_bbox(page, bbox)
                     if visual_rect is not None:
                         rectangles = [visual_rect]
+                        match_mode = "visual_bbox"
 
                 if not rectangles:
                     continue
