@@ -37,6 +37,7 @@ from backend.app.services.pdf_editor import (
     assess_pdf_edit_candidate,
     inspect_pdf,
     prepare_pdf_for_model,
+    validate_pdf_edit_plan,
 )
 from backend.app.services.tool_bootstrap import (
     configured_external_tool_status,
@@ -648,7 +649,10 @@ def edit_seldrune_gpt_pdf(
             "the original, preserve the owner's exact requested wording and let the editing "
             "engine preserve the original font resource, point size, color, baseline, "
             "alignment, and surrounding layout rather than substituting generic typography. "
-            "Resolve "
+            "For repeated values such as 0, salary amounts, dates, IDs, or percentages, "
+            "never rely on fuzzy matching: provide the correct occurrence or an exact bbox "
+            "for the intended row/cell. Do not create two operations whose target regions "
+            "overlap. Resolve "
             "repeated targets from the owner's context and occurrence. Never require a "
             "manual edit plan from the owner."
         ),
@@ -682,45 +686,53 @@ def edit_seldrune_gpt_pdf(
         candidate_diagnostics: list[str] = []
 
         try:
-            candidate_result = apply_pdf_edit_plan(
+            plan_validation = validate_pdf_edit_plan(
                 pdf_bytes,
                 candidate_plan,
                 password=payload.password,
             )
-            candidate_assessment = assess_pdf_edit_candidate(
-                pdf_bytes,
-                candidate_result.data,
-                candidate_plan,
-                password=payload.password,
-                visual_fidelity_score=candidate_result.visual_fidelity_score,
-            )
-            candidate_diagnostics.extend(candidate_assessment.issues)
-            candidate_diagnostics.extend(
-                warning
-                for warning in candidate_result.warnings
-                if "target was not found" in warning
-                or "did not fit cleanly" in warning
-                or "visual fidelity" in warning
-            )
-
-            content_verified = (
-                candidate_result.verification_score == 100
-                or inspection.image_only_pages > 0
-            )
-            if not content_verified:
-                candidate_diagnostics.append(
-                    "content verification did not reach the required level"
+            if not plan_validation.valid:
+                candidate_diagnostics.extend(plan_validation.issues)
+            else:
+                candidate_result = apply_pdf_edit_plan(
+                    pdf_bytes,
+                    candidate_plan,
+                    password=payload.password,
+                )
+                candidate_assessment = assess_pdf_edit_candidate(
+                    pdf_bytes,
+                    candidate_result.data,
+                    candidate_plan,
+                    password=payload.password,
+                    visual_fidelity_score=candidate_result.visual_fidelity_score,
+                )
+                candidate_diagnostics.extend(candidate_assessment.issues)
+                candidate_diagnostics.extend(
+                    warning
+                    for warning in candidate_result.warnings
+                    if "target was not found" in warning
+                    or "did not fit cleanly" in warning
+                    or "visual fidelity" in warning
                 )
 
-            if (
-                candidate_assessment.safe_to_return
-                and content_verified
-                and not candidate_diagnostics
-            ):
-                edit_result = candidate_result
-                selected_assessment = candidate_assessment
-                plan = candidate_plan
-                break
+                content_verified = (
+                    candidate_result.verification_score == 100
+                    or inspection.image_only_pages > 0
+                )
+                if not content_verified:
+                    candidate_diagnostics.append(
+                        "content verification did not reach the required level"
+                    )
+
+                if (
+                    candidate_assessment.safe_to_return
+                    and content_verified
+                    and not candidate_diagnostics
+                ):
+                    edit_result = candidate_result
+                    selected_assessment = candidate_assessment
+                    plan = candidate_plan
+                    break
         except PDFEditorError as exc:
             candidate_diagnostics.append(str(exc))
 
@@ -748,7 +760,10 @@ def edit_seldrune_gpt_pdf(
                 "must be applied exactly once. Do not place replacement text above, below, "
                 "or on top of an existing value. For native text, identify the exact original "
                 "target and occurrence and let the engine reuse its font, baseline, color, "
-                "and alignment. For tables, keep the replacement inside the same cell and "
+                "and alignment. If a value occurs more than once, explicitly choose its "
+                "occurrence or give a precise bbox from the original page. Never use fuzzy "
+                "numeric targets and never generate overlapping operations. For tables, keep "
+                "the replacement inside the same cell and "
                 "do not cross component labels, borders, or neighboring values. For scanned "
                 "content, derive the exact bbox and typography visually. Return a complete "
                 "new plan, not a delta or repair plan. Do not change unrelated content."
