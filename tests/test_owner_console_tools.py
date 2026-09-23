@@ -38,6 +38,9 @@ def test_tools_workspace_exposes_action_controls() -> None:
         "provider-vault-provider",
         "provider-vault-secret",
         "provider-vault-status",
+        "provider-vault-verified",
+        "provider-vault-manual",
+        "tool-clean-invalid",
     ):
         assert f'id="{element_id}"' in html
 
@@ -49,6 +52,10 @@ def test_tools_workspace_exposes_action_controls() -> None:
     assert "api('/tool-defaults')" in script
     assert "api('/tool-bootstrap/preflight'" in script
     assert "api('/tool-bootstrap/credentials'" in script
+    assert "/tool-bootstrap/credentials/verified" in script
+    assert "/tool-bootstrap/credentials/cleanup-invalid" in script
+    assert "data-provider-disconnect" in script
+    assert "data-secret-remove" in script
     assert "credential saved and activated" in script
     assert "api('/tool-bootstrap'" in script
     assert "Approve & execute" in script
