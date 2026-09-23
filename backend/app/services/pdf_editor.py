@@ -707,7 +707,10 @@ def _replacement_visual_fidelity(
             style.exact_font_reusable
             and all(
                 token in output_key
-                for token in re.findall(r"(bold|italic|oblique|times|helvetica|courier)", source_key)
+                for token in re.findall(
+                    r"(bold|italic|oblique|times|helvetica|courier)",
+                    source_key,
+                )
             )
         )
     )
@@ -734,7 +737,15 @@ def _replacement_visual_fidelity(
     if style.alignment == pymupdf.TEXT_ALIGN_RIGHT:
         alignment_match = abs(target.x1 - style.target_rect.x1) <= 1.5
     elif style.alignment == pymupdf.TEXT_ALIGN_CENTER:
-        alignment_match = abs(target.x0 + target.width / 2 - style.target_rect.x0 - style.target_rect.width / 2) <= 1.5
+        alignment_match = (
+            abs(
+                target.x0
+                + target.width / 2
+                - style.target_rect.x0
+                - style.target_rect.width / 2
+            )
+            <= 1.5
+        )
     else:
         alignment_match = abs(target.x0 - style.origin[0]) <= max(1.5, expected_width * 0.02)
     checks.append(alignment_match)
