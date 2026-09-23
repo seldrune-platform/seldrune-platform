@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 
-UNARCHI_VERSION = "unarchi-v0.8"
+UNARCHI_VERSION = "unarchi-v0.9"
 _STOPWORDS = {
     "a",
     "an",
@@ -210,6 +210,7 @@ class CausalHypothesis:
     statement: str
     confidence: float
     predictions: tuple[tuple[str, str], ...]
+    scope: str = "external"
     supporting_evidence: int = 0
     contradicting_evidence: int = 0
     status: str = "active"
@@ -227,6 +228,30 @@ class DiscriminatingExperiment:
     risk: float
     status: str = "planned"
     observed_evidence: str | None = None
+    confidence_updates: tuple[tuple[int, float], ...] = ()
+    reversible_only: bool = True
+    paid_actions_allowed: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class InterventionTrial:
+    id: int
+    action: str
+    context: str
+    environment_signature: str
+    baseline_outcome: str
+    expected_by_hypothesis: tuple[tuple[int, str], ...]
+    risk: float
+    linked_prediction_id: int | None = None
+    status: str = "planned"
+    observed_outcome: str | None = None
+    observed_environment_signature: str | None = None
+    environment_held_constant: bool | None = None
+    attribution: str | None = None
+    evidence_strength: float | None = None
     confidence_updates: tuple[tuple[int, float], ...] = ()
     reversible_only: bool = True
     paid_actions_allowed: bool = False
@@ -288,10 +313,11 @@ class UnarchiEngine:
     """
     CPU-only experimental cognitive kernel.
 
-    v0.8 includes causal internal dynamics, bounded endogenous goals, a
+    v0.9 includes causal internal dynamics, bounded endogenous goals, a
     calibrated predictive self-model, prospective memory, evidence-grounded
-    metacognition, explicit value arbitration, and competing causal hypotheses
-    that update confidence only from discriminating observed evidence.
+    metacognition, explicit value arbitration, competing causal hypotheses,
+    and controlled self-intervention trials that separate changes caused by
+    Seldrune's own action from environmental or confounded changes.
     """
 
     state: UnarchiState = field(default_factory=UnarchiState)
@@ -313,6 +339,8 @@ class UnarchiEngine:
     )
     next_hypothesis_id: int = 1
     next_experiment_id: int = 1
+    intervention_trials: list[InterventionTrial] = field(default_factory=list)
+    next_intervention_id: int = 1
     success_prediction_bias: float = 0.0
     uncertainty_prediction_bias: float = 0.0
     stress_prediction_bias: float = 0.0
@@ -1347,10 +1375,14 @@ class UnarchiEngine:
         statement: str,
         predictions: dict[str, str],
         confidence: float = 0.5,
+        scope: str = "external",
     ) -> CausalHypothesis:
         statement = statement.strip()
+        scope = scope.strip().casefold()
         if not statement:
             raise ValueError("hypothesis statement is required")
+        if scope not in {"external", "self", "mixed"}:
+            raise ValueError("hypothesis scope must be external, self, or mixed")
         clean_predictions = tuple(
             (str(test).strip()[:240], str(evidence).strip()[:300])
             for test, evidence in predictions.items()
@@ -1364,6 +1396,7 @@ class UnarchiEngine:
             statement=statement[:400],
             confidence=round(_clamp(confidence, 0.01, 0.99), 6),
             predictions=clean_predictions,
+            scope=scope,
         )
         self.next_hypothesis_id += 1
         self.causal_hypotheses.append(hypothesis)
@@ -1533,6 +1566,196 @@ class UnarchiEngine:
             return None
         return max(active, key=lambda item: (item.confidence, -item.id))
 
+    def plan_self_intervention(
+        self,
+        *,
+        action: str,
+        context: str,
+        environment_signature: str,
+        baseline_outcome: str,
+        risk: float,
+        reversible: bool = True,
+        external_cost_usd: float = 0.0,
+        linked_prediction_id: int | None = None,
+    ) -> InterventionTrial:
+        """
+        Plan a controlled self-intervention against competing self/world models.
+
+        The action is not executed here. The trial only records what competing
+        causal hypotheses predict should happen if Seldrune changes its own
+        action while the external context is held constant.
+        """
+        action = action.strip()
+        context = context.strip()
+        environment_signature = environment_signature.strip()
+        baseline_outcome = baseline_outcome.strip()
+        risk = _clamp(risk)
+
+        if not action or not context or not environment_signature or not baseline_outcome:
+            raise ValueError("intervention action, context, environment, and baseline are required")
+        if not reversible:
+            raise ValueError("self interventions must be reversible")
+        if external_cost_usd > 0.0:
+            raise ValueError("self interventions must be zero-cost")
+        if risk > 0.50:
+            raise ValueError("self intervention risk exceeds research bound")
+
+        active = [item for item in self.causal_hypotheses if item.status == "active"]
+        scopes = {item.scope for item in active}
+        has_self_model = bool(scopes & {"self", "mixed"})
+        has_world_model = bool(scopes & {"external", "mixed"})
+        if len(active) < 2 or not has_self_model or not has_world_model:
+            raise ValueError(
+                "self intervention requires competing self and external hypotheses"
+            )
+
+        test_key = f"intervention:{action}".casefold()
+        expectations: list[tuple[int, str]] = []
+        for hypothesis in active:
+            expected = next(
+                (
+                    evidence
+                    for test, evidence in hypothesis.predictions
+                    if test.casefold() == test_key
+                ),
+                None,
+            )
+            if expected:
+                expectations.append((hypothesis.id, expected))
+
+        if len(expectations) < 2:
+            raise ValueError(
+                "at least two hypotheses must predict the intervention outcome"
+            )
+        if len({item.casefold() for _, item in expectations}) < 2:
+            raise ValueError("intervention predictions must discriminate hypotheses")
+
+        if linked_prediction_id is not None:
+            linked = next(
+                (
+                    item
+                    for item in self.predictions
+                    if item.id == linked_prediction_id
+                ),
+                None,
+            )
+            if linked is None:
+                raise ValueError("unknown linked self prediction")
+            if linked.action.casefold() != action.casefold():
+                raise ValueError("linked self prediction action does not match intervention")
+
+        trial = InterventionTrial(
+            id=self.next_intervention_id,
+            action=action[:240],
+            context=context[:400],
+            environment_signature=environment_signature[:300],
+            baseline_outcome=baseline_outcome[:400],
+            expected_by_hypothesis=tuple(expectations),
+            risk=round(risk, 6),
+            linked_prediction_id=linked_prediction_id,
+        )
+        self.next_intervention_id += 1
+        self.intervention_trials.append(trial)
+        if len(self.intervention_trials) > self.max_memory:
+            self.intervention_trials = self.intervention_trials[-self.max_memory:]
+        return trial
+
+    def observe_self_intervention(
+        self,
+        intervention_id: int,
+        *,
+        observed_outcome: str,
+        environment_signature: str,
+    ) -> InterventionTrial:
+        """
+        Observe a planned self-intervention and update causal models if unconfounded.
+        """
+        trial = next(
+            (item for item in self.intervention_trials if item.id == intervention_id),
+            None,
+        )
+        if trial is None:
+            raise ValueError("unknown self intervention")
+        if trial.status != "planned":
+            raise ValueError("self intervention has already been observed")
+
+        observed_outcome = observed_outcome.strip()
+        environment_signature = environment_signature.strip()
+        if not observed_outcome or not environment_signature:
+            raise ValueError("observed outcome and environment signature are required")
+
+        held_constant = environment_signature == trial.environment_signature
+        trial.observed_outcome = observed_outcome[:500]
+        trial.observed_environment_signature = environment_signature[:300]
+        trial.environment_held_constant = held_constant
+
+        baseline_similarity = _similarity(trial.baseline_outcome, observed_outcome)
+        trial.evidence_strength = round(_clamp(1.0 - baseline_similarity), 6)
+
+        if not held_constant:
+            trial.status = "confounded"
+            trial.attribution = "confounded_environment_change"
+            return trial
+
+        expectations = dict(trial.expected_by_hypothesis)
+        affected: list[int] = []
+        match_scores: list[tuple[float, CausalHypothesis]] = []
+
+        for hypothesis in self.causal_hypotheses:
+            if hypothesis.status != "active" or hypothesis.id not in expectations:
+                continue
+            expected = expectations[hypothesis.id]
+            match = _similarity(expected, observed_outcome)
+            match_scores.append((match, hypothesis))
+            old = hypothesis.confidence
+            if match >= 0.60:
+                hypothesis.confidence = _clamp(old * (1.0 + (0.60 * match)))
+                hypothesis.supporting_evidence += 1
+            elif match <= 0.20:
+                hypothesis.confidence = _clamp(old * 0.45, 0.001, 1.0)
+                hypothesis.contradicting_evidence += 1
+            else:
+                hypothesis.confidence = _clamp(
+                    old * (0.80 + (0.35 * match)),
+                    0.001,
+                    1.0,
+                )
+            affected.append(hypothesis.id)
+
+        self._normalize_hypothesis_confidence()
+        trial.confidence_updates = tuple(
+            (
+                hypothesis_id,
+                next(
+                    item.confidence
+                    for item in self.causal_hypotheses
+                    if item.id == hypothesis_id
+                ),
+            )
+            for hypothesis_id in affected
+        )
+
+        if baseline_similarity >= 0.75:
+            trial.attribution = "no_detectable_self_effect"
+        elif match_scores:
+            best_match, best_hypothesis = max(
+                match_scores,
+                key=lambda item: (item[0], item[1].confidence, -item[1].id),
+            )
+            if best_match < 0.60:
+                trial.attribution = "uncertain"
+            elif best_hypothesis.scope == "self":
+                trial.attribution = "self_intervention"
+            elif best_hypothesis.scope == "external":
+                trial.attribution = "external_cause"
+            else:
+                trial.attribution = "mixed_cause"
+        else:
+            trial.attribution = "uncertain"
+
+        trial.status = "observed"
+        return trial
+
     def build_metacognitive_narrative(
         self,
         focus: str = "current_state",
@@ -1696,6 +1919,61 @@ class UnarchiEngine:
             else:
                 summary = "No prospective intention is stored."
 
+        elif focus in {"intervention", "self_world", "self_causation"}:
+            if self.intervention_trials:
+                item = self.intervention_trials[-1]
+                index = len(self.intervention_trials) - 1
+                add(
+                    f"intervention:{index}",
+                    (
+                        f"action='{item.action[:160]}'; status={item.status}; "
+                        f"attribution={item.attribution}; "
+                        f"environment_held_constant={item.environment_held_constant}"
+                    ),
+                )
+                if item.linked_prediction_id is not None:
+                    linked = next(
+                        (
+                            prediction
+                            for prediction in self.predictions
+                            if prediction.id == item.linked_prediction_id
+                        ),
+                        None,
+                    )
+                    if linked is not None:
+                        add(
+                            f"prediction:{self.predictions.index(linked)}",
+                            (
+                                f"linked self forecast action='{linked.action[:160]}'; "
+                                f"predicted_success={linked.predicted_success:.3f}"
+                            ),
+                        )
+                for hypothesis_id, _ in item.expected_by_hypothesis:
+                    hypothesis = next(
+                        (
+                            candidate
+                            for candidate in self.causal_hypotheses
+                            if candidate.id == hypothesis_id
+                        ),
+                        None,
+                    )
+                    if hypothesis is not None:
+                        add(
+                            f"hypothesis:{self.causal_hypotheses.index(hypothesis)}",
+                            (
+                                f"scope={hypothesis.scope}; "
+                                f"statement='{hypothesis.statement[:180]}'; "
+                                f"confidence={hypothesis.confidence:.3f}"
+                            ),
+                        )
+                summary = (
+                    "The latest self/world attribution is reconstructed from "
+                    "a controlled intervention record, environment constancy, "
+                    "and the predictions of competing self/external hypotheses."
+                )
+            else:
+                summary = "No self-intervention trial has been recorded."
+
         elif focus in {"world_model", "hypothesis", "causal"}:
             if self.causal_hypotheses:
                 leading = self.leading_causal_hypothesis()
@@ -1708,6 +1986,7 @@ class UnarchiEngine:
                         f"hypothesis:{actual_index}",
                         (
                             f"statement='{item.statement[:180]}'; "
+                            f"scope={item.scope}; "
                             f"confidence={item.confidence:.3f}; "
                             f"support={item.supporting_evidence}; "
                             f"contradictions={item.contradicting_evidence}"
@@ -2005,6 +2284,10 @@ class UnarchiEngine:
             ],
             "next_hypothesis_id": self.next_hypothesis_id,
             "next_experiment_id": self.next_experiment_id,
+            "intervention_trials": [
+                item.to_dict() for item in self.intervention_trials
+            ],
+            "next_intervention_id": self.next_intervention_id,
             "success_prediction_bias": self.success_prediction_bias,
             "uncertainty_prediction_bias": self.uncertainty_prediction_bias,
             "stress_prediction_bias": self.stress_prediction_bias,
@@ -2031,6 +2314,7 @@ class UnarchiEngine:
         arbitration_payload = payload.get("arbitration_history", [])
         hypotheses_payload = payload.get("causal_hypotheses", [])
         experiments_payload = payload.get("discriminating_experiments", [])
+        interventions_payload = payload.get("intervention_trials", [])
         value_weights_payload = payload.get("value_weights", _default_value_weights())
         if not isinstance(state_payload, dict):
             raise ValueError("invalid UNARCHI state")
@@ -2054,6 +2338,8 @@ class UnarchiEngine:
             raise ValueError("invalid UNARCHI causal hypotheses")
         if not isinstance(experiments_payload, list):
             raise ValueError("invalid UNARCHI discriminating experiments")
+        if not isinstance(interventions_payload, list):
+            raise ValueError("invalid UNARCHI intervention trials")
 
         memory: list[Experience] = []
         for item in memory_payload:
@@ -2139,6 +2425,21 @@ class UnarchiEngine:
                 DiscriminatingExperiment(**restored_item)
             )
 
+        intervention_trials: list[InterventionTrial] = []
+        for item in interventions_payload:
+            if not isinstance(item, dict):
+                raise ValueError("invalid UNARCHI intervention trial")
+            restored_item = dict(item)
+            restored_item["expected_by_hypothesis"] = tuple(
+                tuple(pair)
+                for pair in restored_item.get("expected_by_hypothesis", ())
+            )
+            restored_item["confidence_updates"] = tuple(
+                tuple(pair)
+                for pair in restored_item.get("confidence_updates", ())
+            )
+            intervention_trials.append(InterventionTrial(**restored_item))
+
         max_memory = max(16, min(int(payload.get("max_memory") or 256), 4096))
         max_active = max(
             1,
@@ -2193,6 +2494,11 @@ class UnarchiEngine:
                 )
                 + 1,
             ),
+            intervention_trials=intervention_trials[-max_memory:],
+            next_intervention_id=max(
+                int(payload.get("next_intervention_id") or 1),
+                max((item.id for item in intervention_trials), default=0) + 1,
+            ),
             success_prediction_bias=float(
                 payload.get("success_prediction_bias") or 0.0
             ),
@@ -2237,5 +2543,6 @@ class UnarchiEngine:
             "discriminating_experiment_count": len(
                 self.discriminating_experiments
             ),
+            "intervention_trial_count": len(self.intervention_trials),
             "claims_phenomenal_consciousness": False,
         }
