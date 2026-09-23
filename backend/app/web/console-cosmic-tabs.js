@@ -40,6 +40,8 @@
       <nav class="cosmic-tabs owner-portal-tabs" role="tablist"
            aria-label="Seldrune owner workspaces"></nav>
       <div class="owner-portal-actions">
+        <button type="button" id="portal-back-button" class="owner-back-button ghost"
+                aria-label="Go to previous Seldrune page" hidden>← Back</button>
         <button type="button" class="owner-command-button"
                 data-open-portal="operator">New order</button>
         <div class="cosmic-runtime-pill" id="portal-runtime-pill">
@@ -258,8 +260,25 @@
       "<span>Execution truth · governed actions · evidence first</span>";
     root.after(footer);
 
-    function activate(id, updateHash = true) {
+    let currentWorkspace = "home";
+    let portalHistoryDepth = 0;
+    const backButton = document.getElementById("portal-back-button");
+
+    function syncBackButton() {
+      if (!backButton) return;
+      const canGoBackInsidePortal = portalHistoryDepth > 0 && currentWorkspace !== "home";
+      backButton.hidden = !canGoBackInsidePortal;
+    }
+
+    function activate(id, options = {}) {
+      const {
+        historyMode = "push",
+        scroll = true,
+      } = options;
       if (!panels.has(id)) id = "home";
+      const changed = currentWorkspace !== id;
+      currentWorkspace = id;
+
       document.querySelectorAll(".owner-portal-tab").forEach(button => {
         const active = button.dataset.portalTab === id;
         button.setAttribute("aria-selected", String(active));
@@ -268,23 +287,44 @@
       panels.forEach((panel, panelId) => {
         panel.classList.toggle("active", panelId === id);
       });
-      if (updateHash) history.replaceState(null, "", `#${id}`);
+
+      if (changed && historyMode === "push") {
+        portalHistoryDepth += 1;
+        history.pushState(
+          {seldrunePortal: true, workspace: id, depth: portalHistoryDepth},
+          "",
+          `#${id}`,
+        );
+      } else if (historyMode === "replace") {
+        history.replaceState(
+          {seldrunePortal: true, workspace: id, depth: portalHistoryDepth},
+          "",
+          id === "home"
+            ? location.pathname + location.search
+            : `#${id}`,
+        );
+      }
+
+      syncBackButton();
+
       if (id === "operator") {
         requestAnimationFrame(() => {
           document.getElementById("seldrune-gpt-input")?.focus();
         });
       }
-      window.scrollTo({
-        top: 0,
-        behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
-          ? "auto"
-          : "smooth",
-      });
+      if (scroll) {
+        window.scrollTo({
+          top: 0,
+          behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? "auto"
+            : "smooth",
+        });
+      }
     }
 
     tabList.addEventListener("click", event => {
       const button = event.target.closest("[data-portal-tab]");
-      if (button) activate(button.dataset.portalTab);
+      if (button) activate(button.dataset.portalTab, {historyMode: "push"});
     });
 
     tabList.addEventListener("keydown", event => {
@@ -294,13 +334,13 @@
       const delta = event.key === "ArrowRight" ? 1 : -1;
       const next = buttons[(current + delta + buttons.length) % buttons.length];
       next?.focus();
-      if (next) activate(next.dataset.portalTab);
+      if (next) activate(next.dataset.portalTab, {historyMode: "push"});
     });
 
     document.addEventListener("click", event => {
       const trigger = event.target.closest("[data-open-portal]");
       if (!trigger) return;
-      activate(trigger.dataset.openPortal);
+      activate(trigger.dataset.openPortal, {historyMode: "push"});
       const focusTarget = trigger.dataset.focusTarget;
       if (focusTarget) {
         requestAnimationFrame(() => {
@@ -311,9 +351,28 @@
       }
     });
 
-    window.addEventListener("hashchange", () => {
+    backButton?.addEventListener("click", () => {
+      if (portalHistoryDepth > 0) history.back();
+      else activate("home", {historyMode: "replace"});
+    });
+
+    window.addEventListener("popstate", event => {
+      const state = event.state;
+      if (state?.seldrunePortal && panels.has(state.workspace)) {
+        portalHistoryDepth = Math.max(0, Number(state.depth) || 0);
+        activate(state.workspace, {historyMode: "none", scroll: false});
+        return;
+      }
+
       const requested = location.hash.slice(1);
-      if (panels.has(requested)) activate(requested, false);
+      if (panels.has(requested)) {
+        portalHistoryDepth = Math.max(0, portalHistoryDepth - 1);
+        activate(requested, {historyMode: "none", scroll: false});
+        return;
+      }
+
+      portalHistoryDepth = 0;
+      activate("home", {historyMode: "replace", scroll: false});
     });
 
     const readNumber = id => {
@@ -390,13 +449,16 @@
     }
     syncRuntime();
 
-    // A fresh Owner Console session always starts from a single stable Home page.
-    // Workspace hashes are useful while navigating, but must not turn into a
-    // persistent alternate landing page across reloads.
-    if (location.hash) {
-      history.replaceState(null, "", location.pathname + location.search);
-    }
-    activate("home", false);
+    // A fresh Owner Console session always starts from Home, then each workspace
+    // navigation creates real browser history so Back returns through Seldrune
+    // instead of immediately leaving the console.
+    portalHistoryDepth = 0;
+    history.replaceState(
+      {seldrunePortal: true, workspace: "home", depth: 0},
+      "",
+      location.pathname + location.search,
+    );
+    activate("home", {historyMode: "none", scroll: false});
 
     window.seldrunePortal = {
       activate,
