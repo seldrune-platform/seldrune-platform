@@ -4,7 +4,6 @@
     density: "comfortable",
     motion: "system",
     descriptions: "on",
-    defaultWorkspace: "home",
   };
 
   const KEYS = {
@@ -12,7 +11,6 @@
     density: "seldrune.portal.density",
     motion: "seldrune.portal.motion",
     descriptions: "seldrune.portal.descriptions",
-    defaultWorkspace: "seldrune.portal.defaultWorkspace",
   };
 
   function readPreference(name) {
@@ -38,18 +36,6 @@
     const host = document.getElementById("portal-settings-content");
     if (!host || host.dataset.initialized === "true") return;
     host.dataset.initialized = "true";
-
-    const workspaceOptions = (window.seldrunePortal?.workspaces || [
-      {id: "home", label: "Home"},
-      {id: "operator", label: "Operator"},
-      {id: "operations", label: "Operations"},
-      {id: "media", label: "Media"},
-      {id: "intelligence", label: "Intelligence"},
-      {id: "tools", label: "Tools"},
-      {id: "settings", label: "Settings"},
-    ])
-      .map(item => `<option value="${item.id}">${item.label}</option>`)
-      .join("");
 
     host.innerHTML = `
       <div class="portal-settings-grid">
@@ -82,11 +68,11 @@
           </select>
         </label>
 
-        <label class="portal-setting-card">
-          <span>Default workspace</span>
-          <small>The workspace opened first when no explicit portal link is requested.</small>
-          <select id="portal-default-setting">${workspaceOptions}</select>
-        </label>
+        <article class="portal-setting-card">
+          <span>Fixed landing page</span>
+          <small>Every fresh Owner Console load opens Home for predictable navigation.</small>
+          <strong>Home · Locked</strong>
+        </article>
 
         <label class="portal-setting-card portal-setting-toggle">
           <div>
@@ -130,7 +116,6 @@
     const theme = document.getElementById("portal-theme-setting");
     const density = document.getElementById("portal-density-setting");
     const motion = document.getElementById("portal-motion-setting");
-    const defaultWorkspace = document.getElementById("portal-default-setting");
     const descriptions = document.getElementById("portal-descriptions-setting");
     const status = document.getElementById("portal-settings-status");
 
@@ -138,7 +123,6 @@
       theme.value = readPreference("theme");
       density.value = readPreference("density");
       motion.value = readPreference("motion");
-      defaultWorkspace.value = readPreference("defaultWorkspace");
       descriptions.checked = readPreference("descriptions") === "on";
     };
     syncControls();
@@ -163,7 +147,6 @@
       persist("density", density.value);
       persist("motion", motion.value);
       persist("descriptions", descriptions.checked ? "on" : "off");
-      localStorage.setItem(KEYS.defaultWorkspace, defaultWorkspace.value);
       status.textContent = "Portal settings saved for this browser.";
     });
 
