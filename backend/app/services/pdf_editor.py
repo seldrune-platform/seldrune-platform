@@ -42,12 +42,19 @@ class PDFEditResult:
     inspection: PDFInspection
     verified_operations: int
     verification_notes: list[str]
+    visual_fidelity_scores: list[int]
 
     @property
     def verification_score(self) -> int:
         if self.applied_edits <= 0:
             return 0
         return round((self.verified_operations / self.applied_edits) * 100)
+
+    @property
+    def visual_fidelity_score(self) -> int:
+        if not self.visual_fidelity_scores:
+            return 0
+        return round(sum(self.visual_fidelity_scores) / len(self.visual_fidelity_scores))
 
 
 def _open_document(pdf_bytes: bytes, password: str | None = None) -> pymupdf.Document:
@@ -600,6 +607,89 @@ def _fit_textbox(
     return False
 
 
+def _replacement_visual_fidelity(
+    page: pymupdf.Page,
+    replacement_text: str,
+    style: PDFTextStyle,
+) -> tuple[int, str]:
+    matches = list(page.search_for(replacement_text))
+    if not matches:
+        return 0, "replacement style could not be visually inspected"
+
+    target = min(
+        matches,
+        key=lambda item: abs(item.y0 - style.target_rect.y0)
+        + abs(item.x0 - style.target_rect.x0),
+    )
+    best_span: dict[str, Any] | None = None
+    best_area = 0.0
+    for block in page.get_text("dict").get("blocks", []):
+        for line in block.get("lines", []):
+            for span in line.get("spans", []):
+                span_rect = pymupdf.Rect(span.get("bbox", (0, 0, 0, 0)))
+                area = _rect_intersection_area(span_rect, target)
+                if area > best_area:
+                    best_area = area
+                    best_span = span
+
+    if best_span is None:
+        return 0, "replacement span could not be inspected"
+
+    checks: list[bool] = []
+    output_font = str(best_span.get("font") or "")
+    source_key = _font_key(style.font_name)
+    output_key = _font_key(output_font)
+    font_match = (
+        source_key == output_key
+        or source_key in output_key
+        or output_key in source_key
+        or (
+            style.exact_font_reusable
+            and all(
+                token in output_key
+                for token in re.findall(r"(bold|italic|oblique|times|helvetica|courier)", source_key)
+            )
+        )
+    )
+    checks.append(font_match)
+
+    output_size = float(best_span.get("size") or 0.0)
+    checks.append(abs(output_size - style.font_size) <= 0.25)
+
+    output_color = best_span.get("color")
+    expected_color = (
+        round(style.color[0] * 255) << 16
+        | round(style.color[1] * 255) << 8
+        | round(style.color[2] * 255)
+    )
+    checks.append(isinstance(output_color, int) and abs(output_color - expected_color) <= 1)
+
+    output_origin = best_span.get("origin")
+    baseline_match = False
+    if isinstance(output_origin, (list, tuple)) and len(output_origin) == 2:
+        baseline_match = abs(float(output_origin[1]) - style.origin[1]) <= 0.9
+    checks.append(baseline_match)
+
+    expected_width = _font_text_length(style, replacement_text)
+    if style.alignment == pymupdf.TEXT_ALIGN_RIGHT:
+        alignment_match = abs(target.x1 - style.target_rect.x1) <= 1.5
+    elif style.alignment == pymupdf.TEXT_ALIGN_CENTER:
+        alignment_match = abs(target.x0 + target.width / 2 - style.target_rect.x0 - style.target_rect.width / 2) <= 1.5
+    else:
+        alignment_match = abs(target.x0 - style.origin[0]) <= max(1.5, expected_width * 0.02)
+    checks.append(alignment_match)
+
+    score = round((sum(1 for item in checks if item) / len(checks)) * 100)
+    return score, (
+        f"visual fidelity {score}% "
+        f"(font={'yes' if checks[0] else 'no'}, "
+        f"size={'yes' if checks[1] else 'no'}, "
+        f"color={'yes' if checks[2] else 'no'}, "
+        f"baseline={'yes' if checks[3] else 'no'}, "
+        f"alignment={'yes' if checks[4] else 'no'})"
+    )
+
+
 def _matching_widgets(
     page: pymupdf.Page,
     field_name: str,
@@ -669,6 +759,7 @@ def apply_pdf_edit_plan(
     verified = 0
     warnings: list[str] = []
     verification_notes: list[str] = []
+    visual_fidelity_scores: list[int] = []
 
     operations = plan.get("operations")
     if not isinstance(operations, list):
@@ -814,6 +905,22 @@ def apply_pdf_edit_plan(
                             verification_notes.append(
                                 f"Operation {op_index}, page {page_index + 1}: {style_note}."
                             )
+                            if inserted:
+                                fidelity, fidelity_note = _replacement_visual_fidelity(
+                                    page,
+                                    replacement_text,
+                                    style,
+                                )
+                                visual_fidelity_scores.append(fidelity)
+                                verification_notes.append(
+                                    f"Operation {op_index}, page {page_index + 1}: "
+                                    f"{fidelity_note}."
+                                )
+                                if fidelity < 95:
+                                    warnings.append(
+                                        f"Operation {op_index}: original-look visual fidelity "
+                                        f"is {fidelity}% on page {page_index + 1}."
+                                    )
                         else:
                             font_size, color = _style_near_rect(page, rectangle)
                             inserted = _fit_textbox(
@@ -922,4 +1029,5 @@ def apply_pdf_edit_plan(
         inspection=inspection,
         verified_operations=verified,
         verification_notes=verification_notes,
+        visual_fidelity_scores=visual_fidelity_scores,
     )
