@@ -38,6 +38,28 @@
     if (!root) return;
     root.replaceChildren();
     const providers = bootstrapStatus?.providers || [];
+    const targets = bootstrapStatus?.runtime_targets || {};
+    if (targets.github_full_name || targets.render_service_id) {
+      const targetCard = document.createElement('article');
+      targetCard.className = 'tool-readiness-card';
+      const title = document.createElement('strong');
+      title.textContent = 'PRODUCTION TARGET';
+      const detail = document.createElement('p');
+      const parts = [];
+      if (targets.github_full_name) {
+        parts.push(
+          `GitHub: ${targets.github_full_name} @ ${targets.github_ref || 'default'}`
+        );
+      }
+      if (targets.render_service_id) {
+        parts.push(`Render: ${targets.render_service_id}`);
+      } else if (targets.render_service_name) {
+        parts.push(`Render: ${targets.render_service_name}`);
+      }
+      detail.textContent = parts.join(' · ');
+      targetCard.append(title, detail);
+      root.append(targetCard);
+    }
     if (!providers.length) {
       clearAndMessage(root, 'No provider bootstrap metadata is available.');
       return;
@@ -298,8 +320,16 @@
 
   async function loadToolControl() {
     if (!document.getElementById('tool-control') || !state?.org) return;
-    setStatus('Loading governed action fabric…');
+    setStatus('Synchronizing universal tool fabric…');
     try {
+      try {
+        bootstrapStatus = await api('/tool-bootstrap', {
+          method: 'POST',
+          body: '{}',
+        });
+      } catch (bootstrapError) {
+        console.warn('Automatic tool bootstrap was unavailable', bootstrapError);
+      }
       [adapters, secrets, tools, runs, bootstrapStatus, toolDefaults] =
         await Promise.all([
           api('/tool-adapters'),
@@ -317,7 +347,9 @@
       renderRuns();
       refreshSummary();
       refreshAdapterForm();
-      setStatus('Action fabric synchronized with the running Seldrune service.');
+      setStatus(
+        `Universal action fabric synchronized · ${tools.length} tools available.`
+      );
     } catch (error) {
       setStatus(error.message);
     }
