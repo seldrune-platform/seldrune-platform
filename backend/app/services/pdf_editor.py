@@ -182,7 +182,10 @@ def _color_tuple(value: int | None) -> tuple[float, float, float]:
     )
 
 
-def _style_near_rect(page: pymupdf.Page, rect: pymupdf.Rect) -> tuple[float, tuple[float, float, float]]:
+def _style_near_rect(
+    page: pymupdf.Page,
+    rect: pymupdf.Rect,
+) -> tuple[float, tuple[float, float, float]]:
     sizes: list[float] = []
     colors: list[int] = []
     blocks = page.get_text("dict").get("blocks", [])
@@ -467,7 +470,12 @@ def apply_pdf_edit_plan(
                     rectangles = rectangles[occurrence - 1 : occurrence]
 
                 prepared: list[
-                    tuple[pymupdf.Rect, float, tuple[float, float, float], tuple[float, float, float]]
+                    tuple[
+                        pymupdf.Rect,
+                        float,
+                        tuple[float, float, float],
+                        tuple[float, float, float],
+                    ]
                 ] = []
                 for rectangle in rectangles:
                     font_size, color = _style_near_rect(page, rectangle)
