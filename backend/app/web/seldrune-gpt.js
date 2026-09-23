@@ -9,12 +9,12 @@
   const newConversation = document.querySelector('#seldrune-gpt-new');
   const chatButton = document.querySelector('#seldrune-gpt-chat');
   const executeButton = document.querySelector('#seldrune-gpt-execute');
-  const pdfEditButton = document.querySelector('#seldrune-gpt-pdf-edit');
   const attachButton = document.querySelector('#seldrune-gpt-attach');
   const fileInput = document.querySelector('#seldrune-gpt-files');
   const dropzone = document.querySelector('#seldrune-gpt-dropzone');
   const attachmentList = document.querySelector('#seldrune-gpt-attachments');
   const attachmentSummary = document.querySelector('#seldrune-gpt-attachment-summary');
+  const modePill = document.querySelector('#seldrune-gpt-mode');
   const pdfPasswordWrap = document.querySelector('#seldrune-gpt-pdf-password-wrap');
   const pdfPassword = document.querySelector('#seldrune-gpt-pdf-password');
 
@@ -101,7 +101,6 @@
     input.disabled = busy;
     chatButton.disabled = busy;
     executeButton.disabled = busy;
-    if (pdfEditButton) pdfEditButton.disabled = busy;
     attachButton.disabled = busy;
     fileInput.disabled = busy;
     if (message) status.textContent = message;
@@ -139,8 +138,32 @@
     attachmentSummary.textContent = attachments.length
       ? `${attachments.length} attached · ${formatBytes(total)}`
       : 'No attachments';
-    const hasPdf = attachments.some(item => item.media_type === 'application/pdf');
+    const pdfAttachments = attachments.filter(
+      item => item.media_type === 'application/pdf',
+    );
+    const hasPdf = pdfAttachments.length > 0;
+    const aiPdfMode = pdfAttachments.length === 1 && attachments.length === 1;
     pdfPasswordWrap?.classList.toggle('hidden', !hasPdf);
+    dropzone?.classList.toggle('ai-pdf-mode', aiPdfMode);
+    if (modePill) {
+      modePill.textContent = aiPdfMode ? 'AI PDF Editor' : 'Chat';
+      modePill.classList.toggle('active', aiPdfMode);
+    }
+    if (chatButton) {
+      chatButton.innerHTML = aiPdfMode
+        ? 'AI Edit PDF <span>✦</span>'
+        : 'Chat <span>→</span>';
+    }
+    if (executeButton) executeButton.hidden = aiPdfMode;
+    if (input) {
+      input.placeholder = aiPdfMode
+        ? 'Tell Seldrune exactly what to change in this PDF…'
+        : 'Message Seldrune GPT…';
+    }
+    if (aiPdfMode && !input.disabled) {
+      status.textContent =
+        'AI PDF Editor ready · describe the edit in plain language and submit.';
+    }
   }
 
   function fileToBase64(file) {
@@ -275,22 +298,12 @@
     });
   }
 
-  pdfEditButton?.addEventListener('click', async () => {
-    const instruction = input.value.trim();
-    if (!instruction) {
-      status.textContent = 'Describe the PDF edit you want first.';
-      input.focus();
-      return;
-    }
-    const pdfAttachments = attachments.filter(item => item.media_type === 'application/pdf');
-    if (pdfAttachments.length !== 1 || attachments.length !== 1) {
-      status.textContent = 'Edit PDF requires exactly one attached PDF.';
-      return;
-    }
-
-    const pdf = pdfAttachments[0];
-    setBusy(true, 'Seldrune GPT is editing the PDF…');
-    addMessage('You', `${instruction}\nPDF edit: ${pdf.name}`, 'user');
+  async function runAiPdfEdit(instruction, pdf) {
+    setBusy(
+      true,
+      'AI PDF Editor is analyzing the document and applying your instruction…',
+    );
+    addMessage('You', `${instruction}\nAI PDF edit: ${pdf.name}`, 'user');
     try {
       const result = await api('/gpt/pdf/edit', {
         method: 'POST',
@@ -323,24 +336,26 @@
           ? `${result.form_fields} form fields`
           : null,
         result.repair_passes
-          ? `${result.repair_passes} visual repair pass`
+          ? `${result.repair_passes} automatic repair pass${result.repair_passes === 1 ? '' : 'es'}`
           : null,
       ].filter(Boolean).join(' · ');
       addDownloadMessage(
-        'Seldrune GPT · Advanced PDF',
+        'Seldrune GPT · AI PDF Editor',
         `${result.summary || 'PDF edit completed.'} Applied edits: ${result.applied_edits || 0}. ${verification}. ${profile}.${warningText}`,
         result.filename,
         result.data_base64,
       );
-      status.textContent = `PDF ready · ${verification} · ${result.filename}`;
+      status.textContent = `Edited PDF ready · ${verification} · ${result.filename}`;
     } catch (error) {
-      addMessage('System', `PDF edit failed: ${error.message}`);
-      status.textContent = 'PDF edit failed. The original attachment is still available.';
+      addMessage('System', `AI PDF edit failed: ${error.message}`);
+      status.textContent =
+        'AI PDF edit failed. The original PDF is still attached so you can refine the instruction and retry.';
     } finally {
       setBusy(false);
+      renderAttachments();
       input.focus();
     }
-  });
+  }
 
   executeButton?.addEventListener('click', async () => {
     const order = input.value.trim();
@@ -410,6 +425,14 @@
     event.preventDefault();
     const message = input.value.trim();
     if (!message) return;
+
+    const pdfAttachments = attachments.filter(
+      item => item.media_type === 'application/pdf',
+    );
+    if (pdfAttachments.length === 1 && attachments.length === 1) {
+      await runAiPdfEdit(message, pdfAttachments[0]);
+      return;
+    }
     const outgoingAttachments = attachments.map(item => ({
       name: item.name,
       media_type: item.media_type,
