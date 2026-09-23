@@ -1,3 +1,6 @@
+import base64
+import binascii
+from contextlib import suppress
 from time import perf_counter
 from typing import Any
 
@@ -48,52 +51,80 @@ class ModelGateway:
         if not request.model or request.model.startswith("mock-"):
             raise ModelGatewayError("An OpenAI model must be configured")
 
-        model_input: Any = request.input_text
-        if request.input_images or request.input_files:
-            content: list[dict[str, Any]] = [
-                {"type": "input_text", "text": request.input_text}
-            ]
-            for image in request.input_images:
-                content.append(
-                    {
-                        "type": "input_image",
-                        "image_url": (
-                            f"data:{image.media_type};base64,{image.data_base64}"
-                        ),
-                    }
-                )
-            for file_input in request.input_files:
-                content.append(
-                    {
-                        "type": "input_file",
-                        "file_data": file_input.data_base64,
-                        "filename": file_input.filename,
-                    }
-                )
-            model_input = [{"role": "user", "content": content}]
-
-        response_args: dict[str, Any] = {
-            "model": request.model,
-            "input": model_input,
-            "instructions": request.instructions,
-            "max_output_tokens": request.max_output_tokens,
-        }
-        if request.response_schema is not None:
-            response_args["text"] = {
-                "format": {
-                    "type": "json_schema",
-                    "name": "seldrune_response",
-                    "strict": True,
-                    "schema": request.response_schema,
-                }
-            }
+        client = OpenAI(timeout=self.settings.model_timeout_seconds)
+        uploaded_file_ids: list[str] = []
         try:
-            client = OpenAI(timeout=self.settings.model_timeout_seconds)
+            model_input: Any = request.input_text
+            if request.input_images or request.input_files:
+                content: list[dict[str, Any]] = [
+                    {"type": "input_text", "text": request.input_text}
+                ]
+                for image in request.input_images:
+                    content.append(
+                        {
+                            "type": "input_image",
+                            "image_url": (
+                                f"data:{image.media_type};base64,{image.data_base64}"
+                            ),
+                        }
+                    )
+                for file_input in request.input_files:
+                    try:
+                        file_bytes = base64.b64decode(
+                            file_input.data_base64,
+                            validate=True,
+                        )
+                    except (ValueError, binascii.Error) as exc:
+                        raise ModelGatewayError(
+                            f"Invalid base64 content for {file_input.filename}"
+                        ) from exc
+                    uploaded = client.files.create(
+                        file=(
+                            file_input.filename,
+                            file_bytes,
+                            file_input.media_type or "application/octet-stream",
+                        ),
+                        purpose="user_data",
+                    )
+                    uploaded_file_ids.append(uploaded.id)
+                    content.append(
+                        {
+                            "type": "input_file",
+                            "file_id": uploaded.id,
+                        }
+                    )
+                model_input = [{"role": "user", "content": content}]
+
+            response_args: dict[str, Any] = {
+                "model": request.model,
+                "input": model_input,
+                "instructions": request.instructions,
+                "max_output_tokens": request.max_output_tokens,
+            }
+            if request.response_schema is not None:
+                response_args["text"] = {
+                    "format": {
+                        "type": "json_schema",
+                        "name": "seldrune_response",
+                        "strict": True,
+                        "schema": request.response_schema,
+                    }
+                }
             response = client.responses.create(**response_args)
+        except ModelGatewayError:
+            raise
         except Exception as exc:
+            detail = " ".join(str(exc).split())
+            if len(detail) > 500:
+                detail = detail[:497] + "..."
+            suffix = f": {detail}" if detail else ""
             raise ModelGatewayError(
-                f"OpenAI request failed: {type(exc).__name__}"
+                f"OpenAI request failed ({type(exc).__name__}){suffix}"
             ) from exc
+        finally:
+            for file_id in uploaded_file_ids:
+                with suppress(Exception):
+                    client.files.delete(file_id)
 
         usage = getattr(response, "usage", None)
         input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
