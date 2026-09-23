@@ -5,8 +5,11 @@ pytest_plugins = ["tests.test_autonomous_execution"]
 
 _BOOTSTRAP_ENV_VARS = (
     "SELDRUNE_GMAIL_TOOL_CREDENTIAL",
+    "GMAIL_ACCESS_TOKEN",
     "SELDRUNE_GITHUB_TOOL_TOKEN",
+    "GITHUB_TOKEN",
     "SELDRUNE_RENDER_API_KEY",
+    "RENDER_API_KEY",
 )
 
 
