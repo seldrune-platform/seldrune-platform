@@ -32,6 +32,7 @@ from backend.app.services.tool_input_defaults import external_action_defaults_st
 from backend.app.services.tool_gateway import (
     ToolGatewayError,
     allowed_internal_actions,
+    internal_action_catalog,
     approve_tool_run,
     create_tool_run,
     execute_tool_run,
@@ -191,14 +192,14 @@ def list_tool_adapters(
     internal = [
         {
             "provider": "internal",
-            "action_name": action_name,
-            "name": f"Internal · {action_name}",
-            "description": "Seldrune built-in deterministic action.",
+            "action_name": item["action_name"],
+            "name": item["name"],
+            "description": item["description"],
             "risk_level": "low",
             "credential_required": False,
-            "input_schema": {},
+            "input_schema": item["input_schema"],
         }
-        for action_name in allowed_internal_actions()
+        for item in internal_action_catalog()
     ]
     external = [
         {**item, "credential_required": True}
