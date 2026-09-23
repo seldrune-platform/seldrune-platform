@@ -15,6 +15,7 @@ from backend.app.core.tasking import AgentStatus, TaskStatus
 from backend.app.models.agent import Agent
 from backend.app.models.model_invocation import ModelInvocation
 from backend.app.models.task import Task, TaskEvent
+from backend.app.services.ai_cost_governor import choose_cost_route
 from backend.app.services.audit import record_audit
 from backend.app.services.knowledge import build_agent_context, remember_task_result
 from backend.app.services.model_gateway import ModelGateway
@@ -105,10 +106,47 @@ def execute_agent_task(
         raise AgentRuntimeError("Only assigned tasks can be executed")
 
     provider = _resolve_provider(agent)
-    model = _resolve_model(agent)
-    max_output_tokens = int(
+    explicit_model = (
+        _resolve_model(agent)
+        if isinstance(agent.runtime_config.get("model"), str)
+        and str(agent.runtime_config.get("model")).strip()
+        else None
+    )
+    route = choose_cost_route(
+        settings,
+        purpose="agent",
+        text=task.objective,
+        capabilities=agent.capabilities,
+        explicit_model=explicit_model,
+    )
+    model = route.model
+    if agent.allowed_models is not None and model not in agent.allowed_models:
+        permitted = [
+            candidate
+            for candidate in (
+                settings.model_economy,
+                settings.model_balanced,
+                settings.model_premium,
+                settings.model_default,
+            )
+            if candidate in agent.allowed_models
+        ]
+        if not permitted:
+            raise AgentPolicyError(
+                "No cost-governed model is allowed for this agent version"
+            )
+        model = permitted[0]
+        route = choose_cost_route(
+            settings,
+            purpose="agent",
+            text=task.objective,
+            capabilities=agent.capabilities,
+            explicit_model=model,
+        )
+    configured_max_output = int(
         agent.runtime_config.get("max_output_tokens", settings.model_max_output_tokens)
     )
+    max_output_tokens = min(configured_max_output, route.max_output_tokens)
     knowledge_context, context_refs = build_agent_context(
         session,
         task=task,
@@ -169,7 +207,12 @@ def execute_agent_task(
             "task_id": str(task.id),
             "agent_id": str(agent.id),
             "agent_version": agent.version,
+            "cost_tier": route.tier,
         },
+        reasoning_effort=route.reasoning_effort,
+        prompt_cache_key=f"seldrune:{task.organization_id}:agent:{agent.id}",
+        max_estimated_cost_usd=route.request_budget_usd,
+        exact_token_preflight=True,
     )
 
     try:
@@ -216,10 +259,14 @@ def execute_agent_task(
     invocation.input_tokens = result.usage.input_tokens
     invocation.output_tokens = result.usage.output_tokens
     invocation.total_tokens = result.usage.total_tokens
-    invocation.estimated_cost_usd = _estimate_cost(
-        agent,
-        result.usage.input_tokens,
-        result.usage.output_tokens,
+    invocation.estimated_cost_usd = (
+        result.usage.estimated_cost_usd
+        if result.usage.estimated_cost_usd is not None
+        else _estimate_cost(
+            agent,
+            result.usage.input_tokens,
+            result.usage.output_tokens,
+        )
     )
     invocation.latency_ms = latency_ms
     invocation.completed_at = datetime.now(UTC)
@@ -237,6 +284,9 @@ def execute_agent_task(
                 "input_tokens": result.usage.input_tokens,
                 "output_tokens": result.usage.output_tokens,
                 "total_tokens": result.usage.total_tokens,
+                "cached_input_tokens": result.usage.cached_input_tokens,
+                "estimated_cost_usd": result.usage.estimated_cost_usd,
+                "cost_tier": route.tier,
             },
         },
     )
