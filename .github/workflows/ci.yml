@@ -1,3 +1,4 @@
+# CircleCI GitHub App Cloud validates pushes; GitHub Actions is a manual fallback.
 name: ci
 
 on:
