@@ -1,3 +1,5 @@
+import base64
+import binascii
 import re
 from typing import Annotated, Literal
 from uuid import UUID
@@ -15,7 +17,7 @@ from backend.app.api.routes.owner_commands import (
     get_owner_command_brief,
 )
 from backend.app.core.config import settings
-from backend.app.core.modeling import ModelProvider, ModelRequest
+from backend.app.core.modeling import ModelFileInput, ModelImageInput, ModelProvider, ModelRequest
 from backend.app.core.rbac import Permission, Role
 from backend.app.models.membership import Membership
 from backend.app.models.orchestration import OrchestrationStep
@@ -159,8 +161,82 @@ def _require_owner_role(membership: Membership) -> None:
         raise HTTPException(status_code=403, detail="Owner role required")
 
 
+class SeldruneGPTAttachment(BaseModel):
+    name: str = Field(min_length=1, max_length=180)
+    media_type: str = Field(min_length=3, max_length=160)
+    data_base64: str = Field(min_length=1, max_length=12_000_000)
+
+
 class SeldruneGPTRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20000)
+    attachments: list[SeldruneGPTAttachment] = Field(default_factory=list, max_length=6)
+
+
+_IMAGE_MEDIA_TYPES = {
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/gif",
+}
+_FILE_MEDIA_TYPES = {
+    "application/pdf",
+    "text/plain",
+    "text/markdown",
+    "text/csv",
+    "application/json",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+}
+_MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024
+_MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024
+
+
+def _model_attachments(
+    attachments: list[SeldruneGPTAttachment],
+) -> tuple[tuple[ModelImageInput, ...], tuple[ModelFileInput, ...], list[str]]:
+    images: list[ModelImageInput] = []
+    files: list[ModelFileInput] = []
+    names: list[str] = []
+    total_bytes = 0
+    for attachment in attachments:
+        media_type = attachment.media_type.lower().strip()
+        if media_type not in _IMAGE_MEDIA_TYPES | _FILE_MEDIA_TYPES:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unsupported GPT attachment type: {attachment.media_type}",
+            )
+        try:
+            decoded = base64.b64decode(attachment.data_base64, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise HTTPException(status_code=422, detail="Invalid attachment encoding") from exc
+        size = len(decoded)
+        if size > _MAX_ATTACHMENT_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Attachment {attachment.name} exceeds 8 MB",
+            )
+        total_bytes += size
+        if total_bytes > _MAX_TOTAL_ATTACHMENT_BYTES:
+            raise HTTPException(status_code=413, detail="GPT attachments exceed 20 MB total")
+        names.append(attachment.name)
+        if media_type in _IMAGE_MEDIA_TYPES:
+            images.append(
+                ModelImageInput(
+                    media_type=media_type,
+                    data_base64=attachment.data_base64,
+                    name=attachment.name,
+                )
+            )
+        else:
+            files.append(
+                ModelFileInput(
+                    filename=attachment.name,
+                    media_type=media_type,
+                    data_base64=attachment.data_base64,
+                )
+            )
+    return tuple(images), tuple(files), names
 
 
 class SeldruneGPTOperatorRequest(BaseModel):
@@ -232,6 +308,9 @@ def seldrune_gpt(
 ) -> SeldruneGPTResponse:
     if settings.model_provider != "openai":
         raise HTTPException(status_code=503, detail="OpenAI model provider is not enabled")
+    input_images, input_files, attachment_names = _model_attachments(
+        payload.attachments
+    )
     history = list(
         session.scalars(
             select(SeldruneGPTMessage)
@@ -248,9 +327,17 @@ def seldrune_gpt(
     while sum(len(line) for line in context_lines) > 24000 and context_lines:
         context_lines.pop(0)
     context = "\\n".join(context_lines)
-    input_text = payload.message
+    attachment_context = (
+        "\\nAttachments in this turn: " + ", ".join(attachment_names)
+        if attachment_names
+        else ""
+    )
+    input_text = payload.message + attachment_context
     if context:
-        input_text = f"Recent conversation:\\n{context}\\n\\nUser: {payload.message}"
+        input_text = (
+            f"Recent conversation:\\n{context}\\n\\n"
+            f"User: {payload.message}{attachment_context}"
+        )
     ensure_configured_external_tools(
         session,
         organization_id=organization_id,
@@ -302,6 +389,8 @@ def seldrune_gpt(
             + tool_runtime_context
         ),
         max_output_tokens=settings.model_max_output_tokens,
+        input_images=input_images,
+        input_files=input_files,
     )
     try:
         result, _latency_ms = ModelGateway(settings).generate(request)
@@ -312,7 +401,14 @@ def seldrune_gpt(
             organization_id=organization_id,
             user_id=current_user.id,
             role="user",
-            content=payload.message,
+            content=(
+                payload.message
+                + (
+                    "\\n[Attachments: " + ", ".join(attachment_names) + "]"
+                    if attachment_names
+                    else ""
+                )
+            ),
         )
     )
     session.add(
