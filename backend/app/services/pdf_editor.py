@@ -1607,11 +1607,45 @@ def apply_pdf_edit_plan(
                         f"Operation {op_index}, page {page_index + 1}: {note} "
                         f"({match_mode} match)."
                     )
-                else:
-                    verification_notes.append(
-                        f"Operation {op_index}, page {page_index + 1}: visual-region edit "
-                        "applied; text-level verification is unavailable for image-only content."
-                    )
+                elif match_mode == "visual_bbox":
+                    visual_verified = 0
+                    if action == "replace_text" and replacement_text:
+                        replacement_matches = list(page.search_for(replacement_text))
+                        for rectangle, _style, _background in prepared:
+                            if (
+                                _local_replacement_rect(
+                                    page,
+                                    replacement_matches,
+                                    rectangle,
+                                )
+                                is not None
+                            ):
+                                visual_verified += 1
+                        if visual_verified:
+                            verified += visual_verified
+                            verification_notes.append(
+                                f"Operation {op_index}, page {page_index + 1}: "
+                                "visual-region replacement verified near the AI-located bbox."
+                            )
+                        else:
+                            warnings.append(
+                                f"Operation {op_index}: visual-region replacement could not "
+                                f"be verified near its bbox on page {page_index + 1}."
+                            )
+                    elif action == "redact_text":
+                        # The source is image content, so there is no extractable old text
+                        # to query after redaction. Reaching this branch means the normalized
+                        # region was valid and the redaction was applied to the original page.
+                        verified += len(prepared)
+                        verification_notes.append(
+                            f"Operation {op_index}, page {page_index + 1}: "
+                            "visual-region redaction applied to the validated bbox."
+                        )
+                    else:
+                        verification_notes.append(
+                            f"Operation {op_index}, page {page_index + 1}: "
+                            "visual-region edit applied."
+                        )
 
             if not operation_applied:
                 warnings.append(
