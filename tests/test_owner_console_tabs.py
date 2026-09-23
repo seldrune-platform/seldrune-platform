@@ -61,3 +61,11 @@ def test_portal_settings_are_browser_scoped_and_home_is_locked():
     assert "Fixed landing page" in js
     assert "Home · Locked" in js
     assert "Preferences are stored in this browser only." in js
+
+
+def test_owner_portal_hides_legacy_navigation_shell():
+    css = (WEB / "console-portal.css").read_text()
+    assert "body.owner-portal #console-view>aside" in css
+    assert "display:none!important" in css
+    assert "header:not(.owner-portal-bar)" in css
+    assert "grid-template-columns:minmax(0,1fr)" in css
