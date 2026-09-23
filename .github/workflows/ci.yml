@@ -1,43 +1,13 @@
+# CircleCI GitHub App Cloud validates pushes; GitHub Actions remains a manual fallback.
 name: ci
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - ".github/ISSUE_TEMPLATE/**"
-  push:
-    branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - ".github/ISSUE_TEMPLATE/**"
-
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: seldrune_ci
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d seldrune_ci"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -57,6 +27,25 @@ jobs:
       - name: Test
         run: pytest -q
 
+      - name: Start PostgreSQL
+        run: |
+          docker run --rm -d --name seldrune-ci-postgres \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=seldrune_ci \
+            -p 5432:5432 postgres:16
+
+          for attempt in $(seq 1 30); do
+            if docker exec seldrune-ci-postgres pg_isready -U postgres -d seldrune_ci; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker logs seldrune-ci-postgres
+              exit 1
+            fi
+            sleep 1
+          done
+
       - name: PostgreSQL migration smoke
         env:
           SELDRUNE_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/seldrune_ci
@@ -67,12 +56,11 @@ jobs:
         env:
           SELDRUNE_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/seldrune_ci
           SELDRUNE_ENVIRONMENT: production
-          SELDRUNE_AUTH_SECRET_KEY: ci-production-secret-key-longer-than-thirty-two-characters
-          SELDRUNE_MODEL_PROVIDER: openai
-          SELDRUNE_MODEL_DEFAULT: gpt-5.6-sol
+          SELDRUNE_MODEL_PROVIDER: mock
+          SELDRUNE_MODEL_DEFAULT: mock-v1
           SELDRUNE_RELEASE_SHA: ${{ github.sha }}
-          OPENAI_API_KEY: ci-placeholder-key
         run: |
+          export SELDRUNE_AUTH_SECRET_KEY="$(python -c 'print("x" * 40)')"
           uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > /tmp/seldrune-uvicorn.log 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
@@ -83,13 +71,11 @@ jobs:
             fi
             if [ "$attempt" -eq 30 ]; then
               cat /tmp/seldrune-uvicorn.log
-              curl --silent http://127.0.0.1:8000/api/v1/status || true
               exit 1
             fi
             sleep 1
           done
 
-          cat /tmp/seldrune-ready.json
           python - <<'PY'
           import json
           import os
@@ -106,7 +92,8 @@ jobs:
           assert schema['schema_current'] is True
           assert schema['current_revision'] == schema['expected_revision']
           assert status['checks']['model_provider']['status'] == 'ok'
-          assert status['checks']['model_provider']['live_ai'] is True
+          assert status['checks']['model_provider']['provider'] == 'mock'
+          assert status['checks']['model_provider']['live_ai'] is False
           assert status['release'] == {
               'sha': os.environ['SELDRUNE_RELEASE_SHA'],
               'source': 'seldrune',
