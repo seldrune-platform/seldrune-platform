@@ -324,8 +324,11 @@
         ? ` Warnings: ${result.warnings.join('; ')}`
         : '';
       const verification = Number.isFinite(result.verification_score)
-        ? `${result.verification_score}% machine-verified`
-        : 'verification unavailable';
+        ? `${result.verification_score}% content-verified`
+        : 'content verification unavailable';
+      const fidelity = Number.isFinite(result.visual_fidelity_score)
+        ? `${result.visual_fidelity_score}% original-look fidelity`
+        : 'original-look fidelity not machine-verifiable for this PDF type';
       const profile = [
         result.document_type || 'PDF',
         `${result.page_count || 0} pages`,
@@ -341,11 +344,11 @@
       ].filter(Boolean).join(' · ');
       addDownloadMessage(
         'Seldrune GPT · AI PDF Editor',
-        `${result.summary || 'PDF edit completed.'} Applied edits: ${result.applied_edits || 0}. ${verification}. ${profile}.${warningText}`,
+        `${result.summary || 'PDF edit completed.'} Applied edits: ${result.applied_edits || 0}. ${verification}. ${fidelity}. ${profile}.${warningText}`,
         result.filename,
         result.data_base64,
       );
-      status.textContent = `Edited PDF ready · ${verification} · ${result.filename}`;
+      status.textContent = `Edited PDF ready · ${verification} · ${fidelity} · ${result.filename}`;
     } catch (error) {
       addMessage('System', `AI PDF edit failed: ${error.message}`);
       status.textContent =
