@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from backend.app.models.secret_reference import SecretReference
 from backend.app.services.external_actions import default_external_action_catalog
 from backend.app.services.secret_vault import SecretVaultError, resolve_secret
+from backend.app.services.tool_input_defaults import production_runtime_targets
 
 _TIMEOUT_SECONDS = 15.0
 _GITHUB_API_VERSION = "2026-03-10"
@@ -89,27 +90,81 @@ def _gmail_preflight(credential: str) -> dict[str, Any]:
 
 
 def _github_preflight(credential: str) -> dict[str, Any]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {credential}",
+        "X-GitHub-Api-Version": _GITHUB_API_VERSION,
+        "User-Agent": "Seldrune-STI",
+    }
     response = httpx.get(
         "https://api.github.com/user",
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {credential}",
-            "X-GitHub-Api-Version": _GITHUB_API_VERSION,
-            "User-Agent": "Seldrune-STI",
-        },
+        headers=headers,
         timeout=_TIMEOUT_SECONDS,
     )
     data = _response_json(response)
     if response.status_code == 200 and isinstance(data, dict):
+        identity = {
+            "login": data.get("login"),
+            "id": data.get("id"),
+        }
+        targets = production_runtime_targets()
+        full_name = targets.get("github_full_name")
+        if full_name:
+            repository = httpx.get(
+                f"https://api.github.com/repos/{full_name}",
+                headers=headers,
+                timeout=_TIMEOUT_SECONDS,
+            )
+            repository_data = _response_json(repository)
+            if repository.status_code == 404:
+                return _result(
+                    "github",
+                    status="repository_not_found",
+                    verified=False,
+                    detail=(
+                        f"GitHub credential is valid, but the configured repository "
+                        f"{full_name} was not found or is not visible to this token."
+                    ),
+                    identity={**identity, "repository": full_name},
+                    http_status=404,
+                )
+            if repository.status_code in {401, 403}:
+                return _result(
+                    "github",
+                    status="repository_access_denied",
+                    verified=False,
+                    detail=(
+                        f"GitHub credential is valid, but access to {full_name} is denied. "
+                        "Grant the token repository access."
+                    ),
+                    identity={**identity, "repository": full_name},
+                    http_status=repository.status_code,
+                )
+            if repository.status_code != 200:
+                return _result(
+                    "github",
+                    status="provider_error",
+                    verified=False,
+                    detail=(
+                        f"GitHub repository preflight for {full_name} returned "
+                        f"HTTP {repository.status_code}."
+                    ),
+                    identity={**identity, "repository": full_name},
+                    http_status=repository.status_code,
+                )
+            if isinstance(repository_data, dict):
+                identity["repository"] = repository_data.get("full_name") or full_name
+                identity["default_branch"] = repository_data.get("default_branch")
         return _result(
             "github",
             status="verified",
             verified=True,
-            detail="GitHub authenticated-user request succeeded.",
-            identity={
-                "login": data.get("login"),
-                "id": data.get("id"),
-            },
+            detail=(
+                "GitHub credential and configured production repository are accessible."
+                if full_name
+                else "GitHub authenticated-user request succeeded."
+            ),
+            identity=identity,
             http_status=200,
         )
     if response.status_code == 401:
