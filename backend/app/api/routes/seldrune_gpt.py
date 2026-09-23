@@ -597,20 +597,22 @@ def edit_seldrune_gpt_pdf(
             f"{payload.instruction}\n\n{profile}"
         ),
         instructions=(
-            "You are Seldrune's document-edit planner. Produce a precise deterministic "
-            "edit plan for the attached PDF. Preserve all content not requested for change. "
-            "Use page numbers starting at 1. Use replace_text or redact_text for native "
-            "text. Copy target_text exactly when possible. For scanned, image-only, or "
-            "visually positioned content where searchable text is unavailable, provide bbox "
-            "coordinates normalized to 0..1000 as [x0,y0,x1,y1] for the visible target. "
-            "Use fill_form for interactive PDF fields and copy the field name as closely as "
-            "possible. Use add_text only for new visible text and provide a bbox whenever "
-            "placement matters. Use rotate_page only when explicitly requested. Do not "
-            "invent unrelated edits. If there are repeated target strings, set occurrence "
-            "when the owner clearly identifies a specific one. Keep replacements concise "
-            "enough for the original region when possible."
+            "You are Seldrune's autonomous AI PDF editor. Follow the owner's requested "
+            "document changes directly and translate plain-language intent into the required "
+            "PDF operations without asking the owner for coordinates, field names, font "
+            "settings, or editing mechanics. Preserve content the owner did not ask to "
+            "change. Use page numbers starting at 1. Prefer replace_text/redact_text for "
+            "native text and derive exact target_text from the document. For scanned, "
+            "image-only, or visually positioned content, inspect the PDF visually and derive "
+            "the normalized 0..1000 bbox yourself. Use fill_form when the target is an "
+            "interactive field, add_text/add_note when new visible text is requested, and "
+            "rotate_page when rotation is requested. When replacement text is longer than "
+            "the original, preserve the owner's exact requested wording and let the editing "
+            "engine adapt layout/font size rather than shortening or refusing it. Resolve "
+            "repeated targets from the owner's context and occurrence. Never require a "
+            "manual edit plan from the owner."
         ),
-        max_output_tokens=min(settings.model_max_output_tokens, 7000),
+        max_output_tokens=max(settings.model_max_output_tokens, 6000),
         response_schema=_PDF_EDIT_SCHEMA,
         input_files=input_files,
     )
@@ -627,24 +629,73 @@ def edit_seldrune_gpt_pdf(
             detail="Model returned an invalid PDF edit plan",
         ) from exc
 
-    try:
-        edit_result = apply_pdf_edit_plan(
-            pdf_bytes,
-            plan,
-            password=payload.password,
+    edit_result = None
+    apply_error: str | None = None
+    candidate_plan = plan
+    for planning_attempt in range(3):
+        try:
+            edit_result = apply_pdf_edit_plan(
+                pdf_bytes,
+                candidate_plan,
+                password=payload.password,
+            )
+            plan = candidate_plan
+            break
+        except PDFEditorError as exc:
+            apply_error = str(exc)
+            if planning_attempt >= 2:
+                break
+            recovery_request = ModelRequest(
+                provider=ModelProvider.OPENAI,
+                model=settings.model_default,
+                input_text=(
+                    "The previous automatic PDF edit plan could not be applied. "
+                    "Re-plan the owner's request without asking the owner for manual "
+                    "coordinates or editing details.\n"
+                    f"Owner instruction: {payload.instruction}\n"
+                    f"Engine result: {apply_error}\n\n{profile}"
+                ),
+                instructions=(
+                    "Re-inspect the attached PDF and produce a new deterministic edit plan. "
+                    "Derive any needed bbox, occurrence, field name, placement, and font size "
+                    "from the document yourself. Preserve the owner's requested wording "
+                    "exactly. Use a visual bbox for scanned/image content and fuzzy/native "
+                    "targets for searchable content. Return only operations that implement "
+                    "the owner's request."
+                ),
+                max_output_tokens=max(settings.model_max_output_tokens, 6000),
+                response_schema=_PDF_EDIT_SCHEMA,
+                input_files=input_files,
+            )
+            try:
+                recovery_result, _recovery_latency = ModelGateway(settings).generate(
+                    recovery_request
+                )
+                candidate_plan = json.loads(recovery_result.output_text)
+            except (ModelGatewayError, json.JSONDecodeError):
+                continue
+
+    if edit_result is None:
+        raise HTTPException(
+            status_code=422,
+            detail=apply_error or "AI PDF editor could not apply the requested edit",
         )
-    except PDFEditorError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     repair_passes = 0
-    unresolved = [
-        warning
-        for warning in edit_result.warnings
-        if "target was not found" in warning
-        or "form field" in warning
-        or "did not fit cleanly" in warning
-    ]
-    if unresolved:
+    previous_unresolved: tuple[str, ...] | None = None
+    for _repair_attempt in range(3):
+        unresolved = [
+            warning
+            for warning in edit_result.warnings
+            if "target was not found" in warning
+            or "form field" in warning
+            or "did not fit cleanly" in warning
+        ]
+        unresolved_key = tuple(sorted(unresolved))
+        if not unresolved or unresolved_key == previous_unresolved:
+            break
+        previous_unresolved = unresolved_key
+
         repair_file = ModelFileInput(
             filename=f"repair-{payload.pdf.name}",
             media_type="application/pdf",
@@ -654,17 +705,19 @@ def edit_seldrune_gpt_pdf(
             provider=ModelProvider.OPENAI,
             model=settings.model_default,
             input_text=(
-                "Repair only the unresolved PDF edits from the original owner instruction.\n"
+                "Continue editing the current PDF until the owner's original instruction "
+                "is satisfied. Repair only unresolved edits.\n"
                 f"Owner instruction: {payload.instruction}\n"
-                "Unresolved results:\n- " + "\n- ".join(unresolved[:20])
+                "Unresolved results:\n- " + "\n- ".join(unresolved[:30])
             ),
             instructions=(
-                "Return only corrective operations for edits that remain unresolved. "
-                "Inspect the current PDF visually. For scanned or image text, use normalized "
-                "bbox coordinates 0..1000. Do not repeat edits that already succeeded. "
-                "Do not change unrelated content."
+                "Act as an autonomous repair editor. Inspect the current PDF and derive "
+                "coordinates, target text, occurrence, field names, placement, and sizing "
+                "yourself. Do not ask the owner for a manual edit plan. Do not repeat edits "
+                "that already succeeded. Preserve unrelated document content and keep the "
+                "owner's requested replacement wording exact."
             ),
-            max_output_tokens=min(settings.model_max_output_tokens, 5000),
+            max_output_tokens=max(settings.model_max_output_tokens, 6000),
             response_schema=_PDF_EDIT_SCHEMA,
             input_files=(repair_file,),
         )
@@ -675,22 +728,21 @@ def edit_seldrune_gpt_pdf(
             repair_plan = json.loads(repair_model_result.output_text)
             repair_result = apply_pdf_edit_plan(edit_result.data, repair_plan)
         except (ModelGatewayError, json.JSONDecodeError, PDFEditorError):
-            repair_result = None
+            break
 
-        if repair_result is not None:
-            repair_passes = 1
-            edit_result.data = repair_result.data
-            edit_result.applied_edits += repair_result.applied_edits
-            edit_result.verified_operations += repair_result.verified_operations
-            edit_result.verification_notes.extend(repair_result.verification_notes)
-            repaired_warning_set = {
-                item
-                for item in repair_result.warnings
-                if item not in unresolved
-            }
-            edit_result.warnings = [
-                item for item in edit_result.warnings if item not in unresolved
-            ] + sorted(repaired_warning_set)
+        repair_passes += 1
+        edit_result.data = repair_result.data
+        edit_result.applied_edits += repair_result.applied_edits
+        edit_result.verified_operations += repair_result.verified_operations
+        edit_result.verification_notes.extend(repair_result.verification_notes)
+        repaired_warning_set = {
+            item
+            for item in repair_result.warnings
+            if item not in unresolved
+        }
+        edit_result.warnings = [
+            item for item in edit_result.warnings if item not in unresolved
+        ] + sorted(repaired_warning_set)
 
     stem = payload.pdf.name.rsplit(".", 1)[0]
     safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip("-._") or "document"
@@ -722,7 +774,7 @@ def edit_seldrune_gpt_pdf(
             organization_id=organization_id,
             user_id=current_user.id,
             role="user",
-            content=f"{payload.instruction}\n[Advanced PDF edit: {payload.pdf.name}]",
+            content=f"{payload.instruction}\n[AI PDF edit: {payload.pdf.name}]",
         )
     )
     session.add(
@@ -734,7 +786,7 @@ def edit_seldrune_gpt_pdf(
                 f"{summary} Created {output_name} with "
                 f"{edit_result.applied_edits} applied edits and "
                 f"{edit_result.verification_score}% machine verification"
-                + (f" after {repair_passes} repair pass." if repair_passes else ".")
+                + (f" after {repair_passes} automatic repair pass(es)." if repair_passes else ".")
             ),
             model=result.model,
             response_id=result.response_id,
