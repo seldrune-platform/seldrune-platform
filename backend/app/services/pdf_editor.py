@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+import math
+import re
 from statistics import median
 from typing import Any
 
@@ -170,6 +172,311 @@ def _rect_intersection_area(a: pymupdf.Rect, b: pymupdf.Rect) -> float:
     if intersection.is_empty:
         return 0.0
     return max(0.0, intersection.width) * max(0.0, intersection.height)
+
+
+@dataclass(frozen=True)
+class PDFTextStyle:
+    font_name: str
+    font_size: float
+    color: tuple[float, float, float]
+    origin: tuple[float, float]
+    line_rect: pymupdf.Rect
+    target_rect: pymupdf.Rect
+    alignment: int
+    rotation: int
+    font_alias: str
+    font_buffer: bytes | None
+    exact_font_reusable: bool
+
+
+def _font_key(value: str) -> str:
+    cleaned = re.sub(r"^[A-Z]{6}\+", "", value or "")
+    return re.sub(r"[^a-z0-9]+", "", cleaned.casefold())
+
+
+def _builtin_font_name(font_name: str) -> str:
+    key = _font_key(font_name)
+    bold = "bold" in key or key.endswith("bd")
+    italic = "italic" in key or "oblique" in key or key.endswith("it")
+    if "courier" in key or "mono" in key:
+        if bold and italic:
+            return "cobi"
+        if bold:
+            return "cobo"
+        if italic:
+            return "coit"
+        return "cour"
+    if "times" in key or "serif" in key:
+        if bold and italic:
+            return "tibi"
+        if bold:
+            return "tibo"
+        if italic:
+            return "tiit"
+        return "tiro"
+    if bold and italic:
+        return "hebi"
+    if bold:
+        return "hebo"
+    if italic:
+        return "heit"
+    return "helv"
+
+
+def _rotation_from_direction(direction: Any) -> int:
+    if not isinstance(direction, (list, tuple)) or len(direction) != 2:
+        return 0
+    try:
+        x, y = float(direction[0]), float(direction[1])
+    except (TypeError, ValueError):
+        return 0
+    angle = (math.degrees(math.atan2(-y, x)) + 360.0) % 360.0
+    return int(round(angle / 90.0) * 90) % 360
+
+
+def _infer_alignment(
+    page: pymupdf.Page,
+    line_rect: pymupdf.Rect,
+    target_rect: pymupdf.Rect,
+) -> int:
+    tolerance = max(2.0, target_rect.height * 0.2)
+    at_line_start = abs(target_rect.x0 - line_rect.x0) <= tolerance
+    at_line_end = abs(target_rect.x1 - line_rect.x1) <= tolerance
+
+    if at_line_start and at_line_end:
+        left_margin = max(0.0, line_rect.x0 - page.rect.x0)
+        right_margin = max(0.0, page.rect.x1 - line_rect.x1)
+        if abs(left_margin - right_margin) <= max(8.0, page.rect.width * 0.025):
+            return pymupdf.TEXT_ALIGN_CENTER
+        if right_margin + tolerance < left_margin * 0.35:
+            return pymupdf.TEXT_ALIGN_RIGHT
+        return pymupdf.TEXT_ALIGN_LEFT
+
+    if at_line_end and not at_line_start:
+        return pymupdf.TEXT_ALIGN_RIGHT
+    return pymupdf.TEXT_ALIGN_LEFT
+
+
+def _font_resource_for_span(
+    document: pymupdf.Document,
+    page_index: int,
+    span_font: str,
+    replacement_text: str,
+) -> tuple[str, bytes | None, bool]:
+    target = _font_key(span_font)
+    candidates: list[tuple[int, tuple[Any, ...]]] = []
+    for item in document.get_page_fonts(page_index, full=True):
+        xref, _ext, _kind, basefont, resource_name, _encoding, _referencer = item
+        base_key = _font_key(str(basefont))
+        score = 0
+        if base_key == target:
+            score = 100
+        elif target and (target in base_key or base_key in target):
+            score = 80
+        elif target and any(token in base_key for token in ("bold", "italic", "oblique")):
+            score = 10
+        if score:
+            candidates.append((score, item))
+
+    candidates.sort(key=lambda entry: entry[0], reverse=True)
+    for _score, item in candidates:
+        xref = int(item[0] or 0)
+        if xref <= 0:
+            continue
+        try:
+            _name, ext, _kind, content = document.extract_font(xref)
+        except Exception:
+            continue
+        if not content or ext == "n/a":
+            continue
+        try:
+            font = pymupdf.Font(fontbuffer=content)
+            if all(char.isspace() or font.has_glyph(ord(char)) for char in replacement_text):
+                alias = f"SELD{xref}"
+                return alias, content, True
+        except Exception:
+            continue
+
+    return _builtin_font_name(span_font), None, False
+
+
+def _capture_text_style(
+    document: pymupdf.Document,
+    page_index: int,
+    page: pymupdf.Page,
+    rect: pymupdf.Rect,
+    replacement_text: str,
+) -> PDFTextStyle:
+    best_span: dict[str, Any] | None = None
+    best_line: dict[str, Any] | None = None
+    best_area = 0.0
+
+    raw = page.get_text("rawdict")
+    for block in raw.get("blocks", []):
+        if block.get("type", 0) != 0:
+            continue
+        for line in block.get("lines", []):
+            for span in line.get("spans", []):
+                span_rect = pymupdf.Rect(span.get("bbox", (0, 0, 0, 0)))
+                area = _rect_intersection_area(span_rect, rect)
+                if area > best_area:
+                    best_area = area
+                    best_span = span
+                    best_line = line
+
+    if best_span is None or best_line is None:
+        size, color = _style_near_rect(page, rect)
+        return PDFTextStyle(
+            font_name="Helvetica",
+            font_size=size,
+            color=color,
+            origin=(rect.x0, rect.y1 - max(1.0, rect.height * 0.18)),
+            line_rect=pymupdf.Rect(rect),
+            target_rect=pymupdf.Rect(rect),
+            alignment=pymupdf.TEXT_ALIGN_LEFT,
+            rotation=0,
+            font_alias="helv",
+            font_buffer=None,
+            exact_font_reusable=False,
+        )
+
+    line_rect = pymupdf.Rect(best_line.get("bbox", rect))
+    origin_value = best_span.get("origin", (rect.x0, rect.y1))
+    origin = (float(origin_value[0]), float(origin_value[1]))
+
+    for char in best_span.get("chars", []):
+        char_rect = pymupdf.Rect(char.get("bbox", (0, 0, 0, 0)))
+        if _rect_intersection_area(char_rect, rect) > 0:
+            char_origin = char.get("origin")
+            if isinstance(char_origin, (list, tuple)) and len(char_origin) == 2:
+                origin = (float(char_origin[0]), float(char_origin[1]))
+                break
+
+    font_name = str(best_span.get("font") or "Helvetica")
+    font_size = float(best_span.get("size") or max(6.0, rect.height * 0.72))
+    color_value = best_span.get("color")
+    color = _color_tuple(color_value if isinstance(color_value, int) else None)
+    alias, font_buffer, exact = _font_resource_for_span(
+        document,
+        page_index,
+        font_name,
+        replacement_text,
+    )
+
+    return PDFTextStyle(
+        font_name=font_name,
+        font_size=max(4.0, min(144.0, font_size)),
+        color=color,
+        origin=origin,
+        line_rect=line_rect,
+        target_rect=pymupdf.Rect(rect),
+        alignment=_infer_alignment(page, line_rect, rect),
+        rotation=_rotation_from_direction(best_line.get("dir")),
+        font_alias=alias,
+        font_buffer=font_buffer,
+        exact_font_reusable=exact,
+    )
+
+
+def _font_text_length(
+    style: PDFTextStyle,
+    text: str,
+) -> float:
+    try:
+        if style.font_buffer:
+            font = pymupdf.Font(fontbuffer=style.font_buffer)
+        else:
+            font = pymupdf.Font(style.font_alias)
+        return float(font.text_length(text, fontsize=style.font_size))
+    except Exception:
+        return max(1.0, len(text) * style.font_size * 0.55)
+
+
+def _install_style_font(page: pymupdf.Page, style: PDFTextStyle) -> str:
+    if style.font_buffer:
+        try:
+            page.insert_font(fontname=style.font_alias, fontbuffer=style.font_buffer)
+            return style.font_alias
+        except Exception:
+            pass
+    return _builtin_font_name(style.font_name)
+
+
+def _style_preserving_origin(
+    style: PDFTextStyle,
+    replacement_width: float,
+) -> pymupdf.Point:
+    x = style.origin[0]
+    if style.alignment == pymupdf.TEXT_ALIGN_RIGHT:
+        x = style.target_rect.x1 - replacement_width
+    elif style.alignment == pymupdf.TEXT_ALIGN_CENTER:
+        x = style.target_rect.x0 + (style.target_rect.width - replacement_width) / 2.0
+    return pymupdf.Point(x, style.origin[1])
+
+
+def _write_like_original(
+    page: pymupdf.Page,
+    style: PDFTextStyle,
+    text: str,
+) -> tuple[bool, str]:
+    if not text:
+        return True, "no replacement text required"
+
+    fontname = _install_style_font(page, style)
+    width = _font_text_length(style, text)
+    point = _style_preserving_origin(style, width)
+
+    # Preserve the original point size and baseline first. This is the highest
+    # fidelity path and avoids textbox vertical recentering.
+    try:
+        page.insert_text(
+            point,
+            text,
+            fontname=fontname,
+            fontsize=style.font_size,
+            color=style.color,
+            rotate=style.rotation,
+            overlay=True,
+        )
+        font_note = (
+            f"reused embedded {style.font_name}"
+            if style.exact_font_reusable
+            else f"matched {style.font_name} with {fontname}"
+        )
+        return True, (
+            f"original-look reconstruction: {font_note}, "
+            f"{style.font_size:.2f}pt, baseline/alignment preserved"
+        )
+    except Exception:
+        pass
+
+    # Last resort: keep the captured style and geometry but permit a tiny fit
+    # adjustment. This is intentionally much stricter than the old generic box.
+    trial_size = style.font_size
+    for _ in range(5):
+        box = pymupdf.Rect(style.target_rect)
+        if style.alignment == pymupdf.TEXT_ALIGN_LEFT:
+            box.x1 = min(page.rect.x1, max(box.x1, box.x0 + width + 3))
+        elif style.alignment == pymupdf.TEXT_ALIGN_RIGHT:
+            box.x0 = max(page.rect.x0, min(box.x0, box.x1 - width - 3))
+        result = page.insert_textbox(
+            box,
+            text,
+            fontname=fontname,
+            fontsize=trial_size,
+            color=style.color,
+            align=style.alignment,
+            rotate=style.rotation,
+            overlay=True,
+        )
+        if result >= 0:
+            return True, (
+                "original-look reconstruction used constrained fit at "
+                f"{trial_size:.2f}pt"
+            )
+        trial_size *= 0.98
+
+    return False, "original-look reconstruction could not fit replacement"
 
 
 def _color_tuple(value: int | None) -> tuple[float, float, float]:
@@ -471,30 +778,52 @@ def apply_pdf_edit_plan(
                     rectangles = rectangles[occurrence - 1 : occurrence]
 
                 prepared: list[
-                    tuple[
-                        pymupdf.Rect,
-                        float,
-                        tuple[float, float, float],
-                        tuple[float, float, float],
-                    ]
+                    tuple[pymupdf.Rect, PDFTextStyle | None, tuple[float, float, float]]
                 ] = []
                 for rectangle in rectangles:
-                    font_size, color = _style_near_rect(page, rectangle)
-                    background = _estimate_background(page, rectangle)
-                    prepared.append((rectangle, font_size, color, background))
-                    page.add_redact_annot(rectangle, fill=background)
-
-                page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE)
-
-                for rectangle, font_size, color, _background in prepared:
-                    if action == "replace_text":
-                        if not _fit_textbox(
+                    if match_mode == "visual_bbox":
+                        background = _estimate_background(page, rectangle)
+                        prepared.append((rectangle, None, background))
+                        page.add_redact_annot(rectangle, fill=background)
+                    else:
+                        style = _capture_text_style(
+                            document,
+                            page_index,
                             page,
                             rectangle,
                             replacement_text,
-                            font_size=font_size,
-                            color=color,
-                        ):
+                        )
+                        prepared.append((rectangle, style, (1.0, 1.0, 1.0)))
+                        # Native text is removed without repainting the background,
+                        # so vector lines, fills, logos and design elements survive.
+                        page.add_redact_annot(rectangle, fill=False)
+
+                page.apply_redactions(
+                    images=pymupdf.PDF_REDACT_IMAGE_NONE,
+                    graphics=pymupdf.PDF_REDACT_LINE_ART_NONE,
+                )
+
+                for rectangle, style, _background in prepared:
+                    if action == "replace_text":
+                        if style is not None:
+                            inserted, style_note = _write_like_original(
+                                page,
+                                style,
+                                replacement_text,
+                            )
+                            verification_notes.append(
+                                f"Operation {op_index}, page {page_index + 1}: {style_note}."
+                            )
+                        else:
+                            font_size, color = _style_near_rect(page, rectangle)
+                            inserted = _fit_textbox(
+                                page,
+                                rectangle,
+                                replacement_text,
+                                font_size=font_size,
+                                color=color,
+                            )
+                        if not inserted:
                             warnings.append(
                                 f"Operation {op_index}: replacement text did not fit cleanly "
                                 f"on page {page_index + 1}."
