@@ -17,7 +17,6 @@ from backend.app.services.audit import record_audit
 from backend.app.services.autonomous_execution import _execute_registered_tool
 from backend.app.services.development_mission import (
     MISSION_KIND,
-    build_development_mission,
     queue_parallel_ready_stages,
     sync_development_mission_task,
 )
