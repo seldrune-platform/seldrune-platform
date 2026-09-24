@@ -109,8 +109,35 @@ autonomous execution is disabled, a One-Go request performs no execution. The
 configured maximum steps per command caps the controller task limit, while
 metered model calls continue to use Seldrune's AI spend governor.
 
-The next major architecture work is the executable stage compiler: convert
-development milestones such as repository engineering, provider setup, CI
-verification, and deployment into explicit registered tool contracts with
-machine-checkable acceptance evidence. That will let more One-Go work advance
-from executed to verified without weakening the evidence boundary.
+## Executable Stage Compiler v1
+
+The next architecture layer is now implemented as a compiler rather than a
+free-form prompt. Every queued mission stage can carry a
+`compiled_execution_contract` that classifies the work and describes the
+machine-executable evidence chain needed for completion.
+
+Repository-engineering stages compile into a bounded sequence:
+
+1. produce repository artifacts as structured model output;
+2. inspect the configured repository;
+3. create a deterministic feature branch;
+4. bind generated artifact paths and contents into governed file writes;
+5. open a draft pull request;
+6. dispatch the repository CI workflow; and
+7. verify that the exact workflow run concludes successfully.
+
+Deployment stages compile into a Render deployment receipt followed by a
+deployment-status verification step. Stages that need GPU/external resources or
+explicit owner approval remain gated by their existing execution mode.
+
+The compiler records tool availability, missing required inputs, runtime
+bindings, approval/risk metadata, and acceptance checks. A binding such as a
+workflow run ID is deliberately unresolved until the preceding tool actually
+returns it. Model-produced code or analysis still cannot complete a stage by
+itself.
+
+This v1 compiler is an execution contract generator, not yet the full contract
+chain runner. The next runtime layer should consume these ordered contracts,
+resolve bindings only from persisted tool outputs, apply every acceptance
+predicate, and write the final cognitive verification only after the whole
+chain succeeds.
