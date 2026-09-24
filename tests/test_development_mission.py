@@ -180,3 +180,198 @@ def test_owner_console_contains_cognitive_mission_board() -> None:
         assert "/development-mission/sync" in script.text
         assert "/development-mission/queue-ready" in script.text
         assert "Synchronized" in script.text
+
+
+
+def create_mission_agent(
+    client: TestClient,
+    headers: dict[str, str],
+    organization_id: str,
+) -> dict:
+    response = client.post(
+        f"/api/v1/organizations/{organization_id}/agents",
+        headers=headers,
+        json={
+            "name": "Cognitive Execution Agent",
+            "slug": "cognitive-execution-agent",
+            "description": "Executes dependency-ready cognitive mission tasks.",
+            "capabilities": [
+                "reasoning",
+                "validation",
+                "engineering",
+                "models",
+                "integrations",
+                "documents",
+            ],
+            "runtime_config": {
+                "provider": "mock",
+                "model": "mock-v1",
+                "input_cost_per_million": 1.0,
+                "output_cost_per_million": 2.0,
+            },
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+def test_one_go_executes_model_work_without_faking_completion(
+    client: TestClient,
+) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    base = f"/api/v1/organizations/{organization_id}"
+    synchronized = client.post(
+        f"{base}/development-mission/sync",
+        headers=headers,
+    )
+    assert synchronized.status_code == 200
+    create_mission_agent(client, headers, organization_id)
+
+    executed = client.post(
+        f"{base}/development-mission/execute",
+        headers=headers,
+        json={"max_waves": 3, "max_tasks": 8},
+    )
+    assert executed.status_code == 200
+    report = executed.json()
+    assert report["controller_version"] == "one-go-v1"
+    assert report["starting_percentage"] == 61.0
+    assert report["ending_percentage"] == 61.0
+    assert report["waves_executed"] == 1
+    assert report["tasks_executed"] == 3
+    assert report["tasks_verified"] == 0
+    assert report["tasks_unverified"] == 3
+    assert report["tasks_blocked"] == 1
+    assert report["tasks_failed"] == 0
+    assert report["halted_reason"] == "no_new_verified_dependency_progress"
+
+    by_stage = {
+        item["stage_id"]: item
+        for item in report["stage_results"]
+    }
+    assert by_stage["pdf_local_labels"]["disposition"] == "blocked"
+    assert (
+        by_stage["pdf_local_labels"]["reason"]
+        == "owner-gated_requires_explicit_execution"
+    )
+    assert by_stage["unarchi_v31"]["disposition"] == "unverified"
+    assert (
+        by_stage["unarchi_v31"]["reason"]
+        == "model_output_is_not_completion_evidence"
+    )
+
+    mission = client.get(
+        f"{base}/development-mission",
+        headers=headers,
+    )
+    assert mission.status_code == 200
+    assert mission.json()["overall_percentage"] == 61.0
+    assert mission.json()["one_go_execution"]["tasks_verified"] == 0
+
+
+def test_one_go_verified_tool_receipt_unlocks_next_dependency(
+    client: TestClient,
+) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    base = f"/api/v1/organizations/{organization_id}"
+    synchronized = client.post(
+        f"{base}/development-mission/sync",
+        headers=headers,
+    )
+    assert synchronized.status_code == 200
+    agent = create_mission_agent(client, headers, organization_id)
+
+    tasks = client.get(f"{base}/tasks", headers=headers)
+    assert tasks.status_code == 200
+    unarchi = next(
+        item
+        for item in tasks.json()
+        if item["input_data"].get("cognitive_mission_stage_id") == "unarchi_v31"
+    )
+    assigned = client.post(
+        f"{base}/tasks/{unarchi['id']}/assign",
+        headers=headers,
+        json={"agent_id": agent["id"]},
+    )
+    assert assigned.status_code == 200
+
+    tool = client.post(
+        f"{base}/tools",
+        headers=headers,
+        json={
+            "name": "Mission Evidence Echo",
+            "slug": "mission-evidence-echo",
+            "provider": "internal",
+            "action_name": "echo",
+            "risk_level": "low",
+            "approval_mode": "never",
+        },
+    )
+    assert tool.status_code == 201
+
+    tool_run = client.post(
+        f"{base}/tool-runs",
+        headers=headers,
+        json={
+            "tool_id": tool.json()["id"],
+            "task_id": unarchi["id"],
+            "input_data": {"message": "verified mission evidence"},
+        },
+    )
+    assert tool_run.status_code == 201
+    run = tool_run.json()
+    assert run["status"] == "succeeded"
+
+    running = client.post(
+        f"{base}/tasks/{unarchi['id']}/transition",
+        headers=headers,
+        json={"status": "running"},
+    )
+    assert running.status_code == 200
+    succeeded = client.post(
+        f"{base}/tasks/{unarchi['id']}/transition",
+        headers=headers,
+        json={
+            "status": "succeeded",
+            "output_data": {
+                "execution_type": "tool",
+                "evidence": {
+                    "receipt_id": f"tool-run:{run['id']}",
+                    "tool_run_id": run["id"],
+                },
+            },
+        },
+    )
+    assert succeeded.status_code == 200
+
+    executed = client.post(
+        f"{base}/development-mission/execute",
+        headers=headers,
+        json={"max_waves": 1, "max_tasks": 1},
+    )
+    assert executed.status_code == 200
+    report = executed.json()
+    assert report["tasks_verified"] == 1
+    assert report["tasks_unverified"] == 0
+    assert report["ending_percentage"] == 62.0
+    assert report["stage_results"][0]["stage_id"] == "unarchi_v31"
+    assert report["stage_results"][0]["disposition"] == "verified"
+    assert report["stage_results"][0]["reason"] == "verified_tool_receipt"
+
+    mission = client.get(
+        f"{base}/development-mission",
+        headers=headers,
+    )
+    assert mission.status_code == 200
+    payload = mission.json()
+    assert payload["overall_percentage"] == 62.0
+    stages = {
+        item["id"]: item
+        for item in payload["stages"]
+    }
+    assert stages["unarchi_v31"]["status"] == "completed"
+    assert stages["unarchi_v31"]["completion_source"] == "runtime_verified"
+    assert stages["unarchi_v32"]["ready"] is True
+    assert "unarchi_v32" in payload["parallel_ready_stage_ids"]
