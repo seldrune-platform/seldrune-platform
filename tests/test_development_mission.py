@@ -62,11 +62,11 @@ def test_development_mission_calculates_evidence_weighted_progress() -> None:
         item["id"]: item for item in mission["workstreams"]
     }
 
-    assert mission["version"] == "cognitive-execution-v1"
-    assert mission["overall_percentage"] == 58.7
-    assert mission["remaining_percentage"] == 41.3
+    assert mission["version"] == "cognitive-execution-v2"
+    assert mission["overall_percentage"] == 61.0
+    assert mission["remaining_percentage"] == 39.0
     assert workstreams["unarchi"]["percentage"] == 75.0
-    assert workstreams["console"]["percentage"] == 75.0
+    assert workstreams["console"]["percentage"] == 90.0
     assert workstreams["live_media"]["percentage"] == 25.0
     assert workstreams["live_media"]["paused"] is True
     assert set(mission["parallel_ready_stage_ids"]) == {
@@ -95,7 +95,7 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
     assert first.status_code == 200
     payload = first.json()
     assert payload["created"] is True
-    assert payload["overall_percentage"] == 58.7
+    assert payload["overall_percentage"] == 61.0
     assert payload["auto_queued_count"] == 4
     assert set(payload["auto_queued_stage_ids"]) == {
         "unarchi_v31",
@@ -124,7 +124,7 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
     ]
     assert len(master) == 1
     assert master[0]["status"] == "queued"
-    assert master[0]["input_data"]["mission_version"] == "cognitive-execution-v1"
+    assert master[0]["input_data"]["mission_version"] == "cognitive-execution-v2"
 
     stages = [
         item
