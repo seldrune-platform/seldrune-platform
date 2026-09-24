@@ -169,6 +169,15 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
         "run-ci",
         "verify-ci",
     ]
+    artifact_step = contract["steps"][0]
+    schema = artifact_step["response_schema"]
+    assert schema["required"] == ["artifacts", "acceptance_notes"]
+    assert schema["properties"]["artifacts"]["items"]["required"] == [
+        "path",
+        "content",
+        "message",
+    ]
+    assert schema["additionalProperties"] is False
 
     pdf_labels = next(
         item
