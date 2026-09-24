@@ -472,6 +472,20 @@ def _acceptance_state(
     ):
         return "passed", "acceptance_in", receipt
 
+    external_resource_path = acceptance.get("external_resource_path")
+    external_resource_values = acceptance.get("external_resource_values")
+    if (
+        isinstance(external_resource_path, str)
+        and isinstance(external_resource_values, list)
+    ):
+        resource_value = _value_at(tool_output, external_resource_path)
+        if resource_value in external_resource_values:
+            return (
+                "external-resource",
+                f"{external_resource_path}:{resource_value}",
+                receipt,
+            )
+
     pending_values = acceptance.get("pending_values")
     if isinstance(pending_values, list) and actual in pending_values:
         return "pending", f"acceptance_pending:{output_path}", receipt
@@ -1098,6 +1112,25 @@ def advance_compiled_contract(
                         }
                     )
                     continue
+                if state == "external-resource":
+                    step_results.append(
+                        {
+                            "step_id": step_id,
+                            "kind": kind,
+                            "repeat_index": repeat_index,
+                            "status": "external-resource",
+                            "reason": reason,
+                            "child_task_id": str(child.id),
+                        }
+                    )
+                    return _blocked_report(
+                        task=task,
+                        contract=contract,
+                        reason=f"external_resource:{step_id}:{reason}",
+                        match_score=match_score,
+                        step_results=step_results,
+                        executed_steps=executed_steps,
+                    )
                 if state == "failed":
                     step_results.append(
                         {
@@ -1257,6 +1290,25 @@ def advance_compiled_contract(
                     }
                 )
                 continue
+            if state == "external-resource":
+                step_results.append(
+                    {
+                        "step_id": step_id,
+                        "kind": kind,
+                        "repeat_index": repeat_index,
+                        "status": "external-resource",
+                        "reason": reason,
+                        "child_task_id": str(child.id),
+                    }
+                )
+                return _blocked_report(
+                    task=task,
+                    contract=contract,
+                    reason=f"external_resource:{step_id}:{reason}",
+                    match_score=match_score,
+                    step_results=step_results,
+                    executed_steps=executed_steps,
+                )
             if state == "pending":
                 step_results.append(
                     {
