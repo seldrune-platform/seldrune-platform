@@ -382,6 +382,7 @@ def compile_stage_execution_contract(
 
     tool_steps = [step for step in steps if step.get("kind") == "tool"]
     blocking: list[str] = []
+    runtime_bindings: list[str] = []
     for step in tool_steps:
         status = str(step.get("status") or "")
         if status == "tool-unavailable":
@@ -394,12 +395,18 @@ def compile_stage_execution_contract(
                 + ",".join(step.get("missing_fields") or [])
             )
         elif status == "binding-required":
-            blocking.append(f"binding_required:{step.get('id')}")
+            runtime_bindings.append(f"binding_required:{step.get('id')}")
 
     automatic_allowed = execution_mode == "automatic"
-    executable_now = automatic_allowed and not blocking and bool(tool_steps)
     if not automatic_allowed:
         blocking.append(f"execution_mode:{execution_mode}")
+    executable_now = automatic_allowed and not blocking and bool(tool_steps)
+    approval_gate_steps = [
+        str(step["id"])
+        for step in tool_steps
+        if step.get("risk_level") == "high"
+        or step.get("approval_mode") == "always"
+    ]
 
     return {
         "version": CONTRACT_VERSION,
@@ -414,6 +421,8 @@ def compile_stage_execution_contract(
         "tool_step_count": len(tool_steps),
         "executable_now": executable_now,
         "blocking_reasons": sorted(set(blocking)),
+        "runtime_binding_reasons": sorted(set(runtime_bindings)),
+        "approval_gate_steps": approval_gate_steps,
         "evidence_contract": {
             "model_output_is_completion_evidence": False,
             "completion_requires_machine_evidence": True,
