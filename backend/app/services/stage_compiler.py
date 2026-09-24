@@ -278,6 +278,8 @@ def _repository_contract(
                 "external_resource_path": "failure_classification",
                 "external_resource_values": [
                     "hosted_runner_unavailable",
+                    "github_actions_billing_block",
+                    "github_actions_runner_unavailable",
                 ],
                 "pending_status_path": "status",
                 "pending_status_values": [
