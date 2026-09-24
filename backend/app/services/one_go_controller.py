@@ -15,6 +15,10 @@ from backend.app.models.tool_run import ToolRun
 from backend.app.services.agent_runtime import AgentRuntimeError, execute_agent_task
 from backend.app.services.audit import record_audit
 from backend.app.services.autonomous_execution import _execute_registered_tool
+from backend.app.services.contract_chain_runner import (
+    run_compiled_execution_contract,
+    verify_persisted_contract_chain,
+)
 from backend.app.services.development_mission import (
     MISSION_KIND,
     queue_parallel_ready_stages,
@@ -65,6 +69,10 @@ def _verification_from_output(
     output = task.output_data or {}
     if not isinstance(output, dict):
         return False, "missing_structured_output", []
+
+    contract = (task.input_data or {}).get("compiled_execution_contract")
+    if isinstance(contract, dict):
+        return verify_persisted_contract_chain(session, task=task)
 
     tool_request = (task.input_data or {}).get("tool_request")
     if not (
@@ -244,6 +252,8 @@ def _stage_result(
 ) -> dict[str, Any]:
     contract = (task.input_data or {}).get("compiled_execution_contract")
     compiler = contract if isinstance(contract, dict) else {}
+    execution = (task.output_data or {}).get("contract_execution")
+    chain = execution if isinstance(execution, dict) else {}
     return {
         "task_id": str(task.id),
         "stage_id": _stage_id(task),
@@ -259,6 +269,9 @@ def _stage_result(
         "compiled_profile": compiler.get("profile"),
         "compiled_executable_now": compiler.get("executable_now"),
         "compiled_blocking_reasons": compiler.get("blocking_reasons") or [],
+        "contract_chain_version": chain.get("version"),
+        "contract_chain_status": chain.get("status"),
+        "contract_chain_halted_reason": chain.get("halted_reason"),
     }
 
 
@@ -421,6 +434,34 @@ def execute_one_go_controller(
 
             task_status = TaskStatus(task.status)
             if task_status is TaskStatus.SUCCEEDED:
+                contract = (task.input_data or {}).get("compiled_execution_contract")
+                if isinstance(contract, dict):
+                    chain = run_compiled_execution_contract(
+                        session,
+                        task=task,
+                        actor_user_id=actor_user_id,
+                        confirmed_sensitive_action=False,
+                    )
+                    if chain["status"] == "failed":
+                        report["tasks_failed"] += 1
+                        report["stage_results"].append(
+                            _stage_result(
+                                task,
+                                disposition="failed",
+                                reason=chain.get("halted_reason"),
+                            )
+                        )
+                        continue
+                    if chain["status"] == "blocked":
+                        report["tasks_blocked"] += 1
+                        report["stage_results"].append(
+                            _stage_result(
+                                task,
+                                disposition="blocked",
+                                reason=chain.get("halted_reason"),
+                            )
+                        )
+                        continue
                 verified, reason, refs = _record_verification(
                     session,
                     task=task,
@@ -544,6 +585,37 @@ def execute_one_go_controller(
                     )
                 )
                 continue
+
+            contract = (task.input_data or {}).get("compiled_execution_contract")
+            if isinstance(contract, dict):
+                chain = run_compiled_execution_contract(
+                    session,
+                    task=task,
+                    actor_user_id=actor_user_id,
+                    confirmed_sensitive_action=False,
+                )
+                if chain["status"] == "failed":
+                    report["tasks_failed"] += 1
+                    report["stage_results"].append(
+                        _stage_result(
+                            task,
+                            disposition="failed",
+                            reason=chain.get("halted_reason"),
+                            match_score=match_score,
+                        )
+                    )
+                    continue
+                if chain["status"] == "blocked":
+                    report["tasks_blocked"] += 1
+                    report["stage_results"].append(
+                        _stage_result(
+                            task,
+                            disposition="blocked",
+                            reason=chain.get("halted_reason"),
+                            match_score=match_score,
+                        )
+                    )
+                    continue
 
             verified, reason, refs = _record_verification(
                 session,
