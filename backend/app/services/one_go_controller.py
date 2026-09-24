@@ -339,15 +339,22 @@ def execute_one_go_controller(
             report["halted_reason"] = "no_new_verified_dependency_progress"
             break
 
-        wave_tasks = [
-            task
-            for task in _mission_tasks(
-                session,
-                organization_id=organization_id,
-                master_task_id=master_task.id,
-            )
-            if _stage_id(task) in ready_ids
-        ]
+        ready_order = {
+            stage_id: index
+            for index, stage_id in enumerate(mission["parallel_ready_stage_ids"])
+        }
+        wave_tasks = sorted(
+            (
+                task
+                for task in _mission_tasks(
+                    session,
+                    organization_id=organization_id,
+                    master_task_id=master_task.id,
+                )
+                if _stage_id(task) in ready_ids
+            ),
+            key=lambda task: ready_order.get(_stage_id(task) or "", 10_000),
+        )
         if not wave_tasks:
             report["halted_reason"] = "ready_tasks_missing"
             break
