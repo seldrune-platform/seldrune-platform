@@ -245,7 +245,7 @@ def _repository_contract(
                 "title": str(stage.get("title") or stage["id"])[:240],
                 "head": branch,
                 "base": base_ref,
-                "draft": True,
+                "draft": False,
             },
             acceptance={"receipt_required": True},
         ),
@@ -281,6 +281,25 @@ def _repository_contract(
                     "requested",
                     "pending",
                 ],
+            },
+        ),
+        _compile_tool_step(
+            tools,
+            step_id="merge-verified-pull-request",
+            provider="github",
+            action_name="merge-pull-request",
+            input_data={
+                **base,
+                "merge_method": "squash",
+            },
+            bindings={
+                "pull_number": "steps.open-pull-request.output.number",
+                "sha": "steps.verify-ci.output.head_sha",
+            },
+            acceptance={
+                "receipt_required": True,
+                "output_path": "merged",
+                "equals": True,
             },
         ),
     ]
