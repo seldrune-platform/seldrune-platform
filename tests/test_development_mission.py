@@ -179,6 +179,8 @@ def test_owner_console_contains_cognitive_mission_board() -> None:
         assert "mission-overall" in page.text
         assert "mission-ready-stages" in page.text
         assert "Queue ready wave" in page.text
+        assert "Run One-Go" in page.text
+        assert "ONE-GO EXECUTION CONTROLLER" in page.text
         assert "/console-assets/cognitive-mission.css" in page.text
         assert "/console-assets/cognitive-mission.js" in page.text
 
@@ -186,6 +188,8 @@ def test_owner_console_contains_cognitive_mission_board() -> None:
         assert script.status_code == 200
         assert "/development-mission/sync" in script.text
         assert "/development-mission/queue-ready" in script.text
+        assert "/development-mission/execute" in script.text
+        assert "runOneGo" in script.text
         assert "Synchronized" in script.text
 
 
