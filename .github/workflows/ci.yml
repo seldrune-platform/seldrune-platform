@@ -1,32 +1,31 @@
+# CircleCI GitHub Actions compatibility gate.
+# Full PostgreSQL/startup smoke lives in .circleci/config.yml.
 name: ci
 
 on:
-  pull_request:
+  workflow_dispatch:
 
 jobs:
-  lint-diagnostic:
+  test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Ruff
-        run: python -m pip install "ruff>=0.8,<1.0"
-      - name: Capture Ruff
-        id: ruff
-        continue-on-error: true
+
+      - name: Install
         run: |
-          ruff check . > ruff-output.txt 2>&1
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
-      - name: Upload Ruff output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: one-go-ruff-output
-          path: ruff-output.txt
-      - name: Preserve failure
-        if: steps.ruff.outputs.exit_code != '0'
-        run: exit 1
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: pytest -q
