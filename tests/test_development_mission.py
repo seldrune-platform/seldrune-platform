@@ -11,6 +11,10 @@ from backend.app.db.base import Base
 from backend.app.db.session import get_db
 from backend.app.main import app
 from backend.app.models.task import Task
+from backend.app.services.contract_chain_runner import (
+    run_compiled_execution_contract,
+    verify_persisted_contract_chain,
+)
 from backend.app.services.development_mission import build_development_mission
 
 
@@ -314,12 +318,14 @@ def test_one_go_executes_model_work_without_faking_completion(
     assert by_stage["unarchi_v31"]["disposition"] == "unverified"
     assert (
         by_stage["unarchi_v31"]["reason"]
-        == "task_has_no_verifiable_tool_contract"
+        == "model_output_required:produce-artifacts"
     )
     assert by_stage["unarchi_v31"]["compiled_contract_version"] == "stage-compiler-v1"
     assert by_stage["unarchi_v31"]["compiled_profile"] == "repository-engineering"
     assert by_stage["unarchi_v31"]["compiled_executable_now"] is False
     assert by_stage["unarchi_v31"]["compiled_blocking_reasons"]
+    assert by_stage["unarchi_v31"]["contract_chain_version"] == "contract-chain-v1"
+    assert by_stage["unarchi_v31"]["contract_chain_status"] == "waiting"
 
     mission = client.get(
         f"{base}/development-mission",
@@ -487,3 +493,226 @@ def test_one_go_respects_autonomous_execution_governance(
     assert report["tasks_executed"] == 0
     assert report["tasks_verified"] == 0
     assert report["halted_reason"] == "governance_autonomous_execution_disabled"
+
+
+
+def test_contract_chain_runner_resolves_repeated_and_step_bindings(
+    client: TestClient,
+    session_factory,
+) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    base = f"/api/v1/organizations/{organization_id}"
+    synchronized = client.post(
+        f"{base}/development-mission/sync",
+        headers=headers,
+    )
+    assert synchronized.status_code == 200
+    agent = create_mission_agent(client, headers, organization_id)
+
+    profile = client.get("/api/v1/auth/me", headers=headers).json()
+    actor_user_id = UUID(profile["id"])
+    tasks = client.get(f"{base}/tasks", headers=headers).json()
+    unarchi = next(
+        item
+        for item in tasks
+        if item["input_data"].get("cognitive_mission_stage_id") == "unarchi_v31"
+    )
+    assigned = client.post(
+        f"{base}/tasks/{unarchi['id']}/assign",
+        headers=headers,
+        json={"agent_id": agent["id"]},
+    )
+    assert assigned.status_code == 200
+
+    tool = client.post(
+        f"{base}/tools",
+        headers=headers,
+        json={
+            "name": "Contract Echo",
+            "slug": "contract-echo",
+            "provider": "internal",
+            "action_name": "echo",
+            "risk_level": "low",
+            "approval_mode": "never",
+        },
+    )
+    assert tool.status_code == 201
+    tool_payload = tool.json()
+
+    with session_factory() as session:
+        task = session.get(Task, UUID(unarchi["id"]))
+        assert task is not None
+        task.input_data = {
+            **(task.input_data or {}),
+            "compiled_execution_contract": {
+                "version": "stage-compiler-test-v1",
+                "stage_id": "unarchi_v31",
+                "steps": [
+                    {
+                        "id": "produce-artifacts",
+                        "kind": "model",
+                    },
+                    {
+                        "id": "write-artifacts",
+                        "kind": "tool",
+                        "provider": "internal",
+                        "action_name": "echo",
+                        "tool_slug": tool_payload["slug"],
+                        "tool_id": tool_payload["id"],
+                        "input": {},
+                        "bindings": {
+                            "message": "model.artifacts[*].content",
+                        },
+                        "acceptance": {
+                            "repeat_for_each": "model.artifacts",
+                        },
+                    },
+                    {
+                        "id": "consume-step-output",
+                        "kind": "tool",
+                        "provider": "internal",
+                        "action_name": "echo",
+                        "tool_slug": tool_payload["slug"],
+                        "tool_id": tool_payload["id"],
+                        "input": {},
+                        "bindings": {
+                            "message": "steps.write-artifacts.output.items",
+                        },
+                        "acceptance": {},
+                    },
+                ],
+            },
+        }
+        task.output_data = {
+            "structured_output": {
+                "artifacts": [
+                    {
+                        "path": "a.txt",
+                        "content": "alpha",
+                        "message": "write a",
+                    },
+                    {
+                        "path": "b.txt",
+                        "content": "beta",
+                        "message": "write b",
+                    },
+                ],
+                "acceptance_notes": "exercise repeat and step bindings",
+            }
+        }
+        session.commit()
+        session.refresh(task)
+
+        state = run_compiled_execution_contract(
+            session,
+            task=task,
+            actor_user_id=actor_user_id,
+        )
+        assert state["status"] == "verified"
+        assert state["halted_reason"] is None
+        assert len(state["steps"]["write-artifacts"]["runs"]) == 2
+        assert len(state["steps"]["consume-step-output"]["runs"]) == 1
+
+        verified, reason, refs = verify_persisted_contract_chain(
+            session,
+            task=task,
+        )
+        assert verified is True
+        assert reason == "verified_compiled_contract_chain"
+        assert len(refs) == 3
+
+
+def test_contract_chain_runner_stops_for_high_risk_approval(
+    client: TestClient,
+    session_factory,
+) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    base = f"/api/v1/organizations/{organization_id}"
+    synchronized = client.post(
+        f"{base}/development-mission/sync",
+        headers=headers,
+    )
+    assert synchronized.status_code == 200
+    agent = create_mission_agent(client, headers, organization_id)
+
+    profile = client.get("/api/v1/auth/me", headers=headers).json()
+    actor_user_id = UUID(profile["id"])
+    tasks = client.get(f"{base}/tasks", headers=headers).json()
+    unarchi = next(
+        item
+        for item in tasks
+        if item["input_data"].get("cognitive_mission_stage_id") == "unarchi_v31"
+    )
+    assigned = client.post(
+        f"{base}/tasks/{unarchi['id']}/assign",
+        headers=headers,
+        json={"agent_id": agent["id"]},
+    )
+    assert assigned.status_code == 200
+
+    tool = client.post(
+        f"{base}/tools",
+        headers=headers,
+        json={
+            "name": "Approval Echo",
+            "slug": "approval-echo",
+            "provider": "internal",
+            "action_name": "echo",
+            "risk_level": "high",
+            "approval_mode": "always",
+        },
+    )
+    assert tool.status_code == 201
+    tool_payload = tool.json()
+
+    with session_factory() as session:
+        task = session.get(Task, UUID(unarchi["id"]))
+        assert task is not None
+        task.input_data = {
+            **(task.input_data or {}),
+            "compiled_execution_contract": {
+                "version": "stage-compiler-approval-test-v1",
+                "stage_id": "unarchi_v31",
+                "steps": [
+                    {
+                        "id": "high-risk-step",
+                        "kind": "tool",
+                        "provider": "internal",
+                        "action_name": "echo",
+                        "tool_slug": tool_payload["slug"],
+                        "tool_id": tool_payload["id"],
+                        "input": {"message": "requires approval"},
+                        "bindings": {},
+                        "acceptance": {},
+                    }
+                ],
+            },
+        }
+        session.commit()
+        session.refresh(task)
+
+        blocked = run_compiled_execution_contract(
+            session,
+            task=task,
+            actor_user_id=actor_user_id,
+            confirmed_sensitive_action=False,
+        )
+        assert blocked["status"] == "blocked"
+        assert blocked["halted_reason"] == "tool_approval_required"
+
+        resumed = run_compiled_execution_contract(
+            session,
+            task=task,
+            actor_user_id=actor_user_id,
+            confirmed_sensitive_action=True,
+        )
+        assert resumed["status"] == "verified"
+        verified, reason, refs = verify_persisted_contract_chain(
+            session,
+            task=task,
+        )
+        assert verified is True
+        assert reason == "verified_compiled_contract_chain"
+        assert len(refs) == 1
