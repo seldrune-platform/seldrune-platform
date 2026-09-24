@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 from typing import Any
 from urllib.parse import quote
@@ -559,7 +559,7 @@ def _github_dispatched_workflow_run(
                     )
                 except ValueError:
                     continue
-                if created >= dispatched_at:
+                if created >= dispatched_at - timedelta(seconds=5):
                     return item
         if attempt < 4:
             time.sleep(1)
