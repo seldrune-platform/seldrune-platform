@@ -304,10 +304,11 @@ def _safe_repository_path(value: Any) -> str:
     pure = PurePosixPath(path)
     if pure.is_absolute() or not pure.parts or ".." in pure.parts:
         raise ContractRunnerError("Generated repository artifact path is unsafe")
+    normalized = pure.as_posix()
     lowered_parts = [part.casefold() for part in pure.parts]
     if ".git" in lowered_parts:
         raise ContractRunnerError("Generated repository artifact cannot write .git")
-    lowered = path.casefold()
+    lowered = normalized.casefold()
     if (
         lowered.startswith(".github/workflows/")
         or lowered.startswith(".circleci/")
@@ -316,9 +317,9 @@ def _safe_repository_path(value: Any) -> str:
         raise ContractRunnerError(
             "Generated repository artifact cannot rewrite CI control files"
         )
-    if len(path) > 300:
+    if len(normalized) > 300:
         raise ContractRunnerError("Generated repository artifact path is too long")
-    return path
+    return normalized
 
 
 def _model_artifacts(task: Task) -> list[dict[str, str]]:
