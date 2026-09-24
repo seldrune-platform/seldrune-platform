@@ -511,7 +511,7 @@ def test_contract_chain_runner_resolves_repeated_and_step_bindings(
     agent = create_mission_agent(client, headers, organization_id)
 
     profile = client.get("/api/v1/auth/me", headers=headers).json()
-    actor_user_id = UUID(profile["id"])
+    actor_user_id = UUID(profile["user"]["id"])
     tasks = client.get(f"{base}/tasks", headers=headers).json()
     unarchi = next(
         item
@@ -638,7 +638,7 @@ def test_contract_chain_runner_stops_for_high_risk_approval(
     agent = create_mission_agent(client, headers, organization_id)
 
     profile = client.get("/api/v1/auth/me", headers=headers).json()
-    actor_user_id = UUID(profile["id"])
+    actor_user_id = UUID(profile["user"]["id"])
     tasks = client.get(f"{base}/tasks", headers=headers).json()
     unarchi = next(
         item
