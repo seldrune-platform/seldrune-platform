@@ -4,17 +4,114 @@ jobs:
   seldrune-ci:
     docker:
       - image: cimg/python:3.12
+      - image: postgres:16
+        environment:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: seldrune_ci
     resource_class: small
+    environment:
+      SELDRUNE_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/seldrune_ci
+      SELDRUNE_MODEL_PROVIDER: mock
+
     steps:
       - checkout
+
+      - restore_cache:
+          keys:
+            - seldrune-pip-v1-{{ checksum "pyproject.toml" }}
+            - seldrune-pip-v1-
+
       - run:
           name: Install
           command: |
             python -m pip install --upgrade pip
             pip install -e ".[dev]"
+
+      - save_cache:
+          key: seldrune-pip-v1-{{ checksum "pyproject.toml" }}
+          paths:
+            - ~/.cache/pip
+
       - run:
-          name: One-Go F401 diagnostic
-          command: ruff check --select F401 backend/app/services/one_go_controller.py
+          name: Wait for PostgreSQL
+          command: |
+            python - <<'PY'
+            import time
+            import psycopg
+
+            for attempt in range(30):
+                try:
+                    with psycopg.connect(
+                        "postgresql://postgres:postgres@127.0.0.1:5432/seldrune_ci"
+                    ):
+                        print("PostgreSQL ready")
+                        break
+                except Exception:
+                    if attempt == 29:
+                        raise
+                    time.sleep(1)
+            PY
+
+      - run:
+          name: Lint
+          command: ruff check .
+
+      - run:
+          name: Test
+          command: pytest -q
+
+      - run:
+          name: PostgreSQL migration smoke
+          command: alembic upgrade head
+
+      - run:
+          name: Production startup health smoke
+          environment:
+            SELDRUNE_ENVIRONMENT: production
+            SELDRUNE_AUTH_SECRET_KEY: ci-production-secret-key-longer-than-thirty-two-characters
+            SELDRUNE_MODEL_PROVIDER: mock
+            SELDRUNE_MODEL_DEFAULT: mock-v1
+            SELDRUNE_RELEASE_SHA: << pipeline.git.revision >>
+          command: |
+            uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > /tmp/seldrune-uvicorn.log 2>&1 &
+            server_pid=$!
+            trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+            for attempt in $(seq 1 30); do
+              if curl --fail --silent http://127.0.0.1:8000/api/v1/ready > /tmp/seldrune-ready.json; then
+                break
+              fi
+              if [ "$attempt" -eq 30 ]; then
+                cat /tmp/seldrune-uvicorn.log
+                exit 1
+              fi
+              sleep 1
+            done
+
+            python - <<'PY'
+            import json
+            import os
+
+            with open('/tmp/seldrune-ready.json', encoding='utf-8') as handle:
+                status = json.load(handle)
+
+            schema = status['checks']['schema']
+            assert status['ready'] is True
+            assert status['status'] == 'ready'
+            assert status['environment'] == 'production'
+            assert status['checks']['database']['status'] == 'ok'
+            assert schema['status'] == 'ok'
+            assert schema['schema_current'] is True
+            assert schema['current_revision'] == schema['expected_revision']
+            assert status['checks']['model_provider']['status'] == 'ok'
+            assert status['checks']['model_provider']['provider'] == 'mock'
+            assert status['checks']['model_provider']['live_ai'] is False
+            assert status['release'] == {
+                'sha': os.environ['SELDRUNE_RELEASE_SHA'],
+                'source': 'seldrune',
+            }
+            PY
 
 workflows:
   version: 2
