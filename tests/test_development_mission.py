@@ -271,7 +271,7 @@ def create_mission_agent(
     return response.json()
 
 
-def test_one_go_executes_model_work_without_faking_completion(
+def test_one_go_blocks_compiled_work_before_model_without_tools(
     client: TestClient,
 ) -> None:
     token, organization_id = register_owner(client)
@@ -295,10 +295,10 @@ def test_one_go_executes_model_work_without_faking_completion(
     assert report["starting_percentage"] == 61.0
     assert report["ending_percentage"] == 61.0
     assert report["waves_executed"] == 1
-    assert report["tasks_executed"] == 3
+    assert report["tasks_executed"] == 0
     assert report["tasks_verified"] == 0
-    assert report["tasks_unverified"] == 3
-    assert report["tasks_blocked"] == 1
+    assert report["tasks_unverified"] == 0
+    assert report["tasks_blocked"] == 4
     assert report["tasks_failed"] == 0
     assert report["halted_reason"] == "no_new_verified_dependency_progress"
 
@@ -311,10 +311,13 @@ def test_one_go_executes_model_work_without_faking_completion(
         by_stage["pdf_local_labels"]["reason"]
         == "owner-gated_requires_explicit_execution"
     )
-    assert by_stage["unarchi_v31"]["disposition"] == "unverified"
+    assert by_stage["unarchi_v31"]["disposition"] == "blocked"
+    assert by_stage["unarchi_v31"]["reason"].startswith(
+        "compiled_tools_unavailable:"
+    )
     assert (
-        by_stage["unarchi_v31"]["reason"]
-        == "task_has_no_verifiable_tool_contract"
+        by_stage["unarchi_v31"]["contract_execution"]["executed_steps"]
+        == 0
     )
     assert by_stage["unarchi_v31"]["compiled_contract_version"] == "stage-compiler-v1"
     assert by_stage["unarchi_v31"]["compiled_profile"] == "repository-engineering"
@@ -328,6 +331,13 @@ def test_one_go_executes_model_work_without_faking_completion(
     assert mission.status_code == 200
     assert mission.json()["overall_percentage"] == 61.0
     assert mission.json()["one_go_execution"]["tasks_verified"] == 0
+
+    invocations = client.get(
+        f"{base}/model-invocations",
+        headers=headers,
+    )
+    assert invocations.status_code == 200
+    assert invocations.json() == []
 
 
 def test_one_go_verified_tool_receipt_unlocks_next_dependency(

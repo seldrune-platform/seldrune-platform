@@ -140,8 +140,33 @@ workflow run ID is deliberately unresolved until the preceding tool actually
 returns it. Model-produced code or analysis still cannot complete a stage by
 itself.
 
-This v1 compiler is an execution contract generator, not yet the full contract
-chain runner. The next runtime layer should consume these ordered contracts,
-resolve bindings only from persisted tool outputs, apply every acceptance
-predicate, and write the final cognitive verification only after the whole
-chain succeeds.
+## Compiled Contract Runner v1
+
+The compiled-contract runtime is now implemented on top of the compiler. One-Go
+routes compiled stages through persisted child tasks instead of terminalizing
+the parent stage from a free-form model response.
+
+The runner:
+
+- preflights unavailable tools and fixed missing inputs before model spend;
+- requests schema-constrained model output for repository artifacts;
+- rejects absolute, traversal, and `.git` artifact paths and bounds artifact
+  count/content size;
+- persists every model/tool step as a child task so execution can resume after
+  interruption without repeating accepted side effects;
+- resolves downstream bindings only from accepted upstream outputs;
+- verifies the exact persisted ToolRun, tool id, receipt, and acceptance
+  predicate for every machine step;
+- distinguishes pending CI/deploy state from terminal acceptance failure;
+- never auto-approves high-risk workflow dispatch or merge actions;
+- requires the exact tested PR head to be merged before repository work can
+  become runtime-verified; and
+- derives a SHA-256 chain receipt from the parent task, contract version, model
+  task, and canonical ToolRun receipts.
+
+Stored `cognitive_verification` flags are not trusted on their own. One-Go and
+mission progress revalidate the underlying evidence before granting completion
+credit or unlocking a dependency.
+
+The remaining production gate is execution evidence from hosted CI. The code
+must stay unmerged while repository CI runners fail before test steps begin.

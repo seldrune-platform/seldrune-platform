@@ -7,13 +7,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.core.tasking import AgentStatus, TaskStatus
-from backend.app.core.tools import ToolRunStatus
 from backend.app.models.agent import Agent
 from backend.app.models.governance_policy import GovernancePolicy
 from backend.app.models.task import Task, TaskEvent
-from backend.app.models.tool_run import ToolRun
 from backend.app.services.agent_runtime import AgentRuntimeError, execute_agent_task
 from backend.app.services.audit import record_audit
+from backend.app.services.cognitive_evidence import (
+    verify_task_completion_evidence,
+)
+from backend.app.services.contract_runner import (
+    ContractRunnerError,
+    advance_compiled_contract,
+)
 from backend.app.services.autonomous_execution import _execute_registered_tool
 from backend.app.services.development_mission import (
     MISSION_KIND,
@@ -62,66 +67,10 @@ def _verification_from_output(
     session: Session,
     task: Task,
 ) -> tuple[bool, str, list[str]]:
-    output = task.output_data or {}
-    if not isinstance(output, dict):
-        return False, "missing_structured_output", []
-
-    tool_request = (task.input_data or {}).get("tool_request")
-    if not (
-        isinstance(tool_request, dict)
-        and tool_request.get("slug")
-    ):
-        return False, "task_has_no_verifiable_tool_contract", []
-
-    evidence = output.get("evidence")
-    if not (
-        output.get("execution_type") == "tool"
-        and isinstance(evidence, dict)
-        and evidence.get("receipt_id")
-        and evidence.get("tool_run_id")
-    ):
-        return False, "model_output_is_not_completion_evidence", []
-
-    expected_tool_slug = str(tool_request["slug"])
-    if str(output.get("tool_slug") or "") != expected_tool_slug:
-        return False, "tool_contract_mismatch", []
-
-    try:
-        tool_run_id = UUID(str(evidence["tool_run_id"]))
-    except (TypeError, ValueError):
-        return False, "invalid_tool_run_reference", []
-
-    tool_run = session.get(ToolRun, tool_run_id)
-    if tool_run is None:
-        return False, "tool_run_not_found", []
-    if tool_run.organization_id != task.organization_id:
-        return False, "tool_run_wrong_organization", []
-    if tool_run.task_id != task.id:
-        return False, "tool_run_wrong_task", []
-    if tool_run.status != ToolRunStatus.SUCCEEDED.value:
-        return False, "tool_run_not_succeeded", []
-
-    run_output = tool_run.output_data or {}
-    provider_evidence = (
-        run_output.get("evidence")
-        if isinstance(run_output, dict)
-        else None
+    return verify_task_completion_evidence(
+        session,
+        task=task,
     )
-    expected_receipt = (
-        str(provider_evidence.get("receipt_id"))
-        if isinstance(provider_evidence, dict)
-        and provider_evidence.get("receipt_id")
-        else f"tool-run:{tool_run.id}"
-    )
-    receipt_id = str(evidence["receipt_id"])
-    if receipt_id != expected_receipt:
-        return False, "tool_receipt_mismatch", []
-
-    return True, "verified_tool_receipt", [
-        f"receipt:{receipt_id}",
-        f"tool-run:{tool_run.id}",
-    ]
-
 
 def _record_verification(
     session: Session,
@@ -130,13 +79,6 @@ def _record_verification(
     actor_user_id: UUID,
 ) -> tuple[bool, str, list[str]]:
     output = dict(task.output_data or {})
-    existing = output.get("cognitive_verification")
-    if isinstance(existing, dict) and existing.get("status") == "verified":
-        refs = existing.get("evidence_refs")
-        return True, "already_verified", [
-            str(item) for item in refs if item
-        ] if isinstance(refs, list) else []
-
     verified, reason, refs = _verification_from_output(session, task)
     output["cognitive_verification"] = {
         "status": "verified" if verified else "unverified",
@@ -454,6 +396,82 @@ def execute_one_go_controller(
                 )
                 continue
 
+            tool_request = (task.input_data or {}).get("tool_request")
+            compiled_contract = (
+                (task.input_data or {}).get("compiled_execution_contract")
+            )
+            if (
+                not isinstance(tool_request, dict)
+                and isinstance(compiled_contract, dict)
+            ):
+                try:
+                    contract_report = advance_compiled_contract(
+                        session,
+                        task=task,
+                        actor_user_id=actor_user_id,
+                        max_steps=12,
+                        gateway=gateway,
+                    )
+                except ContractRunnerError as exc:
+                    report["tasks_failed"] += 1
+                    report["stage_results"].append(
+                        _stage_result(
+                            task,
+                            disposition="failed",
+                            reason=str(exc),
+                        )
+                    )
+                    continue
+
+                session.refresh(task)
+                contract_status = str(contract_report.get("status") or "blocked")
+                contract_reason = str(contract_report.get("reason") or "")
+                contract_executed = int(contract_report.get("executed_steps") or 0)
+                contract_match_score_raw = contract_report.get("match_score")
+                contract_match_score = (
+                    int(contract_match_score_raw)
+                    if contract_match_score_raw is not None
+                    else None
+                )
+                if contract_executed:
+                    report["tasks_executed"] += 1
+
+                if contract_status == "verified":
+                    report["tasks_verified"] += 1
+                    wave_verified += 1
+                    disposition = "verified"
+                elif contract_status == "unverified":
+                    report["tasks_unverified"] += 1
+                    disposition = "unverified"
+                elif contract_reason.startswith(
+                    (
+                        "model_step_failed:",
+                        "tool_step_failed:",
+                        "acceptance_failed:",
+                        "tool_child_failed:",
+                        "parent_task_failed",
+                    )
+                ):
+                    report["tasks_failed"] += 1
+                    disposition = "failed"
+                else:
+                    report["tasks_blocked"] += 1
+                    disposition = "blocked"
+
+                result = _stage_result(
+                    task,
+                    disposition=disposition,
+                    reason=contract_reason,
+                    match_score=contract_match_score,
+                    evidence_refs=[
+                        str(item)
+                        for item in contract_report.get("evidence_refs") or []
+                    ],
+                )
+                result["contract_execution"] = contract_report
+                report["stage_results"].append(result)
+                continue
+
             agent, match_score = _assign_best_agent(
                 session,
                 task=task,
@@ -473,7 +491,6 @@ def execute_one_go_controller(
                 )
                 continue
 
-            tool_request = (task.input_data or {}).get("tool_request")
             if isinstance(tool_request, dict):
                 tool_status, tool_reason = _execute_registered_tool(
                     session,

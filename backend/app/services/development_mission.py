@@ -9,6 +9,9 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.tasking import TERMINAL_TASK_STATUSES, TaskStatus
 from backend.app.models.task import Task, TaskEvent
+from backend.app.services.cognitive_evidence import (
+    verify_task_completion_evidence,
+)
 from backend.app.services.stage_compiler import compile_stage_execution_contract
 
 
@@ -729,14 +732,15 @@ def _verified_runtime_stage_evidence(
             and verification.get("status") == "verified"
         ):
             continue
+        evidence_valid, _reason, refs = verify_task_completion_evidence(
+            session,
+            task=task,
+        )
+        if not evidence_valid:
+            continue
         stage_key = str(stage_id)
         verified.add(stage_key)
-        refs = verification.get("evidence_refs")
-        evidence_refs[stage_key] = (
-            [str(item) for item in refs if item]
-            if isinstance(refs, list)
-            else []
-        )
+        evidence_refs[stage_key] = refs
     return verified, evidence_refs
 
 
@@ -907,6 +911,11 @@ def compile_mission_stage_contracts(
         stage_id = input_data.get("cognitive_mission_stage_id")
         stage = stages.get(str(stage_id)) if stage_id else None
         if stage is None:
+            continue
+        if (
+            input_data.get("compiled_execution_contract") is not None
+            and TaskStatus(task.status) is not TaskStatus.QUEUED
+        ):
             continue
 
         contract = compile_stage_execution_contract(
