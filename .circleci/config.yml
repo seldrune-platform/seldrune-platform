@@ -13,10 +13,10 @@ jobs:
             python -m pip install --upgrade pip
             pip install -e ".[dev]"
       - run:
-          name: Binary search F401 group A
+          name: Binary search F401 group B
           command: |
             ruff check --select F401 --fix backend/app/services/one_go_controller.py
-            git diff -- backend/app/services/one_go_controller.py | grep -Eq "Any|UUID|select|Session|AgentStatus|TaskStatus|ToolRunStatus|Agent|GovernancePolicy|TaskEvent|ToolRun"
+            git diff -- backend/app/services/one_go_controller.py | grep -Eq "Task|AgentRuntimeError|execute_agent_task|record_audit|_execute_registered_tool|MISSION_KIND|queue_parallel_ready_stages|sync_development_mission_task|build_agent_performance_evidence|select_best_agent|transition_task"
 
 workflows:
   version: 2
