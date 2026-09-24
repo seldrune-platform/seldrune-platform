@@ -7,8 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.core.tasking import AgentStatus, TaskStatus
+from backend.app.core.tools import ToolRunStatus
 from backend.app.models.agent import Agent
 from backend.app.models.task import Task, TaskEvent
+from backend.app.models.tool_run import ToolRun
 from backend.app.services.agent_runtime import AgentRuntimeError, execute_agent_task
 from backend.app.services.audit import record_audit
 from backend.app.services.autonomous_execution import _execute_registered_tool
@@ -56,41 +58,43 @@ def _mission_tasks(
     ]
 
 
-def _verification_from_output(task: Task) -> tuple[bool, str, list[str]]:
+def _verification_from_output(
+    session: Session,
+    task: Task,
+) -> tuple[bool, str, list[str]]:
     output = task.output_data or {}
     if not isinstance(output, dict):
         return False, "missing_structured_output", []
 
     evidence = output.get("evidence")
-    if (
+    if not (
         output.get("execution_type") == "tool"
         and isinstance(evidence, dict)
         and evidence.get("receipt_id")
+        and evidence.get("tool_run_id")
     ):
-        refs = [
-            f"receipt:{evidence['receipt_id']}",
-            *(
-                [f"tool-run:{evidence['tool_run_id']}"]
-                if evidence.get("tool_run_id")
-                else []
-            ),
-        ]
-        return True, "verified_tool_receipt", refs
+        return False, "model_output_is_not_completion_evidence", []
 
-    machine = output.get("machine_verification")
-    if (
-        isinstance(machine, dict)
-        and machine.get("status") == "verified"
-        and machine.get("receipt_id")
-    ):
-        refs = [f"receipt:{machine['receipt_id']}"]
-        supplied = machine.get("evidence_refs")
-        if isinstance(supplied, list):
-            refs.extend(str(item) for item in supplied if item)
-        return True, "verified_machine_receipt", refs
+    try:
+        tool_run_id = UUID(str(evidence["tool_run_id"]))
+    except (TypeError, ValueError):
+        return False, "invalid_tool_run_reference", []
 
-    return False, "model_output_is_not_completion_evidence", []
+    tool_run = session.get(ToolRun, tool_run_id)
+    if tool_run is None:
+        return False, "tool_run_not_found", []
+    if tool_run.organization_id != task.organization_id:
+        return False, "tool_run_wrong_organization", []
+    if tool_run.task_id != task.id:
+        return False, "tool_run_wrong_task", []
+    if tool_run.status != ToolRunStatus.SUCCEEDED.value:
+        return False, "tool_run_not_succeeded", []
 
+    receipt_id = str(evidence["receipt_id"])
+    return True, "verified_tool_receipt", [
+        f"receipt:{receipt_id}",
+        f"tool-run:{tool_run.id}",
+    ]
 
 def _record_verification(
     session: Session,
@@ -106,7 +110,7 @@ def _record_verification(
             str(item) for item in refs if item
         ] if isinstance(refs, list) else []
 
-    verified, reason, refs = _verification_from_output(task)
+    verified, reason, refs = _verification_from_output(session, task)
     output["cognitive_verification"] = {
         "status": "verified" if verified else "unverified",
         "reason": reason,
