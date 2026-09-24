@@ -503,9 +503,6 @@ def execute_one_go_controller(
                 )
             )
 
-        if report["halted_reason"] == "task_limit":
-            break
-
         master_task, updated_mission, _ = sync_development_mission_task(
             session,
             organization_id=organization_id,
@@ -513,6 +510,9 @@ def execute_one_go_controller(
         )
         report["ending_percentage"] = updated_mission["overall_percentage"]
         updated_ready = set(updated_mission["parallel_ready_stage_ids"])
+
+        if report["halted_reason"] == "task_limit":
+            break
         if wave_verified == 0 or updated_ready == ready_ids:
             report["halted_reason"] = "no_new_verified_dependency_progress"
             break
