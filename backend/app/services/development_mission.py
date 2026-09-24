@@ -12,7 +12,7 @@ from backend.app.models.task import Task, TaskEvent
 
 
 MISSION_KIND = "seldrune_cognitive_development_mission"
-MISSION_VERSION = "cognitive-execution-v1"
+MISSION_VERSION = "cognitive-execution-v2"
 MASTER_TASK_TITLE = "Seldrune Master Development Mission"
 
 
@@ -281,9 +281,10 @@ STAGES = (
         "Queue and execute eligible dependency-ready stages under policy and evidence gates.",
         "console",
         15,
-        "pending",
-        ("console_cognitive_mission", "model_router_unified"),
+        "completed",
+        ("console_cognitive_mission",),
         ("orchestration", "tools"),
+        evidence_refs=("feature:one-go-execution-controller",),
     ),
     StageDefinition(
         "console_observability",
@@ -565,10 +566,17 @@ def _validate_definitions() -> None:
 _validate_definitions()
 
 
-def build_development_mission() -> dict[str, Any]:
+def build_development_mission(
+    verified_stage_ids: set[str] | None = None,
+    dynamic_evidence_refs: dict[str, list[str]] | None = None,
+) -> dict[str, Any]:
     workstreams = {item.id: item for item in WORKSTREAMS}
+    dynamically_verified = verified_stage_ids or set()
+    dynamic_refs = dynamic_evidence_refs or {}
     completed = {
-        stage.id for stage in STAGES if stage.status == "completed"
+        stage.id
+        for stage in STAGES
+        if stage.status == "completed" or stage.id in dynamically_verified
     }
 
     stage_rows: list[dict[str, Any]] = []
@@ -582,16 +590,13 @@ def build_development_mission() -> dict[str, Any]:
             dependency in completed for dependency in stage.depends_on
         )
         paused = stream.paused or bool(stage.paused_reason)
-        ready = (
-            stage.status != "completed"
-            and dependencies_complete
-            and not paused
-        )
+        effective_completed = stage.id in completed
+        ready = not effective_completed and dependencies_complete and not paused
         if ready:
             ready_stage_ids.append(stage.id)
-        elif stage.status != "completed":
+        elif not effective_completed:
             blocked_stage_ids.append(stage.id)
-        if paused and stage.status != "completed":
+        if paused and not effective_completed:
             paused_stage_ids.append(stage.id)
 
         stage_rows.append(
@@ -601,7 +606,7 @@ def build_development_mission() -> dict[str, Any]:
                 "objective": stage.objective,
                 "workstream": stage.workstream,
                 "weight": stage.weight,
-                "status": stage.status,
+                "status": "completed" if effective_completed else "pending",
                 "depends_on": list(stage.depends_on),
                 "dependencies_complete": dependencies_complete,
                 "ready": ready,
@@ -611,7 +616,18 @@ def build_development_mission() -> dict[str, Any]:
                 ),
                 "capabilities": list(stage.capabilities),
                 "execution_mode": stage.execution_mode,
-                "evidence_refs": list(stage.evidence_refs),
+                "evidence_refs": [
+                    *stage.evidence_refs,
+                    *dynamic_refs.get(stage.id, []),
+                ],
+                "completion_source": (
+                    "runtime_verified"
+                    if stage.id in dynamically_verified
+                    and stage.status != "completed"
+                    else "roadmap_evidence"
+                    if stage.status == "completed"
+                    else None
+                ),
             }
         )
 
@@ -624,7 +640,7 @@ def build_development_mission() -> dict[str, Any]:
         completed_weight = sum(
             stage.weight
             for stage in stream_stages
-            if stage.status == "completed"
+            if stage.id in completed
         )
         percentage = float(completed_weight)
         overall += percentage * (stream.weight / 100)
@@ -639,7 +655,7 @@ def build_development_mission() -> dict[str, Any]:
                 "paused": stream.paused,
                 "paused_reason": stream.paused_reason,
                 "completed_stage_count": sum(
-                    stage.status == "completed" for stage in stream_stages
+                    stage.id in completed for stage in stream_stages
                 ),
                 "stage_count": len(stream_stages),
             }
@@ -681,13 +697,89 @@ def build_development_mission() -> dict[str, Any]:
     }
 
 
+def _verified_runtime_stage_evidence(
+    session: Session,
+    *,
+    organization_id: UUID,
+    master_task_id: UUID,
+) -> tuple[set[str], dict[str, list[str]]]:
+    verified: set[str] = set()
+    evidence_refs: dict[str, list[str]] = {}
+    tasks = list(
+        session.scalars(
+            select(Task).where(Task.organization_id == organization_id)
+        )
+    )
+    for task in tasks:
+        input_data = task.input_data or {}
+        if input_data.get("master_mission_task_id") != str(master_task_id):
+            continue
+        stage_id = input_data.get("cognitive_mission_stage_id")
+        if not stage_id:
+            continue
+        output = task.output_data or {}
+        verification = (
+            output.get("cognitive_verification")
+            if isinstance(output, dict)
+            else None
+        )
+        if not (
+            isinstance(verification, dict)
+            and verification.get("status") == "verified"
+        ):
+            continue
+        stage_key = str(stage_id)
+        verified.add(stage_key)
+        refs = verification.get("evidence_refs")
+        evidence_refs[stage_key] = (
+            [str(item) for item in refs if item]
+            if isinstance(refs, list)
+            else []
+        )
+    return verified, evidence_refs
+
+
+def current_development_mission(
+    session: Session,
+    *,
+    organization_id: UUID,
+) -> tuple[dict[str, Any], Task | None]:
+    candidates = list(
+        session.scalars(
+            select(Task)
+            .where(
+                Task.organization_id == organization_id,
+                Task.title == MASTER_TASK_TITLE,
+            )
+            .order_by(Task.created_at.desc())
+        )
+    )
+    master_task = next(
+        (
+            item
+            for item in candidates
+            if (item.input_data or {}).get("mission_kind") == MISSION_KIND
+            and TaskStatus(item.status) not in TERMINAL_TASK_STATUSES
+        ),
+        None,
+    )
+    if master_task is None:
+        return build_development_mission(), None
+
+    verified, refs = _verified_runtime_stage_evidence(
+        session,
+        organization_id=organization_id,
+        master_task_id=master_task.id,
+    )
+    return build_development_mission(verified, refs), master_task
+
+
 def sync_development_mission_task(
     session: Session,
     *,
     organization_id: UUID,
     actor_user_id: UUID,
 ) -> tuple[Task, dict[str, Any], bool]:
-    mission = build_development_mission()
     candidates = list(
         session.scalars(
             select(Task)
@@ -724,6 +816,13 @@ def sync_development_mission_task(
         session.flush()
         created = True
 
+    verified, refs = _verified_runtime_stage_evidence(
+        session,
+        organization_id=organization_id,
+        master_task_id=task.id,
+    )
+    mission = build_development_mission(verified, refs)
+
     task.input_data = {
         "mission_kind": MISSION_KIND,
         "mission_version": MISSION_VERSION,
@@ -733,7 +832,9 @@ def sync_development_mission_task(
         "paused_stage_ids": mission["paused_stage_ids"],
         "snapshot": mission,
     }
+    existing_output = dict(task.output_data or {})
     task.output_data = {
+        **existing_output,
         "progress": {
             "completed_percentage": mission["completed_percentage"],
             "remaining_percentage": mission["remaining_percentage"],
@@ -755,6 +856,7 @@ def sync_development_mission_task(
                 "overall_percentage": mission["overall_percentage"],
                 "parallel_ready_stage_ids": mission["parallel_ready_stage_ids"],
                 "paused_stage_ids": mission["paused_stage_ids"],
+                "runtime_verified_stage_ids": sorted(verified),
             },
         )
     )
@@ -770,7 +872,12 @@ def queue_parallel_ready_stages(
     actor_user_id: UUID,
     master_task: Task,
 ) -> list[Task]:
-    mission = build_development_mission()
+    verified, refs = _verified_runtime_stage_evidence(
+        session,
+        organization_id=organization_id,
+        master_task_id=master_task.id,
+    )
+    mission = build_development_mission(verified, refs)
     existing = list(
         session.scalars(
             select(Task).where(Task.organization_id == organization_id)
