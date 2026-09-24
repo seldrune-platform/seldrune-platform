@@ -193,7 +193,6 @@ def test_owner_console_contains_cognitive_mission_board() -> None:
         assert "Synchronized" in script.text
 
 
-
 def create_mission_agent(
     client: TestClient,
     headers: dict[str, str],
@@ -400,7 +399,6 @@ def test_one_go_verified_tool_receipt_unlocks_next_dependency(
     assert stages["unarchi_v31"]["completion_source"] == "runtime_verified"
     assert stages["unarchi_v32"]["ready"] is True
     assert "unarchi_v32" in payload["parallel_ready_stage_ids"]
-
 
 
 def test_one_go_respects_autonomous_execution_governance(
