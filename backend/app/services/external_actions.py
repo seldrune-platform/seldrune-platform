@@ -336,6 +336,47 @@ def github_get_pull_request(
     }
 
 
+def _github_workflow_failure_classification(
+    *,
+    token: str,
+    owner: str,
+    repo: str,
+    run_id: int,
+    status: Any,
+    conclusion: Any,
+) -> tuple[str | None, bool | None]:
+    if status != "completed" or conclusion != "failure":
+        return None, None
+
+    response = httpx.get(
+        f"https://api.github.com/repos/{owner}/{repo}/actions/runs/{run_id}/jobs",
+        headers=_github_headers(token),
+        params={"filter": "latest", "per_page": 100},
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    data = _json_response(response, "GitHub")
+    raw_jobs = data.get("jobs")
+    jobs = (
+        [item for item in raw_jobs if isinstance(item, dict)]
+        if isinstance(raw_jobs, list)
+        else []
+    )
+    if not jobs:
+        return "hosted_runner_unavailable", False
+
+    steps_executed = any(
+        isinstance(job.get("steps"), list) and bool(job["steps"])
+        for job in jobs
+    )
+    runner_allocated = any(
+        bool(job.get("runner_id")) or bool(job.get("runner_name"))
+        for job in jobs
+    )
+    if not steps_executed and not runner_allocated:
+        return "hosted_runner_unavailable", False
+    return None, steps_executed
+
+
 def github_workflow_run_status(
     payload: dict[str, Any],
     credential: str | None,
@@ -353,6 +394,17 @@ def github_workflow_run_status(
     provider_run_id = data.get("id")
     if not provider_run_id:
         raise ToolGatewayError("GitHub workflow response did not include a run id")
+
+    failure_classification, repository_steps_executed = (
+        _github_workflow_failure_classification(
+            token=token,
+            owner=owner,
+            repo=repo,
+            run_id=int(provider_run_id),
+            status=data.get("status"),
+            conclusion=data.get("conclusion"),
+        )
+    )
     return {
         "run_id": provider_run_id,
         "name": data.get("name"),
@@ -360,6 +412,8 @@ def github_workflow_run_status(
         "conclusion": data.get("conclusion"),
         "head_sha": data.get("head_sha"),
         "html_url": data.get("html_url"),
+        "failure_classification": failure_classification,
+        "repository_steps_executed": repository_steps_executed,
         "evidence": {
             "receipt_id": (
                 f"github-workflow-state:{provider_run_id}:"
