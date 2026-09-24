@@ -697,11 +697,14 @@ def verify_compiled_contract_evidence(
             return False, f"compiled_contract_receipt_count:{step_id}", []
 
         if repeat:
-            indices = sorted(
-                int(row.get("repeat_index"))
-                for row in rows
-                if row.get("repeat_index") is not None
-            )
+            try:
+                indices = sorted(
+                    int(row.get("repeat_index"))
+                    for row in rows
+                    if row.get("repeat_index") is not None
+                )
+            except (TypeError, ValueError):
+                return False, f"compiled_contract_repeat_index:{step_id}", []
             if indices != list(range(expected_count)):
                 return False, f"compiled_contract_repeat_index:{step_id}", []
 
