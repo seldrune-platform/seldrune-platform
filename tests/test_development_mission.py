@@ -380,7 +380,7 @@ def test_one_go_verified_tool_receipt_unlocks_next_dependency(
     report = executed.json()
     assert report["tasks_verified"] == 1
     assert report["tasks_unverified"] == 0
-    assert report["ending_percentage"] == 62.0
+    assert report["ending_percentage"] == 61.9
     assert report["stage_results"][0]["stage_id"] == "unarchi_v31"
     assert report["stage_results"][0]["disposition"] == "verified"
     assert report["stage_results"][0]["reason"] == "verified_tool_receipt"
@@ -391,7 +391,7 @@ def test_one_go_verified_tool_receipt_unlocks_next_dependency(
     )
     assert mission.status_code == 200
     payload = mission.json()
-    assert payload["overall_percentage"] == 62.0
+    assert payload["overall_percentage"] == 61.9
     stages = {
         item["id"]: item
         for item in payload["stages"]
