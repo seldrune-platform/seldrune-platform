@@ -396,25 +396,6 @@ def execute_one_go_controller(
                 )
                 continue
 
-            agent, match_score = _assign_best_agent(
-                session,
-                task=task,
-                agents=agents,
-                performance=performance,
-                actor_user_id=actor_user_id,
-            )
-            if agent is None:
-                report["tasks_blocked"] += 1
-                report["stage_results"].append(
-                    _stage_result(
-                        task,
-                        disposition="blocked",
-                        reason="no_capable_active_agent",
-                        match_score=match_score,
-                    )
-                )
-                continue
-
             tool_request = (task.input_data or {}).get("tool_request")
             compiled_contract = (
                 (task.input_data or {}).get("compiled_execution_contract")
@@ -438,7 +419,6 @@ def execute_one_go_controller(
                             task,
                             disposition="failed",
                             reason=str(exc),
-                            match_score=match_score,
                         )
                     )
                     continue
@@ -447,6 +427,12 @@ def execute_one_go_controller(
                 contract_status = str(contract_report.get("status") or "blocked")
                 contract_reason = str(contract_report.get("reason") or "")
                 contract_executed = int(contract_report.get("executed_steps") or 0)
+                contract_match_score_raw = contract_report.get("match_score")
+                contract_match_score = (
+                    int(contract_match_score_raw)
+                    if contract_match_score_raw is not None
+                    else None
+                )
                 if contract_executed:
                     report["tasks_executed"] += 1
 
@@ -476,7 +462,7 @@ def execute_one_go_controller(
                     task,
                     disposition=disposition,
                     reason=contract_reason,
-                    match_score=match_score,
+                    match_score=contract_match_score,
                     evidence_refs=[
                         str(item)
                         for item in contract_report.get("evidence_refs") or []
@@ -484,6 +470,25 @@ def execute_one_go_controller(
                 )
                 result["contract_execution"] = contract_report
                 report["stage_results"].append(result)
+                continue
+
+            agent, match_score = _assign_best_agent(
+                session,
+                task=task,
+                agents=agents,
+                performance=performance,
+                actor_user_id=actor_user_id,
+            )
+            if agent is None:
+                report["tasks_blocked"] += 1
+                report["stage_results"].append(
+                    _stage_result(
+                        task,
+                        disposition="blocked",
+                        reason="no_capable_active_agent",
+                        match_score=match_score,
+                    )
+                )
                 continue
 
             if isinstance(tool_request, dict):
