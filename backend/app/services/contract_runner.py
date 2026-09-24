@@ -302,10 +302,20 @@ def _safe_repository_path(value: Any) -> str:
         raise ContractRunnerError("Generated repository artifact path is empty")
     path = value.strip().replace("\\", "/")
     pure = PurePosixPath(path)
-    if pure.is_absolute() or ".." in pure.parts:
+    if pure.is_absolute() or not pure.parts or ".." in pure.parts:
         raise ContractRunnerError("Generated repository artifact path is unsafe")
-    if pure.parts and pure.parts[0].casefold() == ".git":
+    lowered_parts = [part.casefold() for part in pure.parts]
+    if ".git" in lowered_parts:
         raise ContractRunnerError("Generated repository artifact cannot write .git")
+    lowered = path.casefold()
+    if (
+        lowered.startswith(".github/workflows/")
+        or lowered.startswith(".circleci/")
+        or lowered == ".circleci"
+    ):
+        raise ContractRunnerError(
+            "Generated repository artifact cannot rewrite CI control files"
+        )
     if len(path) > 300:
         raise ContractRunnerError("Generated repository artifact path is too long")
     return path
@@ -323,11 +333,16 @@ def _model_artifacts(task: Task) -> list[dict[str, str]]:
         raise ContractRunnerError("Model step returned too many repository artifacts")
 
     artifacts: list[dict[str, str]] = []
+    seen_paths: set[str] = set()
     total_chars = 0
     for item in raw:
         if not isinstance(item, dict):
             raise ContractRunnerError("Repository artifact must be an object")
         path = _safe_repository_path(item.get("path"))
+        path_key = path.casefold()
+        if path_key in seen_paths:
+            raise ContractRunnerError("Repository artifact paths must be unique")
+        seen_paths.add(path_key)
         content = item.get("content")
         message = item.get("message")
         if not isinstance(content, str):
