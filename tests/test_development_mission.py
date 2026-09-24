@@ -400,3 +400,42 @@ def test_one_go_verified_tool_receipt_unlocks_next_dependency(
     assert stages["unarchi_v31"]["completion_source"] == "runtime_verified"
     assert stages["unarchi_v32"]["ready"] is True
     assert "unarchi_v32" in payload["parallel_ready_stage_ids"]
+
+
+
+def test_one_go_respects_autonomous_execution_governance(
+    client: TestClient,
+) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    base = f"/api/v1/organizations/{organization_id}"
+    synchronized = client.post(
+        f"{base}/development-mission/sync",
+        headers=headers,
+    )
+    assert synchronized.status_code == 200
+    create_mission_agent(client, headers, organization_id)
+
+    policy = client.put(
+        f"{base}/governance-policy",
+        headers=headers,
+        json={
+            "max_steps_per_command": 25,
+            "max_project_budget_usd": 100.0,
+            "allow_autonomous_execution": False,
+        },
+    )
+    assert policy.status_code == 200
+
+    executed = client.post(
+        f"{base}/development-mission/execute",
+        headers=headers,
+        json={"max_waves": 3, "max_tasks": 8},
+    )
+    assert executed.status_code == 200
+    report = executed.json()
+    assert report["governance"]["autonomous_execution_allowed"] is False
+    assert report["waves_executed"] == 0
+    assert report["tasks_executed"] == 0
+    assert report["tasks_verified"] == 0
+    assert report["halted_reason"] == "governance_autonomous_execution_disabled"
