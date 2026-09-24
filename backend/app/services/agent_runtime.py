@@ -72,33 +72,39 @@ def _build_instructions(agent: Agent) -> str:
     )
 
 
+def _compiled_response_schema(task: Task) -> dict[str, object] | None:
+    contract = (task.input_data or {}).get("compiled_execution_contract")
+    if not isinstance(contract, dict):
+        return None
+    model_step = next(
+        (
+            step
+            for step in contract.get("steps") or []
+            if isinstance(step, dict) and step.get("kind") == "model"
+        ),
+        None,
+    )
+    response_schema = (
+        model_step.get("response_schema")
+        if isinstance(model_step, dict)
+        else None
+    )
+    return response_schema if isinstance(response_schema, dict) else None
+
+
 def _build_input(task: Task, knowledge_context: str = "") -> str:
     payload = json.dumps(task.input_data, sort_keys=True, default=str)
     base = f"Task: {task.title}\nObjective: {task.objective}\nContext: {payload}"
 
-    contract = (task.input_data or {}).get("compiled_execution_contract")
-    if isinstance(contract, dict):
-        model_step = next(
-            (
-                step
-                for step in contract.get("steps") or []
-                if isinstance(step, dict) and step.get("kind") == "model"
-            ),
-            None,
+    response_schema = _compiled_response_schema(task)
+    if response_schema is not None:
+        schema_text = json.dumps(response_schema, sort_keys=True)
+        base += (
+            "\n\nCompiled execution contract requirement: return only valid JSON "
+            "matching this response schema. Do not wrap the JSON in markdown fences. "
+            "This model output is an execution input, not completion evidence. "
+            f"Schema: {schema_text}"
         )
-        response_schema = (
-            model_step.get("response_schema")
-            if isinstance(model_step, dict)
-            else None
-        )
-        if isinstance(response_schema, dict):
-            schema_text = json.dumps(response_schema, sort_keys=True)
-            base += (
-                "\n\nCompiled execution contract requirement: return only valid JSON "
-                "matching this response schema. Do not wrap the JSON in markdown fences. "
-                "This model output is an execution input, not completion evidence. "
-                f"Schema: {schema_text}"
-            )
 
     if knowledge_context:
         return f"{base}\n\n{knowledge_context}"
@@ -261,6 +267,7 @@ def execute_agent_task(
             "agent_version": agent.version,
             "cost_tier": route.tier,
         },
+        response_schema=_compiled_response_schema(task),
         reasoning_effort=route.reasoning_effort,
         prompt_cache_key=f"seldrune:{task.organization_id}:agent:{agent.id}",
         max_estimated_cost_usd=route.request_budget_usd,
