@@ -1,3 +1,5 @@
+from uuid import UUID
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -8,11 +10,12 @@ from backend.app import models  # noqa: F401
 from backend.app.db.base import Base
 from backend.app.db.session import get_db
 from backend.app.main import app
+from backend.app.models.task import Task
 from backend.app.services.development_mission import build_development_mission
 
 
 @pytest.fixture
-def client() -> TestClient:
+def session_factory():
     engine = create_engine(
         "sqlite+pysqlite://",
         connect_args={"check_same_thread": False},
@@ -25,16 +28,20 @@ def client() -> TestClient:
         class_=Session,
     )
     Base.metadata.create_all(bind=engine)
+    yield testing_session
+    Base.metadata.drop_all(bind=engine)
 
+
+@pytest.fixture
+def client(session_factory) -> TestClient:
     def override_get_db():
-        with testing_session() as session:
+        with session_factory() as session:
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
-    Base.metadata.drop_all(bind=engine)
 
 
 def register_owner(client: TestClient) -> tuple[str, str]:
@@ -272,6 +279,7 @@ def test_one_go_executes_model_work_without_faking_completion(
 
 def test_one_go_verified_tool_receipt_unlocks_next_dependency(
     client: TestClient,
+    session_factory,
 ) -> None:
     token, organization_id = register_owner(client)
     headers = {"Authorization": f"Bearer {token}"}
@@ -311,6 +319,18 @@ def test_one_go_verified_tool_receipt_unlocks_next_dependency(
     )
     assert tool.status_code == 201
 
+    with session_factory() as session:
+        task = session.get(Task, UUID(unarchi["id"]))
+        assert task is not None
+        task.input_data = {
+            **(task.input_data or {}),
+            "tool_request": {
+                "slug": "mission-evidence-echo",
+                "input": {"message": "verified mission evidence"},
+            },
+        }
+        session.commit()
+
     tool_run = client.post(
         f"{base}/tool-runs",
         headers=headers,
@@ -337,6 +357,7 @@ def test_one_go_verified_tool_receipt_unlocks_next_dependency(
             "status": "succeeded",
             "output_data": {
                 "execution_type": "tool",
+                "tool_slug": "mission-evidence-echo",
                 "evidence": {
                     "receipt_id": f"tool-run:{run['id']}",
                     "tool_run_id": run["id"],
