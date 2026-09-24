@@ -14,6 +14,25 @@
     return `${Number(value || 0).toFixed(1)}%`;
   }
 
+  function renderOneGo(report) {
+    if (!report) return;
+    text(byId('mission-one-go-version'), report.controller_version || 'one-go');
+    text(byId('mission-one-go-waves'), String(Number(report.waves_executed || 0)));
+    text(byId('mission-one-go-executed'), String(Number(report.tasks_executed || 0)));
+    text(byId('mission-one-go-verified'), String(Number(report.tasks_verified || 0)));
+    text(byId('mission-one-go-unverified'), String(Number(report.tasks_unverified || 0)));
+    text(byId('mission-one-go-blocked'), String(Number(report.tasks_blocked || 0)));
+    text(byId('mission-one-go-failed'), String(Number(report.tasks_failed || 0)));
+    const halt = report.halted_reason
+      ? report.halted_reason.replaceAll('_', ' ')
+      : 'controller completed requested waves';
+    text(
+      byId('mission-one-go-status'),
+      `Progress ${percentage(report.starting_percentage)} → `
+      + `${percentage(report.ending_percentage)} · ${halt}.`
+    );
+  }
+
   function stageStatus(stage) {
     if (stage.status === 'completed') return 'completed';
     if (stage.paused) return 'paused';
@@ -144,6 +163,7 @@
     renderSummary(mission);
     renderWorkstreams(mission);
     renderStages(mission);
+    renderOneGo(mission.one_go_execution);
     text(
       byId('mission-master-task'),
       mission.master_task_id
@@ -199,11 +219,41 @@
     }
   }
 
+  async function runOneGo() {
+    const button = byId('mission-run-one-go');
+    if (button) button.disabled = true;
+    text(byId('mission-one-go-status'), 'Running evidence-gated execution wave…');
+    try {
+      const report = await api('/development-mission/execute', {
+        method: 'POST',
+        body: JSON.stringify({
+          max_waves: 3,
+          max_tasks: 8,
+        }),
+      });
+      renderOneGo(report);
+      const mission = await api('/development-mission');
+      renderMission(mission);
+      toast(
+        report.tasks_verified
+          ? `${report.tasks_verified} mission stages verified`
+          : 'One-Go finished without new verified completion evidence'
+      );
+    } catch (error) {
+      text(byId('mission-one-go-status'), error.message);
+      toast(error.message);
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
   document.addEventListener('seldrune:console-ready', syncMission);
   document.addEventListener('DOMContentLoaded', () => {
     const refresh = byId('mission-refresh');
     const queue = byId('mission-queue-ready');
+    const run = byId('mission-run-one-go');
     if (refresh) refresh.addEventListener('click', syncMission);
     if (queue) queue.addEventListener('click', queueReadyWave);
+    if (run) run.addEventListener('click', runOneGo);
   });
 })();
