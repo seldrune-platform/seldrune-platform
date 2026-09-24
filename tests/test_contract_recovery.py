@@ -54,7 +54,7 @@ def test_acceptance_maps_hosted_runner_failure_to_external_resource(
             {
                 "tool_output": {
                     "conclusion": "failure",
-                    "failure_classification": "hosted_runner_unavailable",
+                    "failure_classification": "github_actions_billing_block",
                 }
             },
         ),
@@ -68,35 +68,26 @@ def test_acceptance_maps_hosted_runner_failure_to_external_resource(
                 "output_path": "conclusion",
                 "equals": "success",
                 "external_resource_path": "failure_classification",
-                "external_resource_values": ["hosted_runner_unavailable"],
+                "external_resource_values": [
+                    "hosted_runner_unavailable",
+                    "github_actions_billing_block",
+                    "github_actions_runner_unavailable",
+                ],
             }
         },
     )
 
     assert state == "external-resource"
-    assert reason == "failure_classification:hosted_runner_unavailable"
+    assert reason == "failure_classification:github_actions_billing_block"
     assert receipt is not None
 
 
-def test_github_workflow_status_detects_pre_step_runner_failure(
+def test_github_workflow_status_detects_billing_block_annotation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    run_request = httpx.Request(
-        "GET",
-        "https://api.github.com/repos/seldrune-platform/seldrune-platform/"
-        "actions/runs/123",
-    )
-    jobs_request = httpx.Request(
-        "GET",
-        "https://api.github.com/repos/seldrune-platform/seldrune-platform/"
-        "actions/runs/123/jobs",
-    )
-    calls = 0
-
-    def fake_get(*args, **kwargs):
-        nonlocal calls
-        calls += 1
-        if calls == 1:
+    def fake_get(url, *args, **kwargs):
+        request = httpx.Request("GET", url)
+        if url.endswith("/actions/runs/123"):
             return httpx.Response(
                 200,
                 json={
@@ -108,24 +99,110 @@ def test_github_workflow_status_detects_pre_step_runner_failure(
                     "html_url": "https://github.com/actions/runs/123",
                     "updated_at": "2099-01-01T00:00:00Z",
                 },
-                request=run_request,
+                request=request,
             )
-        return httpx.Response(
-            200,
-            json={
-                "jobs": [
+        if url.endswith("/actions/runs/123/jobs"):
+            return httpx.Response(
+                200,
+                json={
+                    "jobs": [
+                        {
+                            "id": 456,
+                            "status": "completed",
+                            "conclusion": "failure",
+                            "runner_id": 0,
+                            "runner_name": "",
+                            "steps": [],
+                        }
+                    ]
+                },
+                request=request,
+            )
+        if url.endswith("/commits/abc123/check-runs"):
+            return httpx.Response(
+                200,
+                json={
+                    "check_runs": [
+                        {
+                            "id": 456,
+                            "details_url": (
+                                "https://github.com/actions/runs/123/job/456"
+                            ),
+                        }
+                    ]
+                },
+                request=request,
+            )
+        if url.endswith("/check-runs/456/annotations"):
+            return httpx.Response(
+                200,
+                json=[
                     {
-                        "id": 456,
-                        "status": "completed",
-                        "conclusion": "failure",
-                        "runner_id": 0,
-                        "runner_name": "",
-                        "steps": [],
+                        "message": (
+                            "The job was not started because recent account "
+                            "payments have failed or your spending limit needs "
+                            "to be increased."
+                        )
                     }
-                ]
-            },
-            request=jobs_request,
-        )
+                ],
+                request=request,
+            )
+        raise AssertionError(f"Unexpected URL: {url}")
+
+    monkeypatch.setattr(
+        "backend.app.services.external_actions.httpx.get",
+        fake_get,
+    )
+
+    result = github_workflow_run_status(
+        {
+            "owner": "seldrune-platform",
+            "repo": "seldrune-platform",
+            "run_id": 123,
+        },
+        "token",
+    )
+
+    assert result["failure_classification"] == "github_actions_billing_block"
+    assert result["repository_steps_executed"] is False
+    assert "spending limit" in str(result["failure_detail"]).lower()
+    assert "budget" in str(result["remediation"]).lower()
+    assert result["conclusion"] == "failure"
+    assert result["evidence"]["receipt_id"].startswith(
+        "github-workflow-state:123:"
+    )
+
+
+def test_github_workflow_status_keeps_unknown_pre_step_failure_generic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_get(url, *args, **kwargs):
+        request = httpx.Request("GET", url)
+        if url.endswith("/actions/runs/123"):
+            return httpx.Response(
+                200,
+                json={
+                    "id": 123,
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "head_sha": "abc123",
+                    "updated_at": "2099-01-01T00:00:00Z",
+                },
+                request=request,
+            )
+        if url.endswith("/actions/runs/123/jobs"):
+            return httpx.Response(
+                200,
+                json={"jobs": []},
+                request=request,
+            )
+        if url.endswith("/commits/abc123/check-runs"):
+            return httpx.Response(
+                200,
+                json={"check_runs": []},
+                request=request,
+            )
+        raise AssertionError(f"Unexpected URL: {url}")
 
     monkeypatch.setattr(
         "backend.app.services.external_actions.httpx.get",
@@ -143,10 +220,7 @@ def test_github_workflow_status_detects_pre_step_runner_failure(
 
     assert result["failure_classification"] == "hosted_runner_unavailable"
     assert result["repository_steps_executed"] is False
-    assert result["conclusion"] == "failure"
-    assert result["evidence"]["receipt_id"].startswith(
-        "github-workflow-state:123:"
-    )
+    assert result["failure_detail"] is None
 
 
 def test_recovery_retries_pending_then_stops_on_verified(
