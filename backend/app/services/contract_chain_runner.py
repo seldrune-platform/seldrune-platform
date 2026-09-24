@@ -589,9 +589,9 @@ def run_compiled_execution_contract(
             and isinstance(item.get("output"), dict)
         ]
         if len(accepted_outputs) == 1:
-            step_outputs[step_id] = accepted_outputs[0]
+            step_outputs[step_id] = {"output": accepted_outputs[0]}
         elif accepted_outputs:
-            step_outputs[step_id] = {"items": accepted_outputs}
+            step_outputs[step_id] = {"output": {"items": accepted_outputs}}
         evidence_refs.extend(f"receipt:{value}" for value in receipts)
 
         if status != "accepted":
