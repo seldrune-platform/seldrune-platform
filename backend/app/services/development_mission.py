@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.tasking import TERMINAL_TASK_STATUSES, TaskStatus
 from backend.app.models.task import Task, TaskEvent
+from backend.app.services.stage_compiler import compile_stage_execution_contract
 
 
 MISSION_KIND = "seldrune_cognitive_development_mission"
@@ -862,7 +863,86 @@ def sync_development_mission_task(
     )
     session.commit()
     session.refresh(task)
+    compile_mission_stage_contracts(
+        session,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
+        master_task=task,
+        mission=mission,
+    )
     return task, mission, created
+
+
+def compile_mission_stage_contracts(
+    session: Session,
+    *,
+    organization_id: UUID,
+    actor_user_id: UUID,
+    master_task: Task,
+    mission: dict[str, Any] | None = None,
+) -> list[Task]:
+    mission_snapshot = mission
+    if mission_snapshot is None:
+        verified, refs = _verified_runtime_stage_evidence(
+            session,
+            organization_id=organization_id,
+            master_task_id=master_task.id,
+        )
+        mission_snapshot = build_development_mission(verified, refs)
+
+    stages = {
+        str(stage["id"]): stage
+        for stage in mission_snapshot["stages"]
+    }
+    tasks = list(
+        session.scalars(
+            select(Task).where(Task.organization_id == organization_id)
+        )
+    )
+    updated: list[Task] = []
+    for task in tasks:
+        input_data = dict(task.input_data or {})
+        if input_data.get("master_mission_task_id") != str(master_task.id):
+            continue
+        stage_id = input_data.get("cognitive_mission_stage_id")
+        stage = stages.get(str(stage_id)) if stage_id else None
+        if stage is None:
+            continue
+
+        contract = compile_stage_execution_contract(
+            session,
+            organization_id=organization_id,
+            stage=stage,
+        )
+        if input_data.get("compiled_execution_contract") == contract:
+            continue
+
+        task.input_data = {
+            **input_data,
+            "compiled_execution_contract": contract,
+        }
+        session.add(
+            TaskEvent(
+                organization_id=organization_id,
+                task_id=task.id,
+                actor_user_id=actor_user_id,
+                event_type="cognitive_mission.stage_compiled",
+                details={
+                    "stage_id": stage["id"],
+                    "contract_version": contract["version"],
+                    "profile": contract["profile"],
+                    "executable_now": contract["executable_now"],
+                    "blocking_reasons": contract["blocking_reasons"],
+                },
+            )
+        )
+        updated.append(task)
+
+    if updated:
+        session.commit()
+        for task in updated:
+            session.refresh(task)
+    return updated
 
 
 def queue_parallel_ready_stages(
@@ -909,6 +989,11 @@ def queue_parallel_ready_stages(
                 "required_capabilities": stage["capabilities"],
                 "execution_mode": stage["execution_mode"],
                 "evidence_gate_required": True,
+                "compiled_execution_contract": compile_stage_execution_contract(
+                    session,
+                    organization_id=organization_id,
+                    stage=stage,
+                ),
             },
         )
         session.add(task)
