@@ -122,13 +122,17 @@ Repository-engineering stages compile into a bounded sequence:
 2. inspect the configured repository;
 3. create a deterministic feature branch;
 4. bind generated artifact paths and contents into governed file writes;
-5. open a draft pull request;
-6. dispatch the repository CI workflow; and
-7. verify that the exact workflow run concludes successfully.
+5. open a merge-eligible pull request;
+6. dispatch the repository CI workflow;
+7. verify that the exact workflow run concludes successfully; and
+8. merge the exact tested head through the governed high-risk merge tool.
 
 Deployment stages compile into a Render deployment receipt followed by a
-deployment-status verification step. Stages that need GPU/external resources or
-explicit owner approval remain gated by their existing execution mode.
+deployment-status verification step. Repository stages cannot become complete
+before the tested pull request is actually merged. The merge action remains
+high-risk and uses the existing approval path. Stages that need GPU/external
+resources or explicit owner approval remain gated by their existing execution
+mode.
 
 The compiler records tool availability, missing required inputs, runtime
 bindings, approval/risk metadata, and acceptance checks. A binding such as a
