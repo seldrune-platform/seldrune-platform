@@ -3,16 +3,18 @@ from __future__ import annotations
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 
 from backend.app.api.dependencies import CurrentUserDep, SessionDep, require_org_permission
 from backend.app.core.rbac import Permission
 from backend.app.models.membership import Membership
 from backend.app.services.development_mission import (
-    build_development_mission,
+    current_development_mission,
     queue_parallel_ready_stages,
     sync_development_mission_task,
 )
+from backend.app.services.one_go_controller import execute_one_go_controller
 
 
 router = APIRouter(
@@ -26,15 +28,31 @@ MissionReadDep = Annotated[Membership, Depends(mission_read_dependency)]
 MissionManageDep = Annotated[Membership, Depends(mission_manage_dependency)]
 
 
+class OneGoExecutionRequest(BaseModel):
+    max_waves: int = Field(default=3, ge=1, le=10)
+    max_tasks: int = Field(default=8, ge=1, le=50)
+
+
 @router.get("/{organization_id}/development-mission")
 def get_development_mission(
     organization_id: UUID,
     _membership: MissionReadDep,
+    session: SessionDep,
 ) -> dict[str, Any]:
-    mission = build_development_mission()
+    mission, master_task = current_development_mission(
+        session,
+        organization_id=organization_id,
+    )
     return {
         **mission,
         "organization_id": str(organization_id),
+        "master_task_id": str(master_task.id) if master_task else None,
+        "master_task_status": master_task.status if master_task else None,
+        "one_go_execution": (
+            (master_task.output_data or {}).get("one_go_execution")
+            if master_task is not None
+            else None
+        ),
     }
 
 
@@ -103,3 +121,26 @@ def queue_development_mission_wave(
             "until execution produces verifiable evidence."
         ),
     }
+
+
+@router.post("/{organization_id}/development-mission/execute")
+def execute_development_mission(
+    organization_id: UUID,
+    payload: OneGoExecutionRequest,
+    _membership: MissionManageDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    try:
+        return execute_one_go_controller(
+            session,
+            organization_id=organization_id,
+            actor_user_id=current_user.id,
+            max_waves=payload.max_waves,
+            max_tasks=payload.max_tasks,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
