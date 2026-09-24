@@ -145,3 +145,38 @@ chain runner. The next runtime layer should consume these ordered contracts,
 resolve bindings only from persisted tool outputs, apply every acceptance
 predicate, and write the final cognitive verification only after the whole
 chain succeeds.
+
+
+## Executable Contract Chain Runner v1
+
+The Stage Compiler contract is now consumed by a bounded runtime chain runner.
+The runner does not trust model prose or reconstruct missing evidence from
+guesses. It advances only through persisted model input, governed ToolRuns, and
+explicit acceptance predicates.
+
+For repository-engineering contracts the runtime now:
+
+1. requires structured model output matching the compiler response schema;
+2. resolves wildcard artifact bindings for repeated governed file writes;
+3. resolves later step inputs only from persisted earlier ToolRun outputs;
+4. reuses persisted ToolRuns by contract step marker instead of duplicating
+   side effects after a retry;
+5. stops on missing bindings, unavailable tools, provider-pending states,
+   failed acceptance checks, or required approval;
+6. resumes an existing pending high-risk ToolRun only through the existing
+   approval path;
+7. independently revalidates every persisted succeeded ToolRun before granting
+   cognitive mission completion; and
+8. records the full contract-chain state in the mission task output for console
+   telemetry and later recovery.
+
+GitHub workflow dispatch now performs bounded post-dispatch run discovery because
+GitHub's dispatch endpoint normally returns HTTP 204 without a workflow run ID.
+The discovered run ID becomes the persisted binding for the subsequent
+workflow-status acceptance step. If discovery cannot resolve a run, the chain
+remains unresolved rather than inventing an identifier.
+
+The final merge remains a high-risk governed tool action. A repository stage
+cannot become runtime-verified until the exact persisted merge ToolRun succeeds
+after the CI acceptance step has succeeded. Model-produced code remains an
+input to that chain and is never treated as completion evidence by itself.
