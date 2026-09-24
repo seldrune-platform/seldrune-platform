@@ -578,7 +578,8 @@ def _tool_payload(
     missing = step.get("missing_fields")
     if isinstance(missing, list):
         for field in missing:
-            if field not in payload or payload[field] in {None, ""}:
+            value = payload.get(field)
+            if value is None or (isinstance(value, str) and not value.strip()):
                 unresolved.append(str(field))
 
     return (payload if not unresolved else None), sorted(set(unresolved))
@@ -588,7 +589,7 @@ def _chain_receipt_id(
     *,
     parent_task: Task,
     contract_version: str,
-    model_task_id: str,
+    model_task_id: str | None,
     receipts: list[dict[str, Any]],
 ) -> str:
     normalized = [
@@ -635,24 +636,38 @@ def verify_compiled_contract_evidence(
     if not isinstance(chain, dict):
         return False, "compiled_contract_chain_missing", []
 
+    model_steps = [
+        step
+        for step in contract.get("steps") or []
+        if isinstance(step, dict) and step.get("kind") == "model"
+    ]
+    if len(model_steps) > 1:
+        return False, "compiled_contract_multiple_model_steps_unsupported", []
+
+    model_task: Task | None = None
+    artifacts: list[dict[str, str]] = []
     model_task_id_raw = chain.get("model_task_id")
-    try:
-        model_task_id = UUID(str(model_task_id_raw))
-    except (TypeError, ValueError):
-        return False, "compiled_contract_model_task_invalid", []
-    model_task = session.get(Task, model_task_id)
-    if model_task is None:
-        return False, "compiled_contract_model_task_missing", []
-    if (
-        model_task.organization_id != task.organization_id
-        or (model_task.input_data or {}).get("contract_parent_task_id") != str(task.id)
-        or TaskStatus(model_task.status) is not TaskStatus.SUCCEEDED
-    ):
-        return False, "compiled_contract_model_task_scope_invalid", []
-    try:
-        artifacts = _model_artifacts(model_task)
-    except ContractRunnerError as exc:
-        return False, str(exc), []
+    if model_steps:
+        try:
+            model_task_id = UUID(str(model_task_id_raw))
+        except (TypeError, ValueError):
+            return False, "compiled_contract_model_task_invalid", []
+        model_task = session.get(Task, model_task_id)
+        if model_task is None:
+            return False, "compiled_contract_model_task_missing", []
+        if (
+            model_task.organization_id != task.organization_id
+            or (model_task.input_data or {}).get("contract_parent_task_id")
+            != str(task.id)
+            or TaskStatus(model_task.status) is not TaskStatus.SUCCEEDED
+        ):
+            return False, "compiled_contract_model_task_scope_invalid", []
+        try:
+            artifacts = _model_artifacts(model_task)
+        except ContractRunnerError as exc:
+            return False, str(exc), []
+    elif model_task_id_raw not in {None, ""}:
+        return False, "compiled_contract_unexpected_model_task", []
 
     raw_receipts = chain.get("receipts")
     if not isinstance(raw_receipts, list):
@@ -729,7 +744,7 @@ def verify_compiled_contract_evidence(
     expected_chain_receipt = _chain_receipt_id(
         parent_task=task,
         contract_version=contract_version,
-        model_task_id=str(model_task.id),
+        model_task_id=str(model_task.id) if model_task is not None else None,
         receipts=canonical_receipts,
     )
     evidence = output.get("evidence")
@@ -814,12 +829,22 @@ def advance_compiled_contract(
             reason=f"parent_task_{task.status}",
         )
 
+    tool_steps = [
+        step
+        for step in contract.get("steps") or []
+        if isinstance(step, dict) and step.get("kind") == "tool"
+    ]
+    if not tool_steps:
+        return _blocked_report(
+            task=task,
+            contract=contract,
+            reason="contract_has_no_machine_evidence_steps",
+        )
+
     unavailable = [
         str(step.get("id"))
-        for step in contract.get("steps") or []
-        if isinstance(step, dict)
-        and step.get("kind") == "tool"
-        and not step.get("tool_slug")
+        for step in tool_steps
+        if not step.get("tool_slug")
     ]
     if unavailable:
         return _blocked_report(
@@ -1215,20 +1240,10 @@ def advance_compiled_contract(
                 executed_steps=executed_steps,
             )
 
-    if model_task is None:
-        return _blocked_report(
-            task=task,
-            contract=contract,
-            reason="model_evidence_step_missing",
-            match_score=match_score,
-            step_results=step_results,
-            executed_steps=executed_steps,
-        )
-
     chain_receipt = _chain_receipt_id(
         parent_task=task,
         contract_version=str(contract.get("version") or ""),
-        model_task_id=str(model_task.id),
+        model_task_id=str(model_task.id) if model_task is not None else None,
         receipts=accepted_receipts,
     )
     output = {
@@ -1241,7 +1256,9 @@ def advance_compiled_contract(
         "contract_runner_version": RUNNER_VERSION,
         "stage_id": _stage_id(task),
         "contract_chain": {
-            "model_task_id": str(model_task.id),
+            "model_task_id": (
+                str(model_task.id) if model_task is not None else None
+            ),
             "model_artifact_count": len(artifacts),
             "receipts": accepted_receipts,
             "completed_step_ids": [
