@@ -461,6 +461,11 @@ def execute_one_go_controller(
                 if contract_executed:
                     report["tasks_executed"] += 1
 
+                recovery_classification = (
+                    str(recovery.get("final_classification") or "")
+                    if isinstance(recovery, dict)
+                    else ""
+                )
                 if contract_status == "verified":
                     report["tasks_verified"] += 1
                     wave_verified += 1
@@ -468,13 +473,14 @@ def execute_one_go_controller(
                 elif contract_status == "unverified":
                     report["tasks_unverified"] += 1
                     disposition = "unverified"
-                elif contract_reason.startswith(
+                elif recovery_classification == "failed" or contract_reason.startswith(
                     (
                         "model_step_failed:",
                         "tool_step_failed:",
                         "acceptance_failed:",
                         "tool_child_failed:",
                         "parent_task_failed",
+                        "parent_task_cancelled",
                     )
                 ):
                     report["tasks_failed"] += 1
