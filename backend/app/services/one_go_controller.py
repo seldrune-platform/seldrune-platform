@@ -15,10 +15,8 @@ from backend.app.services.audit import record_audit
 from backend.app.services.cognitive_evidence import (
     verify_task_completion_evidence,
 )
-from backend.app.services.contract_runner import (
-    ContractRunnerError,
-    advance_compiled_contract,
-)
+from backend.app.services.contract_recovery import advance_contract_with_recovery
+from backend.app.services.contract_runner import ContractRunnerError
 from backend.app.services.autonomous_execution import _execute_registered_tool
 from backend.app.services.development_mission import (
     MISSION_KIND,
@@ -211,12 +209,15 @@ def execute_one_go_controller(
     actor_user_id: UUID,
     max_waves: int = 3,
     max_tasks: int = 8,
+    recovery_rounds: int = 3,
     gateway: ModelGateway | None = None,
 ) -> dict[str, Any]:
     if not 1 <= max_waves <= 10:
         raise ValueError("max_waves must be between 1 and 10")
     if not 1 <= max_tasks <= 50:
         raise ValueError("max_tasks must be between 1 and 50")
+    if not 1 <= recovery_rounds <= 5:
+        raise ValueError("recovery_rounds must be between 1 and 5")
 
     master_task, mission, _ = sync_development_mission_task(
         session,
@@ -262,6 +263,7 @@ def execute_one_go_controller(
         "waves_executed": 0,
         "task_limit_requested": max_tasks,
         "task_limit": effective_task_limit,
+        "recovery_rounds": recovery_rounds,
         "governance": {
             "autonomous_execution_allowed": governance_allowed,
             "max_steps_per_command": (
@@ -274,6 +276,11 @@ def execute_one_go_controller(
         "tasks_unverified": 0,
         "tasks_blocked": 0,
         "tasks_failed": 0,
+        "recovery_attempts": 0,
+        "recovery_retryable_remaining": 0,
+        "recovery_owner_gates": 0,
+        "recovery_configuration_gates": 0,
+        "recovery_external_resource_gates": 0,
         "stage_results": [],
         "halted_reason": None,
     }
@@ -294,6 +301,7 @@ def execute_one_go_controller(
             "controller_version": CONTROLLER_VERSION,
             "max_waves": max_waves,
             "max_tasks": max_tasks,
+            "recovery_rounds": recovery_rounds,
         },
     )
     session.commit()
@@ -405,11 +413,12 @@ def execute_one_go_controller(
                 and isinstance(compiled_contract, dict)
             ):
                 try:
-                    contract_report = advance_compiled_contract(
+                    contract_report = advance_contract_with_recovery(
                         session,
                         task=task,
                         actor_user_id=actor_user_id,
                         max_steps=12,
+                        max_rounds=recovery_rounds,
                         gateway=gateway,
                     )
                 except ContractRunnerError as exc:
@@ -427,6 +436,22 @@ def execute_one_go_controller(
                 contract_status = str(contract_report.get("status") or "blocked")
                 contract_reason = str(contract_report.get("reason") or "")
                 contract_executed = int(contract_report.get("executed_steps") or 0)
+                recovery = contract_report.get("recovery")
+                if isinstance(recovery, dict):
+                    report["recovery_attempts"] += int(
+                        recovery.get("rounds_executed") or 0
+                    )
+                    classification = str(
+                        recovery.get("final_classification") or ""
+                    )
+                    if classification == "retryable":
+                        report["recovery_retryable_remaining"] += 1
+                    elif classification == "approval":
+                        report["recovery_owner_gates"] += 1
+                    elif classification == "configuration":
+                        report["recovery_configuration_gates"] += 1
+                    elif classification == "external-resource":
+                        report["recovery_external_resource_gates"] += 1
                 contract_match_score_raw = contract_report.get("match_score")
                 contract_match_score = (
                     int(contract_match_score_raw)
@@ -436,6 +461,11 @@ def execute_one_go_controller(
                 if contract_executed:
                     report["tasks_executed"] += 1
 
+                recovery_classification = (
+                    str(recovery.get("final_classification") or "")
+                    if isinstance(recovery, dict)
+                    else ""
+                )
                 if contract_status == "verified":
                     report["tasks_verified"] += 1
                     wave_verified += 1
@@ -443,13 +473,14 @@ def execute_one_go_controller(
                 elif contract_status == "unverified":
                     report["tasks_unverified"] += 1
                     disposition = "unverified"
-                elif contract_reason.startswith(
+                elif recovery_classification == "failed" or contract_reason.startswith(
                     (
                         "model_step_failed:",
                         "tool_step_failed:",
                         "acceptance_failed:",
                         "tool_child_failed:",
                         "parent_task_failed",
+                        "parent_task_cancelled",
                     )
                 ):
                     report["tasks_failed"] += 1
@@ -638,6 +669,11 @@ def execute_one_go_controller(
                 "tasks_unverified",
                 "tasks_blocked",
                 "tasks_failed",
+                "recovery_attempts",
+                "recovery_retryable_remaining",
+                "recovery_owner_gates",
+                "recovery_configuration_gates",
+                "recovery_external_resource_gates",
                 "ending_percentage",
                 "halted_reason",
             )

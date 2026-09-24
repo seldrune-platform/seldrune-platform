@@ -26,10 +26,22 @@
     const halt = report.halted_reason
       ? report.halted_reason.replaceAll('_', ' ')
       : 'controller completed requested waves';
+    const recoveryAttempts = Number(report.recovery_attempts || 0);
+    const gates = [
+      Number(report.recovery_owner_gates || 0) ? 'owner approval' : '',
+      Number(report.recovery_configuration_gates || 0) ? 'configuration' : '',
+      Number(report.recovery_external_resource_gates || 0) ? 'external resource' : '',
+    ].filter(Boolean);
+    const recoveryText = recoveryAttempts
+      ? ` Recovery: ${recoveryAttempts} bounded attempt(s)`
+        + (gates.length ? `; stopped at ${gates.join(', ')} gate(s)` : '')
+        + '.'
+      : '';
     text(
       byId('mission-one-go-status'),
       `Progress ${percentage(report.starting_percentage)} → `
       + `${percentage(report.ending_percentage)} · ${halt}.`
+      + recoveryText
     );
   }
 
@@ -229,6 +241,7 @@
         body: JSON.stringify({
           max_waves: 3,
           max_tasks: 8,
+          recovery_rounds: 3,
         }),
       });
       renderOneGo(report);

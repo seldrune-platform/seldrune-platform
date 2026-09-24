@@ -235,6 +235,7 @@ def test_owner_console_contains_cognitive_mission_board() -> None:
         assert "/development-mission/sync" in script.text
         assert "/development-mission/queue-ready" in script.text
         assert "/development-mission/execute" in script.text
+        assert "recovery_rounds" in script.text
         assert "runOneGo" in script.text
         assert "Synchronized" in script.text
 
@@ -300,6 +301,11 @@ def test_one_go_blocks_compiled_work_before_model_without_tools(
     assert report["tasks_unverified"] == 0
     assert report["tasks_blocked"] == 4
     assert report["tasks_failed"] == 0
+    assert report["recovery_rounds"] == 3
+    assert report["recovery_attempts"] == 3
+    assert report["recovery_configuration_gates"] == 3
+    assert report["recovery_owner_gates"] == 0
+    assert report["recovery_external_resource_gates"] == 0
     assert report["halted_reason"] == "no_new_verified_dependency_progress"
 
     by_stage = {

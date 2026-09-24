@@ -170,3 +170,43 @@ credit or unlocking a dependency.
 
 The remaining production gate is execution evidence from hosted CI. The code
 must stay unmerged while repository CI runners fail before test steps begin.
+
+## Contract Recovery Controller v1
+
+One-Go now includes a bounded recovery layer above the compiled-contract runner.
+It may re-advance an automatic contract for at most five recovery rounds in one
+owner request. The default is three rounds.
+
+Recovery is deliberately narrow:
+
+- `step_limit`, pending acceptance, and already-running tool/model states may be
+  rechecked;
+- owner approval gates stop immediately;
+- external-resource stages stop immediately;
+- missing tools, unresolved fixed inputs, unresolved bindings, and missing
+  capable agents stop as configuration blockers;
+- terminal model, tool, child-task, parent-task, and acceptance failures are not
+  retried; and
+- the recovery controller never passes
+  `confirmed_sensitive_action=True`, so high-risk actions remain on the normal
+  approval path.
+
+The controller reports every recovery round and a final blocker
+classification. One-Go aggregates those rounds and exposes owner-approval,
+configuration, external-resource, and still-retryable gate counts to the Owner
+Console.
+
+### GitHub workflow-dispatch binding
+
+GitHub's workflow-dispatch endpoint commonly succeeds with HTTP 204 and no
+workflow-run ID. A missing run ID would leave the compiled `verify-ci` binding
+unresolvable even though CI was successfully dispatched.
+
+The GitHub adapter now snapshots recent workflow-dispatch run IDs before
+dispatch, performs the dispatch, then performs bounded run discovery on the same
+workflow and branch. Only a newly observed run created at the dispatch boundary
+is accepted as the runtime binding. If no new run can be resolved, the adapter
+keeps the run ID unresolved instead of inventing one.
+
+This recovery layer does not change the current merge gate: PRs #287, #288, and
+#289 remain unmerged until hosted CI produces executable repository evidence.
