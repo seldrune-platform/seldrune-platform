@@ -138,6 +138,10 @@ def _assign_parent_agent(
             and assigned.organization_id == task.organization_id
             and assigned.status == AgentStatus.ACTIVE.value
         ):
+            if TaskStatus(task.status) is TaskStatus.QUEUED:
+                transition_task(task, TaskStatus.ASSIGNED)
+                session.commit()
+                session.refresh(task)
             return assigned, 100
 
     agents = list(
@@ -854,6 +858,28 @@ def advance_compiled_contract(
             task=task,
             contract=contract,
             reason="compiled_tools_unavailable:" + ",".join(unavailable),
+        )
+
+    unresolved_inputs = [
+        (
+            str(step.get("id")),
+            [
+                str(field)
+                for field in step.get("missing_fields") or []
+            ],
+        )
+        for step in tool_steps
+        if step.get("status") == "input-unresolved"
+    ]
+    if unresolved_inputs:
+        details = ";".join(
+            f"{step_id}:{','.join(fields)}"
+            for step_id, fields in unresolved_inputs
+        )
+        return _blocked_report(
+            task=task,
+            contract=contract,
+            reason=f"compiled_inputs_unresolved:{details}",
         )
 
     agent, match_score = _assign_parent_agent(
