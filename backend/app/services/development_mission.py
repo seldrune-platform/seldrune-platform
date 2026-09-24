@@ -12,7 +12,7 @@ from backend.app.models.task import Task, TaskEvent
 
 
 MISSION_KIND = "seldrune_cognitive_development_mission"
-MISSION_VERSION = "cognitive-execution-v1"
+MISSION_VERSION = "cognitive-execution-v2"
 MASTER_TASK_TITLE = "Seldrune Master Development Mission"
 
 
@@ -281,9 +281,10 @@ STAGES = (
         "Queue and execute eligible dependency-ready stages under policy and evidence gates.",
         "console",
         15,
-        "pending",
-        ("console_cognitive_mission", "model_router_unified"),
+        "completed",
+        ("console_cognitive_mission",),
         ("orchestration", "tools"),
+        evidence_refs=("feature:one-go-execution-controller",),
     ),
     StageDefinition(
         "console_observability",
@@ -565,10 +566,17 @@ def _validate_definitions() -> None:
 _validate_definitions()
 
 
-def build_development_mission() -> dict[str, Any]:
+def build_development_mission(
+    verified_stage_ids: set[str] | None = None,
+    dynamic_evidence_refs: dict[str, list[str]] | None = None,
+) -> dict[str, Any]:
     workstreams = {item.id: item for item in WORKSTREAMS}
+    dynamically_verified = verified_stage_ids or set()
+    dynamic_refs = dynamic_evidence_refs or {}
     completed = {
-        stage.id for stage in STAGES if stage.status == "completed"
+        stage.id
+        for stage in STAGES
+        if stage.status == "completed" or stage.id in dynamically_verified
     }
 
     stage_rows: list[dict[str, Any]] = []
@@ -582,16 +590,13 @@ def build_development_mission() -> dict[str, Any]:
             dependency in completed for dependency in stage.depends_on
         )
         paused = stream.paused or bool(stage.paused_reason)
-        ready = (
-            stage.status != "completed"
-            and dependencies_complete
-            and not paused
-        )
+        effective_completed = stage.id in completed
+        ready = not effective_completed and dependencies_complete and not paused
         if ready:
             ready_stage_ids.append(stage.id)
-        elif stage.status != "completed":
+        elif not effective_completed:
             blocked_stage_ids.append(stage.id)
-        if paused and stage.status != "completed":
+        if paused and not effective_completed:
             paused_stage_ids.append(stage.id)
 
         stage_rows.append(
@@ -601,7 +606,7 @@ def build_development_mission() -> dict[str, Any]:
                 "objective": stage.objective,
                 "workstream": stage.workstream,
                 "weight": stage.weight,
-                "status": stage.status,
+                "status": "completed" if effective_completed else "pending",
                 "depends_on": list(stage.depends_on),
                 "dependencies_complete": dependencies_complete,
                 "ready": ready,
@@ -611,7 +616,18 @@ def build_development_mission() -> dict[str, Any]:
                 ),
                 "capabilities": list(stage.capabilities),
                 "execution_mode": stage.execution_mode,
-                "evidence_refs": list(stage.evidence_refs),
+                "evidence_refs": [
+                    *stage.evidence_refs,
+                    *dynamic_refs.get(stage.id, []),
+                ],
+                "completion_source": (
+                    "runtime_verified"
+                    if stage.id in dynamically_verified
+                    and stage.status != "completed"
+                    else "roadmap_evidence"
+                    if stage.status == "completed"
+                    else None
+                ),
             }
         )
 
@@ -624,7 +640,7 @@ def build_development_mission() -> dict[str, Any]:
         completed_weight = sum(
             stage.weight
             for stage in stream_stages
-            if stage.status == "completed"
+            if stage.id in completed
         )
         percentage = float(completed_weight)
         overall += percentage * (stream.weight / 100)
@@ -639,7 +655,7 @@ def build_development_mission() -> dict[str, Any]:
                 "paused": stream.paused,
                 "paused_reason": stream.paused_reason,
                 "completed_stage_count": sum(
-                    stage.status == "completed" for stage in stream_stages
+                    stage.id in completed for stage in stream_stages
                 ),
                 "stage_count": len(stream_stages),
             }
