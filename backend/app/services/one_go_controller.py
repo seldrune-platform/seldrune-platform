@@ -67,6 +67,13 @@ def _verification_from_output(
     if not isinstance(output, dict):
         return False, "missing_structured_output", []
 
+    tool_request = (task.input_data or {}).get("tool_request")
+    if not (
+        isinstance(tool_request, dict)
+        and tool_request.get("slug")
+    ):
+        return False, "task_has_no_verifiable_tool_contract", []
+
     evidence = output.get("evidence")
     if not (
         output.get("execution_type") == "tool"
@@ -75,6 +82,10 @@ def _verification_from_output(
         and evidence.get("tool_run_id")
     ):
         return False, "model_output_is_not_completion_evidence", []
+
+    expected_tool_slug = str(tool_request["slug"])
+    if str(output.get("tool_slug") or "") != expected_tool_slug:
+        return False, "tool_contract_mismatch", []
 
     try:
         tool_run_id = UUID(str(evidence["tool_run_id"]))
