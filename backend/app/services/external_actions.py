@@ -520,6 +520,34 @@ def github_merge_pull_request(
     }
 
 
+def _workflow_dispatch_runs(
+    *,
+    token: str,
+    owner: str,
+    repo: str,
+    workflow: str,
+    ref: str,
+) -> list[dict[str, Any]]:
+    response = httpx.get(
+        (
+            f"https://api.github.com/repos/{owner}/{repo}/actions/"
+            f"workflows/{workflow}/runs"
+        ),
+        headers=_github_headers(token),
+        params={
+            "branch": ref,
+            "event": "workflow_dispatch",
+            "per_page": 10,
+        },
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    data = _json_response(response, "GitHub")
+    runs = data.get("workflow_runs")
+    if not isinstance(runs, list):
+        return []
+    return [item for item in runs if isinstance(item, dict)]
+
+
 def _discover_dispatched_workflow_run(
     *,
     token: str,
@@ -528,40 +556,32 @@ def _discover_dispatched_workflow_run(
     workflow: str,
     ref: str,
     dispatched_at: datetime,
+    excluded_run_ids: set[str],
 ) -> dict[str, Any] | None:
-    url = (
-        f"https://api.github.com/repos/{owner}/{repo}/actions/"
-        f"workflows/{workflow}/runs"
-    )
     earliest = dispatched_at - timedelta(seconds=5)
     for attempt in range(5):
-        response = httpx.get(
-            url,
-            headers=_github_headers(token),
-            params={
-                "branch": ref,
-                "event": "workflow_dispatch",
-                "per_page": 10,
-            },
-            timeout=_REQUEST_TIMEOUT_SECONDS,
+        runs = _workflow_dispatch_runs(
+            token=token,
+            owner=owner,
+            repo=repo,
+            workflow=workflow,
+            ref=ref,
         )
-        data = _json_response(response, "GitHub")
-        runs = data.get("workflow_runs")
-        if isinstance(runs, list):
-            for item in runs:
-                if not isinstance(item, dict):
-                    continue
-                created_at = item.get("created_at")
-                if not isinstance(created_at, str):
-                    continue
-                try:
-                    created = datetime.fromisoformat(
-                        created_at.replace("Z", "+00:00")
-                    )
-                except ValueError:
-                    continue
-                if created >= earliest:
-                    return item
+        for item in runs:
+            run_id = item.get("id")
+            if run_id is None or str(run_id) in excluded_run_ids:
+                continue
+            created_at = item.get("created_at")
+            if not isinstance(created_at, str):
+                continue
+            try:
+                created = datetime.fromisoformat(
+                    created_at.replace("Z", "+00:00")
+                )
+            except ValueError:
+                continue
+            if created >= earliest:
+                return item
         if attempt < 4:
             time.sleep(1)
     return None
@@ -580,6 +600,18 @@ def github_dispatch_workflow(
     if not isinstance(inputs, dict):
         raise ToolGatewayError("inputs must be an object")
 
+    existing_runs = _workflow_dispatch_runs(
+        token=token,
+        owner=owner,
+        repo=repo,
+        workflow=workflow,
+        ref=ref,
+    )
+    existing_run_ids = {
+        str(item["id"])
+        for item in existing_runs
+        if item.get("id") is not None
+    }
     dispatched_at = datetime.now(UTC)
     response = httpx.post(
         (
@@ -617,6 +649,7 @@ def github_dispatch_workflow(
             workflow=workflow,
             ref=ref,
             dispatched_at=dispatched_at,
+            excluded_run_ids=existing_run_ids,
         )
         if discovered is not None:
             run_id = discovered.get("id")
