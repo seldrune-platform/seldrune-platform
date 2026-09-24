@@ -353,9 +353,9 @@ def execute_agent_task(
         transition_task(
             task,
             TaskStatus.FAILED,
-            output_data=output_data,
             error_message=structured_output_error,
         )
+        task.output_data = output_data
         session.add(
             TaskEvent(
                 organization_id=task.organization_id,
