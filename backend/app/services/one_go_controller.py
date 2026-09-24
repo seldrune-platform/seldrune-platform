@@ -276,6 +276,11 @@ def execute_one_go_controller(
         "tasks_unverified": 0,
         "tasks_blocked": 0,
         "tasks_failed": 0,
+        "recovery_attempts": 0,
+        "recovery_retryable_remaining": 0,
+        "recovery_owner_gates": 0,
+        "recovery_configuration_gates": 0,
+        "recovery_external_resource_gates": 0,
         "stage_results": [],
         "halted_reason": None,
     }
@@ -431,6 +436,22 @@ def execute_one_go_controller(
                 contract_status = str(contract_report.get("status") or "blocked")
                 contract_reason = str(contract_report.get("reason") or "")
                 contract_executed = int(contract_report.get("executed_steps") or 0)
+                recovery = contract_report.get("recovery")
+                if isinstance(recovery, dict):
+                    report["recovery_attempts"] += int(
+                        recovery.get("rounds_executed") or 0
+                    )
+                    classification = str(
+                        recovery.get("final_classification") or ""
+                    )
+                    if classification == "retryable":
+                        report["recovery_retryable_remaining"] += 1
+                    elif classification == "approval":
+                        report["recovery_owner_gates"] += 1
+                    elif classification == "configuration":
+                        report["recovery_configuration_gates"] += 1
+                    elif classification == "external-resource":
+                        report["recovery_external_resource_gates"] += 1
                 contract_match_score_raw = contract_report.get("match_score")
                 contract_match_score = (
                     int(contract_match_score_raw)
@@ -642,6 +663,11 @@ def execute_one_go_controller(
                 "tasks_unverified",
                 "tasks_blocked",
                 "tasks_failed",
+                "recovery_attempts",
+                "recovery_retryable_remaining",
+                "recovery_owner_gates",
+                "recovery_configuration_gates",
+                "recovery_external_resource_gates",
                 "ending_percentage",
                 "halted_reason",
             )
