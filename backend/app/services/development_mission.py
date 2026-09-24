@@ -8,7 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.core.tasking import TERMINAL_TASK_STATUSES, TaskStatus
+from backend.app.core.tools import ToolRunStatus
 from backend.app.models.task import Task, TaskEvent
+from backend.app.models.tool_run import ToolRun
 from backend.app.services.cognitive_evidence import (
     verify_task_completion_evidence,
 )
@@ -744,6 +746,140 @@ def _verified_runtime_stage_evidence(
     return verified, evidence_refs
 
 
+def _contract_requires_verified_upstream_commit(
+    contract: dict[str, Any],
+) -> bool:
+    for step in contract.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        bindings = step.get("bindings")
+        if not isinstance(bindings, dict):
+            continue
+        if "upstream.verified_commit_sha" in bindings.values():
+            return True
+    return False
+
+
+def _verified_dependency_commit_evidence(
+    session: Session,
+    *,
+    organization_id: UUID,
+    master_task_id: UUID,
+    dependency_stage_ids: list[str],
+) -> dict[str, Any] | None:
+    dependency_ids = {
+        str(stage_id)
+        for stage_id in dependency_stage_ids
+        if str(stage_id).strip()
+    }
+    if not dependency_ids:
+        return None
+
+    candidates: list[dict[str, Any]] = []
+    tasks = list(
+        session.scalars(
+            select(Task).where(Task.organization_id == organization_id)
+        )
+    )
+    for task in tasks:
+        input_data = task.input_data or {}
+        if input_data.get("master_mission_task_id") != str(master_task_id):
+            continue
+        stage_id = str(input_data.get("cognitive_mission_stage_id") or "")
+        if stage_id not in dependency_ids:
+            continue
+        if TaskStatus(task.status) is not TaskStatus.SUCCEEDED:
+            continue
+
+        output = task.output_data or {}
+        verification = (
+            output.get("cognitive_verification")
+            if isinstance(output, dict)
+            else None
+        )
+        if not (
+            isinstance(verification, dict)
+            and verification.get("status") == "verified"
+        ):
+            continue
+
+        evidence_valid, _reason, refs = verify_task_completion_evidence(
+            session,
+            task=task,
+        )
+        if not evidence_valid:
+            continue
+
+        chain = output.get("contract_chain")
+        receipts = (
+            chain.get("receipts")
+            if isinstance(chain, dict)
+            else None
+        )
+        if not isinstance(receipts, list):
+            continue
+
+        for receipt in receipts:
+            if not isinstance(receipt, dict):
+                continue
+            if receipt.get("step_id") != "merge-verified-pull-request":
+                continue
+            try:
+                tool_run_id = UUID(str(receipt.get("tool_run_id") or ""))
+            except ValueError:
+                continue
+            run = session.get(ToolRun, tool_run_id)
+            if run is None:
+                continue
+            if (
+                run.organization_id != organization_id
+                or run.status != ToolRunStatus.SUCCEEDED.value
+            ):
+                continue
+            tool_output = run.output_data or {}
+            if not (
+                isinstance(tool_output, dict)
+                and tool_output.get("merged") is True
+            ):
+                continue
+            commit_sha = str(tool_output.get("sha") or "").strip()
+            if not commit_sha:
+                continue
+
+            completed_at = (
+                run.completed_at
+                or task.completed_at
+                or task.updated_at
+                or task.created_at
+            )
+            candidates.append(
+                {
+                    "verified_commit_sha": commit_sha,
+                    "source_stage_id": stage_id,
+                    "source_task_id": str(task.id),
+                    "source_tool_run_id": str(run.id),
+                    "completed_at": (
+                        completed_at.isoformat()
+                        if completed_at is not None
+                        else ""
+                    ),
+                    "evidence_refs": sorted(set(refs)),
+                }
+            )
+
+    if not candidates:
+        return None
+    candidates.sort(
+        key=lambda item: (
+            str(item["completed_at"]),
+            str(item["source_tool_run_id"]),
+        )
+    )
+    selected = dict(candidates[-1])
+    selected["source"] = "verified_dependency_merge_receipt"
+    return selected
+
+
 def current_development_mission(
     session: Session,
     *,
@@ -923,13 +1059,28 @@ def compile_mission_stage_contracts(
             organization_id=organization_id,
             stage=stage,
         )
-        if input_data.get("compiled_execution_contract") == contract:
-            continue
-
-        task.input_data = {
+        next_input_data = {
             **input_data,
             "compiled_execution_contract": contract,
         }
+        if _contract_requires_verified_upstream_commit(contract):
+            upstream_evidence = _verified_dependency_commit_evidence(
+                session,
+                organization_id=organization_id,
+                master_task_id=master_task.id,
+                dependency_stage_ids=[
+                    str(item) for item in stage.get("depends_on") or []
+                ],
+            )
+            if upstream_evidence is None:
+                next_input_data.pop("upstream_evidence", None)
+            else:
+                next_input_data["upstream_evidence"] = upstream_evidence
+
+        if input_data == next_input_data:
+            continue
+
+        task.input_data = next_input_data
         session.add(
             TaskEvent(
                 organization_id=organization_id,
@@ -983,6 +1134,33 @@ def queue_parallel_ready_stages(
     for stage in mission["parallel_ready_stages"]:
         if stage["id"] in existing_stage_ids:
             continue
+        contract = compile_stage_execution_contract(
+            session,
+            organization_id=organization_id,
+            stage=stage,
+        )
+        input_data: dict[str, Any] = {
+            "master_mission_task_id": str(master_task.id),
+            "cognitive_mission_stage_id": stage["id"],
+            "workstream": stage["workstream"],
+            "depends_on": stage["depends_on"],
+            "required_capabilities": stage["capabilities"],
+            "execution_mode": stage["execution_mode"],
+            "evidence_gate_required": True,
+            "compiled_execution_contract": contract,
+        }
+        if _contract_requires_verified_upstream_commit(contract):
+            upstream_evidence = _verified_dependency_commit_evidence(
+                session,
+                organization_id=organization_id,
+                master_task_id=master_task.id,
+                dependency_stage_ids=[
+                    str(item) for item in stage.get("depends_on") or []
+                ],
+            )
+            if upstream_evidence is not None:
+                input_data["upstream_evidence"] = upstream_evidence
+
         task = Task(
             organization_id=organization_id,
             created_by_user_id=actor_user_id,
@@ -990,20 +1168,7 @@ def queue_parallel_ready_stages(
             objective=stage["objective"],
             priority=90,
             status=TaskStatus.QUEUED.value,
-            input_data={
-                "master_mission_task_id": str(master_task.id),
-                "cognitive_mission_stage_id": stage["id"],
-                "workstream": stage["workstream"],
-                "depends_on": stage["depends_on"],
-                "required_capabilities": stage["capabilities"],
-                "execution_mode": stage["execution_mode"],
-                "evidence_gate_required": True,
-                "compiled_execution_contract": compile_stage_execution_contract(
-                    session,
-                    organization_id=organization_id,
-                    stage=stage,
-                ),
-            },
+            input_data=input_data,
         )
         session.add(task)
         session.flush()
