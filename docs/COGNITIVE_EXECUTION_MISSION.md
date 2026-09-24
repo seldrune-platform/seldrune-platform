@@ -230,3 +230,27 @@ verification later stops validating, stale `upstream_evidence` is removed and
 the deployment binding remains unresolved rather than deploying an assumed
 commit.
 
+## Hosted CI infrastructure classification
+
+A completed GitHub Actions run with conclusion `failure` is no longer assumed
+to be a repository failure before its job metadata is inspected. The workflow
+status adapter checks the latest jobs and distinguishes a pre-step hosted-runner
+failure from an executed repository check.
+
+The narrow infrastructure signature is:
+
+- the workflow is completed with conclusion `failure`;
+- no job reports an allocated runner; and
+- no job reports any executed steps.
+
+That signature is emitted as
+`failure_classification=hosted_runner_unavailable`. The compiled
+`verify-ci` acceptance rule maps only that value to an external-resource
+blocker. Runs that allocated a runner or executed repository steps continue
+through the normal success/pending/failure acceptance logic.
+
+Contract recovery treats this blocker as non-retryable within the bounded
+One-Go loop. The Owner Console can therefore report that execution stopped on
+an external CI resource without mislabeling unexecuted code as a failed test.
+The CI success requirement itself is unchanged.
+
