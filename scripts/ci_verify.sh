@@ -34,7 +34,8 @@ alembic upgrade head
 
 export SELDRUNE_ENVIRONMENT=production
 export SELDRUNE_RELEASE_SHA="${SELDRUNE_CI_RELEASE_SHA}"
-export SELDRUNE_AUTH_SECRET_KEY="${SELDRUNE_AUTH_SECRET_KEY:-ci-production-secret-key-longer-than-thirty-two-characters}"
+default_auth_secret="ci-production-secret-key-longer-than-thirty-two-characters"
+export SELDRUNE_AUTH_SECRET_KEY="${SELDRUNE_AUTH_SECRET_KEY:-$default_auth_secret}"
 
 uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 \
   > /tmp/seldrune-uvicorn.log 2>&1 &
