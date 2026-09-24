@@ -123,6 +123,7 @@ def _verification_from_output(
         f"tool-run:{tool_run.id}",
     ]
 
+
 def _record_verification(
     session: Session,
     *,
