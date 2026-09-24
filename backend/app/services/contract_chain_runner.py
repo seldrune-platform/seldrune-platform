@@ -214,6 +214,68 @@ def _tool_for_step(
     return tool
 
 
+def _verified_upstream_context(
+    session: Session,
+    *,
+    task: Task,
+) -> dict[str, Any]:
+    input_data = task.input_data or {}
+    explicit = input_data.get("contract_runtime_context")
+    context = dict(explicit) if isinstance(explicit, dict) else {}
+    master_task_id = input_data.get("master_mission_task_id")
+    dependencies = input_data.get("depends_on")
+    if not master_task_id or not isinstance(dependencies, list):
+        return context
+
+    dependency_ids = {str(item) for item in dependencies if item}
+    if not dependency_ids:
+        return context
+
+    candidates = session.scalars(
+        select(Task).where(Task.organization_id == task.organization_id)
+    )
+    for candidate in candidates:
+        candidate_input = candidate.input_data or {}
+        if candidate_input.get("master_mission_task_id") != str(master_task_id):
+            continue
+        stage_id = candidate_input.get("cognitive_mission_stage_id")
+        if str(stage_id) not in dependency_ids:
+            continue
+
+        candidate_output = candidate.output_data or {}
+        verification = candidate_output.get("cognitive_verification")
+        if not (
+            isinstance(verification, dict)
+            and verification.get("status") == "verified"
+        ):
+            continue
+
+        chain = candidate_output.get("contract_execution")
+        if not isinstance(chain, dict) or chain.get("status") != "verified":
+            continue
+        steps = chain.get("steps")
+        if not isinstance(steps, dict):
+            continue
+        merge_step = steps.get("merge-verified-pull-request")
+        if not isinstance(merge_step, dict):
+            continue
+        runs = merge_step.get("runs")
+        if not isinstance(runs, list):
+            continue
+        for record in reversed(runs):
+            if not isinstance(record, dict):
+                continue
+            output = record.get("output")
+            if not isinstance(output, dict) or output.get("merged") is not True:
+                continue
+            sha = output.get("sha")
+            if isinstance(sha, str) and sha.strip():
+                context.setdefault("verified_commit_sha", sha.strip())
+                break
+
+    return context
+
+
 def _state(task: Task, contract: dict[str, Any]) -> dict[str, Any]:
     output = task.output_data or {}
     existing = output.get("contract_execution")
@@ -501,9 +563,7 @@ def run_compiled_execution_contract(
 
     state = _state(task, contract)
     model_output = _model_output(task)
-    upstream = (task.input_data or {}).get("contract_runtime_context") or {}
-    if not isinstance(upstream, dict):
-        upstream = {}
+    upstream = _verified_upstream_context(session, task=task)
     agent = (
         session.get(Agent, task.assigned_agent_id)
         if task.assigned_agent_id is not None
