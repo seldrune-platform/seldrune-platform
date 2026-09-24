@@ -154,6 +154,20 @@ def test_contract_preflight_blocks_before_model_cost(
     assert invocations.status_code == 200
     assert invocations.json() == []
 
+    recovered = client.post(
+        (
+            f"/api/v1/organizations/{organization_id}/development-mission/"
+            f"tasks/{task.json()['id']}/recover-contract"
+        ),
+        headers=headers,
+        json={"max_steps": 5, "max_rounds": 5},
+    )
+    assert recovered.status_code == 200
+    recovery = recovered.json()["recovery"]
+    assert recovery["rounds_executed"] == 1
+    assert recovery["final_classification"] == "configuration"
+    assert recovery["requires_configuration"] is True
+
 
 def test_contract_runner_verifies_receipts_and_detects_tampering(
     client: TestClient,
