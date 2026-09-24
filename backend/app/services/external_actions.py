@@ -567,6 +567,7 @@ def _discover_dispatched_workflow_run(
             workflow=workflow,
             ref=ref,
         )
+        candidates: list[dict[str, Any]] = []
         for item in runs:
             run_id = item.get("id")
             if run_id is None or str(run_id) in excluded_run_ids:
@@ -581,7 +582,11 @@ def _discover_dispatched_workflow_run(
             except ValueError:
                 continue
             if created >= earliest:
-                return item
+                candidates.append(item)
+        if len(candidates) == 1:
+            return candidates[0]
+        if len(candidates) > 1:
+            return None
         if attempt < 4:
             time.sleep(1)
     return None
