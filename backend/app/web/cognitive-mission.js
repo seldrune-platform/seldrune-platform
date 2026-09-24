@@ -37,11 +37,22 @@
         + (gates.length ? `; stopped at ${gates.join(', ')} gate(s)` : '')
         + '.'
       : '';
+    const stageResults = Array.isArray(report.stage_results)
+      ? report.stage_results
+      : [];
+    const githubBillingBlocked = stageResults.some(item => (
+      String(item.reason || '').includes('github_actions_billing_block')
+    ));
+    const resourceHint = githubBillingBlocked
+      ? ' GitHub Actions billing/budget blocked job start; '
+        + 'check the organization Actions budget and payment state, then rerun.'
+      : '';
     text(
       byId('mission-one-go-status'),
       `Progress ${percentage(report.starting_percentage)} → `
       + `${percentage(report.ending_percentage)} · ${halt}.`
       + recoveryText
+      + resourceHint
     );
   }
 
