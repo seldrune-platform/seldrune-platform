@@ -141,11 +141,56 @@
 
 @media (max-width: 900px) {
   .mission-summary-grid,
-  .mission-workstreams {
+  .mission-workstreams,
+  .mission-controller-grid {
     grid-template-columns: 1fr;
   }
 
   .cognitive-mission-head {
     flex-direction: column;
   }
+}
+
+.mission-controller-report {
+  display: grid;
+  gap: .8rem;
+  padding: 1rem;
+  border: 1px solid rgba(90, 215, 255, .16);
+  border-radius: 16px;
+  background: rgba(90, 215, 255, .035);
+}
+
+.mission-controller-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.mission-controller-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: .65rem;
+}
+
+.mission-controller-grid article {
+  padding: .75rem;
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .025);
+}
+
+.mission-controller-grid small,
+.mission-controller-grid strong {
+  display: block;
+}
+
+.mission-controller-grid strong {
+  margin-top: .25rem;
+  font-size: 1.2rem;
+}
+
+#mission-one-go-status {
+  margin: 0;
+  opacity: .78;
 }
