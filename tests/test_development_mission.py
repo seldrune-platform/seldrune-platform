@@ -1,4 +1,6 @@
-from uuid import UUID
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,7 +13,11 @@ from backend.app.db.base import Base
 from backend.app.db.session import get_db
 from backend.app.main import app
 from backend.app.models.task import Task
-from backend.app.services.development_mission import build_development_mission
+from backend.app.services import development_mission
+from backend.app.services.development_mission import (
+    _verified_dependency_commit_evidence,
+    build_development_mission,
+)
 
 
 @pytest.fixture
@@ -61,6 +67,98 @@ def register_owner(client: TestClient) -> tuple[str, str]:
     profile = client.get("/api/v1/auth/me", headers=headers).json()
     organization_id = profile["memberships"][0]["organization"]["id"]
     return token, organization_id
+
+
+def test_verified_dependency_commit_evidence_uses_latest_verified_merge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    organization_id = uuid4()
+    master_task_id = uuid4()
+    older_run_id = uuid4()
+    newer_run_id = uuid4()
+    now = datetime.now(UTC)
+
+    def task_for(stage_id: str, run_id, completed_at):
+        return SimpleNamespace(
+            id=uuid4(),
+            organization_id=organization_id,
+            status="succeeded",
+            input_data={
+                "master_mission_task_id": str(master_task_id),
+                "cognitive_mission_stage_id": stage_id,
+            },
+            output_data={
+                "cognitive_verification": {"status": "verified"},
+                "contract_chain": {
+                    "receipts": [
+                        {
+                            "step_id": "merge-verified-pull-request",
+                            "tool_run_id": str(run_id),
+                        }
+                    ]
+                },
+            },
+            completed_at=completed_at,
+            updated_at=completed_at,
+            created_at=completed_at,
+        )
+
+    older_task = task_for(
+        "provider_connectors",
+        older_run_id,
+        now - timedelta(minutes=2),
+    )
+    newer_task = task_for(
+        "factory_build_test",
+        newer_run_id,
+        now - timedelta(minutes=1),
+    )
+    runs = {
+        older_run_id: SimpleNamespace(
+            id=older_run_id,
+            organization_id=organization_id,
+            status="succeeded",
+            output_data={"merged": True, "sha": "older-sha"},
+            completed_at=now - timedelta(minutes=2),
+        ),
+        newer_run_id: SimpleNamespace(
+            id=newer_run_id,
+            organization_id=organization_id,
+            status="succeeded",
+            output_data={"merged": True, "sha": "newer-sha"},
+            completed_at=now - timedelta(minutes=1),
+        ),
+    }
+
+    class FakeSession:
+        def scalars(self, _statement):
+            return [older_task, newer_task]
+
+        def get(self, _model, key):
+            return runs.get(key)
+
+    monkeypatch.setattr(
+        development_mission,
+        "verify_task_completion_evidence",
+        lambda _session, *, task: (
+            True,
+            "verified_compiled_contract",
+            [f"receipt:{task.id}"],
+        ),
+    )
+
+    evidence = _verified_dependency_commit_evidence(
+        FakeSession(),
+        organization_id=organization_id,
+        master_task_id=master_task_id,
+        dependency_stage_ids=["provider_connectors", "factory_build_test"],
+    )
+
+    assert evidence is not None
+    assert evidence["verified_commit_sha"] == "newer-sha"
+    assert evidence["source_stage_id"] == "factory_build_test"
+    assert evidence["source_tool_run_id"] == str(newer_run_id)
+    assert evidence["source"] == "verified_dependency_merge_receipt"
 
 
 def test_development_mission_calculates_evidence_weighted_progress() -> None:
