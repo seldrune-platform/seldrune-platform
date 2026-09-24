@@ -20,6 +20,8 @@ REPOSITORY_ARTIFACT_RESPONSE_SCHEMA: dict[str, Any] = {
     "properties": {
         "artifacts": {
             "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
             "items": {
                 "type": "object",
                 "properties": {
