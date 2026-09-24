@@ -32,7 +32,7 @@ Each workstream owns 100 milestone-weight points. Workstream weights also sum to
 
 `sum(workstream_completion * workstream_weight / 100)`
 
-The current roadmap snapshot reports 58.7% completed and 41.3% remaining.
+The v2 roadmap snapshot reports 61.0% completed and 39.0% remaining.
 
 This percentage is a roadmap measure, not a benchmark of general intelligence,
 model quality, or consciousness.
@@ -79,7 +79,38 @@ high-impact execution still requires a connected provider, applicable policy,
 and verifiable completion evidence. This prevents the console from reporting a
 planned or queued action as completed.
 
-The next architectural step is the one-go execution controller: it will assign
-eligible queued stages to verified model/tool workers, execute reversible work,
-feed results into UNARCHI, and continue to the next dependency wave only after
-evidence gates pass.
+## One-Go Execution Controller
+
+Cognitive Execution v2 adds the One-Go controller. One owner action can now:
+
+1. synchronize the durable master mission;
+2. queue dependency-ready work without duplicating existing stage tasks;
+3. route automatic stages to active agents using capability and prior-task
+   evidence;
+4. execute registered low-risk tools or model work through the existing
+   Seldrune runtimes;
+5. distinguish execution from verified completion;
+6. accept a tool receipt only when it belongs to a persisted succeeded ToolRun,
+   is tied to the same task and organization, matches the task's declared tool
+   contract, and matches the receipt derived from that ToolRun;
+7. recompute roadmap progress from newly verified stages;
+8. unlock the next dependency wave and continue within configured wave and task
+   limits.
+
+Model output by itself is explicitly unverified. It can produce analysis or a
+proposal, but it cannot increase roadmap completion.
+
+Owner-gated and external-resource stages are not automatically executed. Tools
+that require approval remain blocked until their existing approval path is
+satisfied.
+
+The controller also respects the organization governance policy. When
+autonomous execution is disabled, a One-Go request performs no execution. The
+configured maximum steps per command caps the controller task limit, while
+metered model calls continue to use Seldrune's AI spend governor.
+
+The next major architecture work is the executable stage compiler: convert
+development milestones such as repository engineering, provider setup, CI
+verification, and deployment into explicit registered tool contracts with
+machine-checkable acceptance evidence. That will let more One-Go work advance
+from executed to verified without weakening the evidence boundary.
