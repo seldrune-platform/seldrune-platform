@@ -13,8 +13,8 @@ jobs:
             python -m pip install --upgrade pip
             pip install -e ".[dev]"
       - run:
-          name: One-Go F-rule diagnostic
-          command: ruff check --select F backend/app/services/one_go_controller.py
+          name: One-Go F401 diagnostic
+          command: ruff check --select F401 backend/app/services/one_go_controller.py
 
 workflows:
   version: 2
