@@ -63,6 +63,7 @@ def create_runtime_task(
     organization_id: str,
     *,
     agent_overrides: dict | None = None,
+    task_input_data: dict | None = None,
 ) -> dict:
     headers = {"Authorization": f"Bearer {token}"}
     agent_payload = {
@@ -94,7 +95,11 @@ def create_runtime_task(
             "title": "Validate reconciliation pain",
             "objective": "Find evidence that payment reconciliation is painful.",
             "priority": 20,
-            "input_data": {"market": "India"},
+            "input_data": (
+                {"market": "India"}
+                if task_input_data is None
+                else task_input_data
+            ),
             "assigned_agent_id": agent["id"],
         },
     )
@@ -139,6 +144,65 @@ def test_mock_agent_runtime_executes_task_and_records_usage(client: TestClient) 
     event_types = [event["event_type"] for event in events.json()]
     assert "agent.runtime.started" in event_types
     assert "agent.runtime.completed" in event_types
+
+
+def test_structured_agent_runtime_rejects_invalid_mock_json(
+    client: TestClient,
+) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    task = create_runtime_task(
+        client,
+        token,
+        organization_id,
+        task_input_data={
+            "model_response_schema": {
+                "type": "object",
+                "properties": {
+                    "result": {"type": "string"},
+                },
+                "required": ["result"],
+                "additionalProperties": False,
+            }
+        },
+    )
+
+    execute = client.post(
+        f"/api/v1/organizations/{organization_id}/tasks/{task['id']}/execute",
+        headers=headers,
+    )
+    assert execute.status_code == 502
+    assert "Structured model output was not valid JSON" in execute.json()["detail"]
+
+    failed = client.get(
+        f"/api/v1/organizations/{organization_id}/tasks/{task['id']}",
+        headers=headers,
+    )
+    assert failed.status_code == 200
+    payload = failed.json()
+    assert payload["status"] == "failed"
+    assert payload["output_data"]["response_schema_applied"] is True
+    assert payload["output_data"]["structured_output"] is None
+    assert (
+        payload["output_data"]["structured_output_error"]
+        == "Structured model output was not valid JSON"
+    )
+
+    invocations = client.get(
+        f"/api/v1/organizations/{organization_id}/model-invocations",
+        headers=headers,
+    )
+    assert invocations.status_code == 200
+    assert invocations.json()[0]["status"] == "succeeded"
+
+    events = client.get(
+        f"/api/v1/organizations/{organization_id}/tasks/{task['id']}/events",
+        headers=headers,
+    )
+    assert events.status_code == 200
+    assert "agent.runtime.structured_output_failed" in {
+        event["event_type"] for event in events.json()
+    }
 
 
 def test_agent_model_policy_allows_configured_runtime(client: TestClient) -> None:
