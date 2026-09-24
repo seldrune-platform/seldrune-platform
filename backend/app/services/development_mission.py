@@ -912,6 +912,11 @@ def compile_mission_stage_contracts(
         stage = stages.get(str(stage_id)) if stage_id else None
         if stage is None:
             continue
+        if (
+            input_data.get("compiled_execution_contract") is not None
+            and TaskStatus(task.status) is not TaskStatus.QUEUED
+        ):
+            continue
 
         contract = compile_stage_execution_contract(
             session,
