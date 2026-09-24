@@ -168,6 +168,7 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
         "open-pull-request",
         "run-ci",
         "verify-ci",
+        "merge-verified-pull-request",
     ]
     artifact_step = contract["steps"][0]
     schema = artifact_step["response_schema"]
