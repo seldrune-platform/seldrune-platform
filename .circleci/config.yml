@@ -13,10 +13,10 @@ jobs:
             python -m pip install --upgrade pip
             pip install -e ".[dev]"
       - run:
-          name: Identify future import F401
+          name: Binary search F401 group A
           command: |
             ruff check --select F401 --fix backend/app/services/one_go_controller.py
-            git diff -- backend/app/services/one_go_controller.py | grep -q "annotations"
+            git diff -- backend/app/services/one_go_controller.py | grep -Eq "Any|UUID|select|Session|AgentStatus|TaskStatus|ToolRunStatus|Agent|GovernancePolicy|TaskEvent|ToolRun"
 
 workflows:
   version: 2
