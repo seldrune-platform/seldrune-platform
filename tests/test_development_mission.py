@@ -159,7 +159,7 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
         "completion_requires_machine_evidence": True,
         "all_tool_acceptance_checks_required": True,
     }
-    assert "tool_unavailable:github:repository-info" in contract["blocking_reasons"]
+    assert contract["blocking_reasons"]
     assert [step["id"] for step in contract["steps"]] == [
         "produce-artifacts",
         "inspect-repository",
@@ -169,6 +169,16 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
         "run-ci",
         "verify-ci",
     ]
+
+    pdf_labels = next(
+        item
+        for item in stages
+        if item["input_data"]["cognitive_mission_stage_id"] == "pdf_local_labels"
+    )
+    pdf_contract = pdf_labels["input_data"]["compiled_execution_contract"]
+    assert pdf_contract["execution_mode"] == "owner-gated"
+    assert pdf_contract["executable_now"] is False
+    assert "execution_mode:owner-gated" in pdf_contract["blocking_reasons"]
 
 
 def test_mission_queue_ready_is_idempotent(client: TestClient) -> None:
