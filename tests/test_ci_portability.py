@@ -39,4 +39,5 @@ def test_portable_ci_verifier_covers_required_evidence_gates() -> None:
         assert check in script
 
     assert "SELDRUNE_CI_RELEASE_SHA is required" in script
+    assert 'SELDRUNE_RELEASE_SHA="${SELDRUNE_CI_RELEASE_SHA}"' in script
     assert '"release_sha": os.environ["SELDRUNE_CI_RELEASE_SHA"]' in script
