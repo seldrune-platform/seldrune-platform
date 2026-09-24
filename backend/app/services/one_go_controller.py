@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from backend.app.core.tasking import AgentStatus, TaskStatus
 from backend.app.core.tools import ToolRunStatus
 from backend.app.models.agent import Agent
+from backend.app.models.governance_policy import GovernancePolicy
 from backend.app.models.task import Task, TaskEvent
 from backend.app.models.tool_run import ToolRun
 from backend.app.services.agent_runtime import AgentRuntimeError, execute_agent_task
@@ -263,6 +264,14 @@ def execute_one_go_controller(
         organization_id=organization_id,
         actor_user_id=actor_user_id,
     )
+    policy = session.get(GovernancePolicy, organization_id)
+    governance_allowed = (
+        policy is None or bool(policy.allow_autonomous_execution)
+    )
+    effective_task_limit = min(
+        max_tasks,
+        policy.max_steps_per_command if policy is not None else max_tasks,
+    )
     queue_parallel_ready_stages(
         session,
         organization_id=organization_id,
@@ -292,7 +301,14 @@ def execute_one_go_controller(
         "ending_percentage": mission["overall_percentage"],
         "waves_requested": max_waves,
         "waves_executed": 0,
-        "task_limit": max_tasks,
+        "task_limit_requested": max_tasks,
+        "task_limit": effective_task_limit,
+        "governance": {
+            "autonomous_execution_allowed": governance_allowed,
+            "max_steps_per_command": (
+                policy.max_steps_per_command if policy is not None else None
+            ),
+        },
         "tasks_considered": 0,
         "tasks_executed": 0,
         "tasks_verified": 0,
@@ -302,6 +318,11 @@ def execute_one_go_controller(
         "stage_results": [],
         "halted_reason": None,
     }
+
+    effective_max_waves = max_waves
+    if not governance_allowed:
+        effective_max_waves = 0
+        report["halted_reason"] = "governance_autonomous_execution_disabled"
 
     record_audit(
         session,
@@ -319,7 +340,7 @@ def execute_one_go_controller(
     session.commit()
 
     previously_ready: set[str] | None = None
-    for wave_number in range(1, max_waves + 1):
+    for wave_number in range(1, effective_max_waves + 1):
         master_task, mission, _ = sync_development_mission_task(
             session,
             organization_id=organization_id,
@@ -362,7 +383,7 @@ def execute_one_go_controller(
         report["waves_executed"] += 1
         wave_verified = 0
         for task in wave_tasks:
-            if report["tasks_considered"] >= max_tasks:
+            if report["tasks_considered"] >= effective_task_limit:
                 report["halted_reason"] = "task_limit"
                 break
             report["tasks_considered"] += 1
