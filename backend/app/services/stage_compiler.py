@@ -273,6 +273,14 @@ def _repository_contract(
                 "receipt_required": True,
                 "output_path": "conclusion",
                 "equals": "success",
+                "pending_status_path": "status",
+                "pending_status_values": [
+                    "queued",
+                    "in_progress",
+                    "waiting",
+                    "requested",
+                    "pending",
+                ],
             },
         ),
     ]
@@ -309,6 +317,12 @@ def _deployment_contract(
                 "receipt_required": True,
                 "output_path": "status",
                 "in": ["live"],
+                "pending_values": [
+                    "created",
+                    "build_in_progress",
+                    "update_in_progress",
+                    "pre_deploy_in_progress",
+                ],
             },
         ),
     ]
