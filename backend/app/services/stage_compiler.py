@@ -15,6 +15,29 @@ from backend.app.services.tool_input_defaults import production_runtime_targets
 CONTRACT_VERSION = "stage-compiler-v1"
 
 
+REPOSITORY_ARTIFACT_RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "artifacts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "minLength": 1},
+                    "content": {"type": "string"},
+                    "message": {"type": "string", "minLength": 1},
+                },
+                "required": ["path", "content", "message"],
+                "additionalProperties": False,
+            },
+        },
+        "acceptance_notes": {"type": "string"},
+    },
+    "required": ["artifacts", "acceptance_notes"],
+    "additionalProperties": False,
+}
+
+
 _REPOSITORY_PROFILES = {
     "unarchi",
     "model_bus",
@@ -167,6 +190,7 @@ def _repository_contract(
                 ],
                 "acceptance_notes": "machine-checkable acceptance notes",
             },
+            "response_schema": REPOSITORY_ARTIFACT_RESPONSE_SCHEMA,
             "acceptance": {
                 "model_output_is_completion_evidence": False,
             },
