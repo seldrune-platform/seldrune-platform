@@ -70,11 +70,11 @@ def _verification_from_output(
     if not isinstance(output, dict):
         return False, "missing_structured_output", []
 
+    tool_request = (task.input_data or {}).get("tool_request")
     contract = (task.input_data or {}).get("compiled_execution_contract")
-    if isinstance(contract, dict):
+    if not isinstance(tool_request, dict) and isinstance(contract, dict):
         return verify_persisted_contract_chain(session, task=task)
 
-    tool_request = (task.input_data or {}).get("tool_request")
     if not (
         isinstance(tool_request, dict)
         and tool_request.get("slug")
@@ -435,7 +435,8 @@ def execute_one_go_controller(
             task_status = TaskStatus(task.status)
             if task_status is TaskStatus.SUCCEEDED:
                 contract = (task.input_data or {}).get("compiled_execution_contract")
-                if isinstance(contract, dict):
+                tool_request = (task.input_data or {}).get("tool_request")
+                if isinstance(contract, dict) and not isinstance(tool_request, dict):
                     chain = run_compiled_execution_contract(
                         session,
                         task=task,
@@ -587,7 +588,8 @@ def execute_one_go_controller(
                 continue
 
             contract = (task.input_data or {}).get("compiled_execution_contract")
-            if isinstance(contract, dict):
+            tool_request = (task.input_data or {}).get("tool_request")
+            if isinstance(contract, dict) and not isinstance(tool_request, dict):
                 chain = run_compiled_execution_contract(
                     session,
                     task=task,
