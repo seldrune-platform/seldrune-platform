@@ -9,6 +9,11 @@ from pydantic import BaseModel, Field
 from backend.app.api.dependencies import CurrentUserDep, SessionDep, require_org_permission
 from backend.app.core.rbac import Permission
 from backend.app.models.membership import Membership
+from backend.app.models.task import Task
+from backend.app.services.contract_runner import (
+    ContractRunnerError,
+    advance_compiled_contract,
+)
 from backend.app.services.development_mission import (
     current_development_mission,
     queue_parallel_ready_stages,
@@ -31,6 +36,10 @@ MissionManageDep = Annotated[Membership, Depends(mission_manage_dependency)]
 class OneGoExecutionRequest(BaseModel):
     max_waves: int = Field(default=3, ge=1, le=10)
     max_tasks: int = Field(default=8, ge=1, le=50)
+
+
+class ContractAdvanceRequest(BaseModel):
+    max_steps: int = Field(default=12, ge=1, le=50)
 
 
 @router.get("/{organization_id}/development-mission")
@@ -121,6 +130,44 @@ def queue_development_mission_wave(
             "until execution produces verifiable evidence."
         ),
     }
+
+
+@router.post(
+    "/{organization_id}/development-mission/tasks/{task_id}/advance-contract"
+)
+def advance_development_mission_contract(
+    organization_id: UUID,
+    task_id: UUID,
+    payload: ContractAdvanceRequest,
+    _membership: MissionManageDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    task = session.get(Task, task_id)
+    if task is None or task.organization_id != organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Development mission task not found",
+        )
+    input_data = task.input_data or {}
+    if not input_data.get("cognitive_mission_stage_id"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Task is not a cognitive mission stage",
+        )
+
+    try:
+        return advance_compiled_contract(
+            session,
+            task=task,
+            actor_user_id=current_user.id,
+            max_steps=payload.max_steps,
+        )
+    except ContractRunnerError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
 
 
 @router.post("/{organization_id}/development-mission/execute")
