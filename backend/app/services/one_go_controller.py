@@ -15,6 +15,10 @@ from backend.app.services.audit import record_audit
 from backend.app.services.cognitive_evidence import (
     verify_task_completion_evidence,
 )
+from backend.app.services.contract_runner import (
+    ContractRunnerError,
+    advance_compiled_contract,
+)
 from backend.app.services.autonomous_execution import _execute_registered_tool
 from backend.app.services.development_mission import (
     MISSION_KIND,
@@ -412,6 +416,76 @@ def execute_one_go_controller(
                 continue
 
             tool_request = (task.input_data or {}).get("tool_request")
+            compiled_contract = (
+                (task.input_data or {}).get("compiled_execution_contract")
+            )
+            if (
+                not isinstance(tool_request, dict)
+                and isinstance(compiled_contract, dict)
+            ):
+                try:
+                    contract_report = advance_compiled_contract(
+                        session,
+                        task=task,
+                        actor_user_id=actor_user_id,
+                        max_steps=12,
+                        gateway=gateway,
+                    )
+                except ContractRunnerError as exc:
+                    report["tasks_failed"] += 1
+                    report["stage_results"].append(
+                        _stage_result(
+                            task,
+                            disposition="failed",
+                            reason=str(exc),
+                            match_score=match_score,
+                        )
+                    )
+                    continue
+
+                session.refresh(task)
+                contract_status = str(contract_report.get("status") or "blocked")
+                contract_reason = str(contract_report.get("reason") or "")
+                contract_executed = int(contract_report.get("executed_steps") or 0)
+                if contract_executed:
+                    report["tasks_executed"] += 1
+
+                if contract_status == "verified":
+                    report["tasks_verified"] += 1
+                    wave_verified += 1
+                    disposition = "verified"
+                elif contract_status == "unverified":
+                    report["tasks_unverified"] += 1
+                    disposition = "unverified"
+                elif contract_reason.startswith(
+                    (
+                        "model_step_failed:",
+                        "tool_step_failed:",
+                        "acceptance_failed:",
+                        "tool_child_failed:",
+                        "parent_task_failed",
+                    )
+                ):
+                    report["tasks_failed"] += 1
+                    disposition = "failed"
+                else:
+                    report["tasks_blocked"] += 1
+                    disposition = "blocked"
+
+                result = _stage_result(
+                    task,
+                    disposition=disposition,
+                    reason=contract_reason,
+                    match_score=match_score,
+                    evidence_refs=[
+                        str(item)
+                        for item in contract_report.get("evidence_refs") or []
+                    ],
+                )
+                result["contract_execution"] = contract_report
+                report["stage_results"].append(result)
+                continue
+
             if isinstance(tool_request, dict):
                 tool_status, tool_reason = _execute_registered_tool(
                     session,
