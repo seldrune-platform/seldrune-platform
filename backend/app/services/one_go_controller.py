@@ -242,6 +242,8 @@ def _stage_result(
     match_score: int | None = None,
     evidence_refs: list[str] | None = None,
 ) -> dict[str, Any]:
+    contract = (task.input_data or {}).get("compiled_execution_contract")
+    compiler = contract if isinstance(contract, dict) else {}
     return {
         "task_id": str(task.id),
         "stage_id": _stage_id(task),
@@ -253,6 +255,10 @@ def _stage_result(
         ),
         "match_score": match_score,
         "evidence_refs": evidence_refs or [],
+        "compiled_contract_version": compiler.get("version"),
+        "compiled_profile": compiler.get("profile"),
+        "compiled_executable_now": compiler.get("executable_now"),
+        "compiled_blocking_reasons": compiler.get("blocking_reasons") or [],
     }
 
 
