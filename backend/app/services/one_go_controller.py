@@ -90,7 +90,22 @@ def _verification_from_output(
     if tool_run.status != ToolRunStatus.SUCCEEDED.value:
         return False, "tool_run_not_succeeded", []
 
+    run_output = tool_run.output_data or {}
+    provider_evidence = (
+        run_output.get("evidence")
+        if isinstance(run_output, dict)
+        else None
+    )
+    expected_receipt = (
+        str(provider_evidence.get("receipt_id"))
+        if isinstance(provider_evidence, dict)
+        and provider_evidence.get("receipt_id")
+        else f"tool-run:{tool_run.id}"
+    )
     receipt_id = str(evidence["receipt_id"])
+    if receipt_id != expected_receipt:
+        return False, "tool_receipt_mismatch", []
+
     return True, "verified_tool_receipt", [
         f"receipt:{receipt_id}",
         f"tool-run:{tool_run.id}",
