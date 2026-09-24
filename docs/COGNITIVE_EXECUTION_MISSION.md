@@ -254,3 +254,25 @@ One-Go loop. The Owner Console can therefore report that execution stopped on
 an external CI resource without mislabeling unexecuted code as a failed test.
 The CI success requirement itself is unchanged.
 
+## GitHub Actions billing diagnostics
+
+Pre-step GitHub Actions failures are refined by reading check-run annotations
+when the connected GitHub credential can access them. The classifier recognizes
+billing/spending-limit language separately from runner-capacity language.
+
+The workflow status evidence can now include:
+
+- `github_actions_billing_block` when annotations indicate a payment or
+  Actions spending-limit problem;
+- `github_actions_runner_unavailable` when annotations identify hosted runner
+  acquisition/capacity failure; or
+- `hosted_runner_unavailable` when the job has no runner and no executed steps
+  but the annotation does not identify a more specific cause.
+
+The adapter also returns a bounded failure detail and remediation hint. These
+fields remain diagnostic only: no failure classification satisfies the CI
+success acceptance rule, and no merge or deployment gate is bypassed.
+
+The Owner Console recognizes the billing classification and tells the owner to
+check the organization Actions budget and payment state before rerunning.
+
