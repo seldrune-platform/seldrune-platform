@@ -142,19 +142,24 @@ def test_github_dispatch_discovers_workflow_run_after_204(
             request=post_request,
         )
 
+    get_calls = 0
+
     def fake_get(*args, **kwargs):
+        nonlocal get_calls
+        get_calls += 1
+        runs = []
+        if get_calls > 1:
+            runs = [
+                {
+                    "id": 98765,
+                    "created_at": "2099-01-01T00:00:00Z",
+                    "url": "https://api.github.com/actions/runs/98765",
+                    "html_url": "https://github.com/actions/runs/98765",
+                }
+            ]
         return httpx.Response(
             200,
-            json={
-                "workflow_runs": [
-                    {
-                        "id": 98765,
-                        "created_at": "2099-01-01T00:00:00Z",
-                        "url": "https://api.github.com/actions/runs/98765",
-                        "html_url": "https://github.com/actions/runs/98765",
-                    }
-                ]
-            },
+            json={"workflow_runs": runs},
             request=get_request,
         )
 
