@@ -352,7 +352,7 @@ def execute_one_go_controller(
     session.commit()
 
     previously_ready: set[str] | None = None
-    for wave_number in range(1, effective_max_waves + 1):
+    for _wave_number in range(1, effective_max_waves + 1):
         master_task, mission, _ = sync_development_mission_task(
             session,
             organization_id=organization_id,
