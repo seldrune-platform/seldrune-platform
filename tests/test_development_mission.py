@@ -268,7 +268,7 @@ def test_one_go_executes_model_work_without_faking_completion(
     assert by_stage["unarchi_v31"]["disposition"] == "unverified"
     assert (
         by_stage["unarchi_v31"]["reason"]
-        == "model_output_is_not_completion_evidence"
+        == "task_has_no_verifiable_tool_contract"
     )
 
     mission = client.get(
