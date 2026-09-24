@@ -210,3 +210,23 @@ keeps the run ID unresolved instead of inventing one.
 
 This recovery layer does not change the current merge gate: PRs #287, #288, and
 #289 remain unmerged until hosted CI produces executable repository evidence.
+
+## Verified upstream deployment handoff
+
+Deployment contracts already bind Render's `commit_id` to
+`upstream.verified_commit_sha`. The mission scheduler now supplies that binding
+only from a dependency stage whose compiled contract is still independently
+verifiable and whose persisted GitHub merge ToolRun reports `merged=true` with
+a commit SHA.
+
+When several dependency stages have verified merge receipts, the most recently
+completed merge ToolRun is selected. This represents the newest verified commit
+on the shared deployment branch after the prerequisite merges. The selected
+evidence records the source stage, parent task, ToolRun, completion time, and
+verification references.
+
+Queued deployment tasks are recompiled with this evidence. If dependency
+verification later stops validating, stale `upstream_evidence` is removed and
+the deployment binding remains unresolved rather than deploying an assumed
+commit.
+
