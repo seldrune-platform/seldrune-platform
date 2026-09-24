@@ -13,8 +13,10 @@ jobs:
             python -m pip install --upgrade pip
             pip install -e ".[dev]"
       - run:
-          name: One-Go F401 diagnostic
-          command: ruff check --select F401 backend/app/services/one_go_controller.py
+          name: Identify F401 import
+          command: |
+            ruff check --select F401 --fix backend/app/services/one_go_controller.py
+            git diff -- backend/app/services/one_go_controller.py | grep -q "ModelGateway"
 
 workflows:
   version: 2
