@@ -80,6 +80,27 @@ def _build_input(task: Task, knowledge_context: str = "") -> str:
     return base
 
 
+def _task_response_schema(task: Task) -> dict | None:
+    raw = (task.input_data or {}).get("model_response_schema")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise AgentRuntimeError("model_response_schema must be an object")
+    return dict(raw)
+
+
+def _structured_output(output_text: str) -> dict:
+    try:
+        value = json.loads(output_text)
+    except json.JSONDecodeError as exc:
+        raise AgentRuntimeError(
+            "Structured model output was not valid JSON"
+        ) from exc
+    if not isinstance(value, dict):
+        raise AgentRuntimeError("Structured model output must be a JSON object")
+    return value
+
+
 def _estimate_cost(agent: Agent, input_tokens: int, output_tokens: int) -> float | None:
     input_rate = agent.runtime_config.get("input_cost_per_million")
     output_rate = agent.runtime_config.get("output_cost_per_million")
@@ -181,6 +202,7 @@ def execute_agent_task(
         limit=settings.knowledge_retrieval_limit,
         max_chars=settings.knowledge_context_max_chars,
     )
+    response_schema = _task_response_schema(task)
     invocation = ModelInvocation(
         organization_id=task.organization_id,
         task_id=task.id,
@@ -236,6 +258,7 @@ def execute_agent_task(
             "agent_version": agent.version,
             "cost_tier": route.tier,
         },
+        response_schema=response_schema,
         reasoning_effort=route.reasoning_effort,
         prompt_cache_key=f"seldrune:{task.organization_id}:agent:{agent.id}",
         max_estimated_cost_usd=route.request_budget_usd,
@@ -281,6 +304,14 @@ def execute_agent_task(
         session.commit()
         raise AgentRuntimeError(message) from exc
 
+    structured_output: dict | None = None
+    structured_output_error: str | None = None
+    if response_schema is not None:
+        try:
+            structured_output = _structured_output(result.output_text)
+        except AgentRuntimeError as exc:
+            structured_output_error = str(exc)
+
     invocation.status = InvocationStatus.SUCCEEDED.value
     invocation.provider_response_id = result.response_id
     invocation.input_tokens = result.usage.input_tokens
@@ -297,25 +328,70 @@ def execute_agent_task(
     )
     invocation.latency_ms = latency_ms
     invocation.completed_at = datetime.now(UTC)
+    output_data = {
+        "text": result.output_text,
+        "provider": result.provider.value,
+        "model": result.model,
+        "response_id": result.response_id,
+        "agent_version": agent.version,
+        "context_refs": context_refs,
+        "usage": {
+            "input_tokens": result.usage.input_tokens,
+            "output_tokens": result.usage.output_tokens,
+            "total_tokens": result.usage.total_tokens,
+            "cached_input_tokens": result.usage.cached_input_tokens,
+            "estimated_cost_usd": result.usage.estimated_cost_usd,
+            "cost_tier": route.tier,
+        },
+    }
+    if response_schema is not None:
+        output_data["response_schema_applied"] = True
+        output_data["structured_output"] = structured_output
+
+    if structured_output_error is not None:
+        output_data["structured_output_error"] = structured_output_error
+        transition_task(
+            task,
+            TaskStatus.FAILED,
+            output_data=output_data,
+            error_message=structured_output_error,
+        )
+        session.add(
+            TaskEvent(
+                organization_id=task.organization_id,
+                task_id=task.id,
+                actor_user_id=actor_user_id,
+                actor_agent_id=agent.id,
+                event_type="agent.runtime.structured_output_failed",
+                details={
+                    "provider": result.provider.value,
+                    "model": result.model,
+                    "error": structured_output_error,
+                },
+            )
+        )
+        record_audit(
+            session,
+            organization_id=task.organization_id,
+            actor_user_id=actor_user_id,
+            action="agent.runtime.structured_output_failed",
+            resource_type="task",
+            resource_id=str(task.id),
+            details={
+                "agent_id": str(agent.id),
+                "provider": result.provider.value,
+                "model": result.model,
+                "error": structured_output_error,
+            },
+        )
+        session.commit()
+        session.refresh(task)
+        raise AgentRuntimeError(structured_output_error)
+
     transition_task(
         task,
         TaskStatus.SUCCEEDED,
-        output_data={
-            "text": result.output_text,
-            "provider": result.provider.value,
-            "model": result.model,
-            "response_id": result.response_id,
-            "agent_version": agent.version,
-            "context_refs": context_refs,
-            "usage": {
-                "input_tokens": result.usage.input_tokens,
-                "output_tokens": result.usage.output_tokens,
-                "total_tokens": result.usage.total_tokens,
-                "cached_input_tokens": result.usage.cached_input_tokens,
-                "estimated_cost_usd": result.usage.estimated_cost_usd,
-                "cost_tier": route.tier,
-            },
-        },
+        output_data=output_data,
     )
     remember_task_result(
         session,
