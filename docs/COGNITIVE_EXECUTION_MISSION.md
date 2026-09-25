@@ -392,3 +392,24 @@ This bridge still does not merge code or mark the mission stage complete.
 Normal GitHub CI remains primary, fallback remains limited to explicit hosted
 CI external-resource classifications, and the merge tool remains governed as a
 high-risk action.
+
+## Railway authenticated CI provider adapter
+
+Seldrune now includes an internal Railway GraphQL adapter for portable CI
+provenance. It queries Railway's public API for a deployment by ID using an
+account/workspace/OAuth bearer token or a project-scoped token.
+
+The adapter accepts a Railway run only when the authenticated API response
+returns the requested deployment ID, a deployment status, and the exact source
+commit hash from deployment metadata. Railway `SUCCESS` maps to provider
+`success`; terminal failed/crashed/removed/skipped states map to
+`failed`; other states remain non-success states.
+
+The Railway ingestion helper passes this authenticated adapter into the
+portable CI ingestion bridge. The signed repository-owned receipt is still
+required independently, and both the provider commit and signed receipt SHA
+must equal the expected commit before evidence is persisted.
+
+Railway tokens and the portable-receipt signing key are not stored in task
+evidence or audit details. This adapter does not trigger deployments, merge
+pull requests, or mark mission stages complete.
