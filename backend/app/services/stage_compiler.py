@@ -170,6 +170,16 @@ def _repository_contract(
     repo = targets.get("github_repo")
     base_ref = targets.get("github_ref") or "main"
     branch = f"seldrune/{_slug_fragment(str(stage['id']))}"
+    railway_ci = {
+        key: value
+        for key, value in {
+            "project_id": targets.get("railway_ci_project_id"),
+            "service_id": targets.get("railway_ci_service_id"),
+            "environment_id": targets.get("railway_ci_environment_id"),
+            "token_kind": targets.get("railway_token_kind"),
+        }.items()
+        if value
+    }
 
     base = {
         key: value
@@ -298,12 +308,29 @@ def _repository_contract(
         ),
         _compile_tool_step(
             tools,
+            step_id="retrieve-portable-ci",
+            provider="railway",
+            action_name="find-portable-ci-evidence",
+            input_data=railway_ci,
+            bindings={
+                "expected_sha": "steps.verify-ci.output.head_sha",
+            },
+            acceptance={
+                "receipt_required": True,
+                "output_path": "conclusion",
+                "equals": "success",
+            },
+            optional=True,
+            run_when_external_resource_from="verify-ci",
+        ),
+        _compile_tool_step(
+            tools,
             step_id="verify-portable-ci",
             provider="portable-ci",
             action_name="verify-receipt",
             bindings={
-                "receipt": "parent.input.portable_ci_evidence.receipt",
-                "signature": "parent.input.portable_ci_evidence.signature",
+                "receipt": "steps.retrieve-portable-ci.output.receipt",
+                "signature": "steps.retrieve-portable-ci.output.signature",
             },
             acceptance={
                 "receipt_required": True,
