@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 from uuid import UUID
 
@@ -24,6 +25,11 @@ from backend.app.services.development_mission import (
     sync_development_mission_task,
 )
 from backend.app.services.model_gateway import ModelGateway
+from backend.app.services.portable_ci_ingestion import PortableCIIngestionError
+from backend.app.services.railway_ci_provider import (
+    RailwayCIProviderError,
+    auto_ingest_railway_portable_ci_for_task,
+)
 from backend.app.services.orchestrator import (
     build_agent_performance_evidence,
     select_best_agent,
@@ -172,6 +178,98 @@ def _assign_best_agent(
     session.commit()
     session.refresh(task)
     return agent, score
+
+
+def _contract_step_tool_output(
+    session: Session,
+    *,
+    parent_task: Task,
+    step_id: str,
+) -> dict[str, Any] | None:
+    children = list(
+        session.scalars(
+            select(Task).where(
+                Task.organization_id == parent_task.organization_id,
+            )
+        )
+    )
+    matches = [
+        child
+        for child in children
+        if (child.input_data or {}).get("contract_parent_task_id")
+        == str(parent_task.id)
+        and (child.input_data or {}).get("contract_step_id") == step_id
+    ]
+    if not matches:
+        return None
+    child = max(matches, key=lambda item: (item.created_at, item.id))
+    output = child.output_data or {}
+    tool_output = output.get("tool_output") if isinstance(output, dict) else None
+    return tool_output if isinstance(tool_output, dict) else None
+
+
+def _try_auto_portable_ci_fallback(
+    session: Session,
+    *,
+    task: Task,
+    actor_user_id: UUID,
+) -> tuple[bool, str]:
+    if isinstance((task.input_data or {}).get("portable_ci_evidence"), dict):
+        return False, "portable_ci_evidence_already_present"
+
+    verify_ci_output = _contract_step_tool_output(
+        session,
+        parent_task=task,
+        step_id="verify-ci",
+    )
+    if not isinstance(verify_ci_output, dict):
+        return False, "verify_ci_output_missing"
+
+    expected_sha = str(verify_ci_output.get("head_sha") or "").strip().lower()
+    if not expected_sha:
+        return False, "verify_ci_head_sha_missing"
+
+    config = {
+        "railway_token": os.getenv("SELDRUNE_RAILWAY_API_TOKEN", "").strip(),
+        "signing_key": os.getenv("SELDRUNE_CI_RECEIPT_HMAC_KEY", "").strip(),
+        "project_id": os.getenv("SELDRUNE_CI_RAILWAY_PROJECT_ID", "").strip(),
+        "service_id": os.getenv("SELDRUNE_CI_RAILWAY_SERVICE_ID", "").strip(),
+        "environment_id": os.getenv(
+            "SELDRUNE_CI_RAILWAY_ENVIRONMENT_ID",
+            "",
+        ).strip(),
+    }
+    missing = sorted(key for key, value in config.items() if not value)
+    if missing:
+        return False, "portable_ci_auto_config_missing:" + ",".join(missing)
+
+    token_kind = os.getenv(
+        "SELDRUNE_RAILWAY_TOKEN_KIND",
+        "account",
+    ).strip() or "account"
+
+    try:
+        result = auto_ingest_railway_portable_ci_for_task(
+            session,
+            task=task,
+            actor_user_id=actor_user_id,
+            expected_sha=expected_sha,
+            signing_key=config["signing_key"],
+            railway_token=config["railway_token"],
+            project_id=config["project_id"],
+            service_id=config["service_id"],
+            environment_id=config["environment_id"],
+            token_kind=token_kind,
+        )
+    except (RailwayCIProviderError, PortableCIIngestionError) as exc:
+        return False, f"portable_ci_auto_ingest_failed:{exc}"
+
+    session.refresh(task)
+    return bool(result.get("verified")), (
+        "portable_ci_auto_ingested"
+        if result.get("verified")
+        else "portable_ci_auto_ingest_unverified"
+    )
 
 
 def _stage_result(
@@ -466,6 +564,50 @@ def execute_one_go_controller(
                     if isinstance(recovery, dict)
                     else ""
                 )
+
+                auto_fallback: dict[str, Any] | None = None
+                if recovery_classification == "external-resource":
+                    hydrated, hydrate_reason = _try_auto_portable_ci_fallback(
+                        session,
+                        task=task,
+                        actor_user_id=actor_user_id,
+                    )
+                    auto_fallback = {
+                        "attempted": True,
+                        "hydrated": hydrated,
+                        "reason": hydrate_reason,
+                    }
+                    if hydrated:
+                        contract_report = advance_contract_with_recovery(
+                            session,
+                            task=task,
+                            actor_user_id=actor_user_id,
+                            max_steps=12,
+                            max_rounds=recovery_rounds,
+                            gateway=gateway,
+                        )
+                        session.refresh(task)
+                        contract_status = str(
+                            contract_report.get("status") or "blocked"
+                        )
+                        contract_reason = str(
+                            contract_report.get("reason") or ""
+                        )
+                        contract_executed += int(
+                            contract_report.get("executed_steps") or 0
+                        )
+                        recovery = contract_report.get("recovery")
+                        recovery_classification = (
+                            str(recovery.get("final_classification") or "")
+                            if isinstance(recovery, dict)
+                            else ""
+                        )
+                        auto_fallback["retry_status"] = contract_status
+                        auto_fallback["retry_reason"] = contract_reason
+                        auto_fallback["retry_classification"] = (
+                            recovery_classification
+                        )
+
                 if contract_status == "verified":
                     report["tasks_verified"] += 1
                     wave_verified += 1
@@ -500,6 +642,8 @@ def execute_one_go_controller(
                     ],
                 )
                 result["contract_execution"] = contract_report
+                if auto_fallback is not None:
+                    result["portable_ci_auto_fallback"] = auto_fallback
                 report["stage_results"].append(result)
                 continue
 

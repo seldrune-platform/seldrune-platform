@@ -24,6 +24,20 @@ query deployment($id: String!) {
 }
 """
 
+_DEPLOYMENTS_QUERY = """
+query deployments($input: DeploymentListInput!, $first: Int) {
+  deployments(input: $input, first: $first) {
+    edges {
+      node {
+        id
+        status
+        meta
+      }
+    }
+  }
+}
+"""
+
 _DEPLOYMENT_LOGS_QUERY = """
 query deploymentLogs($deploymentId: String!, $limit: Int) {
   deploymentLogs(deploymentId: $deploymentId, limit: $limit) {
@@ -171,6 +185,73 @@ class RailwayPortableCIProvider:
             "provider_status": provider_status,
         }
 
+    def find_successful_deployment(
+        self,
+        *,
+        expected_sha: str,
+        project_id: str,
+        service_id: str,
+        environment_id: str,
+        first: int = 50,
+    ) -> dict[str, Any]:
+        normalized_sha = str(expected_sha or "").strip().lower()
+        if not normalized_sha:
+            raise RailwayCIProviderError("expected_sha is required")
+        if not all(
+            str(value or "").strip()
+            for value in (project_id, service_id, environment_id)
+        ):
+            raise RailwayCIProviderError(
+                "Railway project, service, and environment ids are required"
+            )
+
+        data = self._query(
+            query=_DEPLOYMENTS_QUERY,
+            variables={
+                "input": {
+                    "projectId": str(project_id).strip(),
+                    "serviceId": str(service_id).strip(),
+                    "environmentId": str(environment_id).strip(),
+                },
+                "first": max(1, min(int(first), 100)),
+            },
+        )
+        deployments = data.get("deployments")
+        edges = deployments.get("edges") if isinstance(deployments, dict) else None
+        if not isinstance(edges, list):
+            raise RailwayCIProviderError("Railway deployments are unavailable")
+
+        for edge in edges:
+            node = edge.get("node") if isinstance(edge, dict) else None
+            if not isinstance(node, dict):
+                continue
+            if str(node.get("status") or "").strip().upper() != "SUCCESS":
+                continue
+            meta = node.get("meta")
+            if not isinstance(meta, dict):
+                continue
+            commit_sha = str(
+                meta.get("commitHash")
+                or meta.get("commit_hash")
+                or ""
+            ).strip().lower()
+            if commit_sha != normalized_sha:
+                continue
+            deployment_id = str(node.get("id") or "").strip()
+            if not deployment_id:
+                continue
+            return {
+                "provider": self.provider_name,
+                "run_id": deployment_id,
+                "status": "success",
+                "commit_sha": commit_sha,
+                "provider_status": "SUCCESS",
+            }
+
+        raise RailwayCIProviderError(
+            "no successful Railway deployment matches expected_sha"
+        )
+
     def fetch_receipt_bundle(self, *, run_id: str) -> dict[str, Any]:
         normalized_run_id = str(run_id or "").strip()
         if not normalized_run_id:
@@ -277,6 +358,45 @@ def ingest_railway_portable_ci_run(
         actor_user_id=actor_user_id,
         expected_sha=expected_sha,
         run_id=deployment_id,
+        receipt=bundle["receipt"],
+        signature=bundle["signature"],
+        signing_key=signing_key,
+        provider_adapter=adapter,
+    )
+
+
+def auto_ingest_railway_portable_ci_for_task(
+    session: Session,
+    *,
+    task: Task,
+    actor_user_id: UUID | None,
+    expected_sha: str,
+    signing_key: str,
+    railway_token: str,
+    project_id: str,
+    service_id: str,
+    environment_id: str,
+    token_kind: str = "account",
+) -> dict[str, Any]:
+    """Discover exact-head Railway CI and attach its verified signed receipt."""
+
+    adapter = RailwayPortableCIProvider(
+        token=railway_token,
+        token_kind=token_kind,
+    )
+    execution = adapter.find_successful_deployment(
+        expected_sha=expected_sha,
+        project_id=project_id,
+        service_id=service_id,
+        environment_id=environment_id,
+    )
+    bundle = adapter.fetch_receipt_bundle(run_id=execution["run_id"])
+    return ingest_portable_ci_evidence(
+        session,
+        task=task,
+        actor_user_id=actor_user_id,
+        expected_sha=expected_sha,
+        run_id=execution["run_id"],
         receipt=bundle["receipt"],
         signature=bundle["signature"],
         signing_key=signing_key,

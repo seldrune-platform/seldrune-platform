@@ -342,3 +342,88 @@ def test_ingest_run_retrieves_receipt_before_ingestion(monkeypatch) -> None:
     assert captured["run_id"] == RUN_ID
     assert captured["receipt"] is receipt
     assert captured["signature"] == "sha256=signed"
+
+
+def test_find_successful_deployment_matches_exact_commit(monkeypatch) -> None:
+    def fake_post(url, *, headers, json, timeout):
+        return FakeResponse(
+            {
+                "data": {
+                    "deployments": {
+                        "edges": [
+                            {
+                                "node": {
+                                    "id": "wrong-failed",
+                                    "status": "FAILED",
+                                    "meta": {"commitHash": SHA},
+                                }
+                            },
+                            {
+                                "node": {
+                                    "id": "wrong-sha",
+                                    "status": "SUCCESS",
+                                    "meta": {"commitHash": "deadbeef"},
+                                }
+                            },
+                            {
+                                "node": {
+                                    "id": RUN_ID,
+                                    "status": "SUCCESS",
+                                    "meta": {"commitHash": SHA},
+                                }
+                            },
+                        ]
+                    }
+                }
+            }
+        )
+
+    monkeypatch.setattr(railway_ci_provider.httpx, "post", fake_post)
+    adapter = RailwayPortableCIProvider(token="railway-token")
+
+    result = adapter.find_successful_deployment(
+        expected_sha=SHA,
+        project_id="project",
+        service_id="service",
+        environment_id="environment",
+    )
+
+    assert result["run_id"] == RUN_ID
+    assert result["commit_sha"] == SHA
+    assert result["status"] == "success"
+
+
+def test_find_successful_deployment_fails_when_no_exact_match(monkeypatch) -> None:
+    monkeypatch.setattr(
+        railway_ci_provider.httpx,
+        "post",
+        lambda *args, **kwargs: FakeResponse(
+            {
+                "data": {
+                    "deployments": {
+                        "edges": [
+                            {
+                                "node": {
+                                    "id": "other",
+                                    "status": "SUCCESS",
+                                    "meta": {"commitHash": "deadbeef"},
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        ),
+    )
+    adapter = RailwayPortableCIProvider(token="railway-token")
+
+    with pytest.raises(
+        RailwayCIProviderError,
+        match="no successful Railway deployment matches expected_sha",
+    ):
+        adapter.find_successful_deployment(
+            expected_sha=SHA,
+            project_id="project",
+            service_id="service",
+            environment_id="environment",
+        )
