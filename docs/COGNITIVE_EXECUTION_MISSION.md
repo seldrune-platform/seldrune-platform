@@ -458,3 +458,32 @@ replaced.
 After successful hydration, the compiled contract is retried. The normal merge
 step remains a governed high-risk action; automatic evidence hydration does not
 grant merge approval or convert a hosted CI failure into hosted CI success.
+
+## GitHub production authentication modes
+
+Repository-engineering stages can authenticate to GitHub in either of two
+production modes.
+
+The existing token mode remains supported through
+`SELDRUNE_GITHUB_TOOL_TOKEN` (or the legacy `GITHUB_TOKEN` alias).
+
+GitHub App mode uses a private key plus non-secret App metadata:
+
+- `SELDRUNE_GITHUB_APP_PRIVATE_KEY`
+- `SELDRUNE_GITHUB_APP_ID`
+- `SELDRUNE_GITHUB_APP_INSTALLATION_ID`
+
+When all three are present, tool bootstrap treats the App bundle as an
+available GitHub credential. Runtime actions sign a short-lived GitHub App JWT,
+exchange it for an installation access token, cache only that short-lived token
+in process memory, and use it for repository API calls. The private key is
+never persisted in task evidence, tool outputs, or audit details.
+
+A structured single-variable form is also supported through
+`SELDRUNE_GITHUB_TOOL_CREDENTIAL` with `app_id`, `installation_id`, and
+`private_key` fields.
+
+Incomplete App configuration fails closed and does not create GitHub tool
+definitions. Existing approval rules are unchanged: read/low-risk actions may
+run automatically according to policy, while high-risk actions such as merge
+and workflow dispatch remain governed.
