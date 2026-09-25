@@ -756,6 +756,12 @@ def verify_compiled_contract_evidence(
 
         fallback_source = step.get("run_when_external_resource_from")
         if isinstance(fallback_source, str) and fallback_source:
+            if fallback_source not in verified_states:
+                return (
+                    False,
+                    f"compiled_contract_fallback_source_missing:{step_id}",
+                    [],
+                )
             if verified_states.get(fallback_source) != "external-resource":
                 if rows:
                     return (
@@ -881,6 +887,9 @@ def verify_compiled_contract_evidence(
             or verified_states.get(fallback_step_id) != "passed"
         ):
             return False, f"compiled_contract_fallback_missing:{step_id}", []
+
+    if not canonical_receipts:
+        return False, "compiled_contract_machine_evidence_missing", []
 
     contract_version = str(contract.get("version") or "")
     expected_chain_receipt = _chain_receipt_id(
@@ -1180,10 +1189,18 @@ def advance_compiled_contract(
                 ),
                 None,
             )
-            if not (
-                isinstance(source_result, dict)
-                and source_result.get("status")
-                == "external-resource-fallback"
+            if source_result is None:
+                return _blocked_report(
+                    task=task,
+                    contract=contract,
+                    reason=f"fallback_source_missing:{fallback_source}",
+                    match_score=match_score,
+                    step_results=step_results,
+                    executed_steps=executed_steps,
+                )
+            if (
+                source_result.get("status")
+                != "external-resource-fallback"
             ):
                 step_results.append(
                     {
