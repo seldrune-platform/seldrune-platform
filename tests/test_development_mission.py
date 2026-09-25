@@ -266,8 +266,34 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
         "open-pull-request",
         "run-ci",
         "verify-ci",
+        "verify-portable-ci",
         "merge-verified-pull-request",
     ]
+    verify_ci = next(
+        step for step in contract["steps"] if step["id"] == "verify-ci"
+    )
+    assert verify_ci["acceptance"]["fallback_step_id"] == "verify-portable-ci"
+
+    portable_ci = next(
+        step for step in contract["steps"] if step["id"] == "verify-portable-ci"
+    )
+    assert portable_ci["optional"] is True
+    assert portable_ci["run_when_external_resource_from"] == "verify-ci"
+    assert portable_ci["bindings"] == {
+        "receipt": "parent.input.portable_ci_evidence.receipt",
+        "signature": "parent.input.portable_ci_evidence.signature",
+    }
+
+    merge_step = next(
+        step
+        for step in contract["steps"]
+        if step["id"] == "merge-verified-pull-request"
+    )
+    assert merge_step["bindings"]["sha"] == [
+        "steps.verify-ci.output.head_sha",
+        "steps.verify-portable-ci.output.head_sha",
+    ]
+
     artifact_step = contract["steps"][0]
     schema = artifact_step["response_schema"]
     assert schema["required"] == ["artifacts", "acceptance_notes"]

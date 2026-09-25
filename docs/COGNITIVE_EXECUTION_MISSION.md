@@ -326,3 +326,29 @@ building block for recovery when hosted CI is unavailable; merge/deployment
 contracts continue to require exact-head evidence and their existing governed
 approval path.
 
+## Fail-closed portable CI fallback contract
+
+Repository-engineering contracts keep GitHub Actions as the primary CI verdict.
+The `verify-ci` step may name `verify-portable-ci` as a fallback only for
+the explicit external-resource classifications already used for hosted-runner
+or Actions billing/capacity failures.
+
+The fallback is conditional and fail-closed:
+
+- a normal GitHub CI failure stops the contract and cannot invoke the fallback;
+- a successful GitHub CI verdict skips the portable verifier;
+- an external-resource GitHub verdict may continue only to the declared
+  `portable-ci/verify-receipt` step;
+- the portable step reads a signed receipt and signature from
+  `portable_ci_evidence` on the parent task;
+- missing portable evidence or a missing verifier remains an external-resource
+  gate rather than being retried as a code failure;
+- merge SHA resolution prefers the successful GitHub head SHA and otherwise
+  uses the successfully verified portable receipt head SHA;
+- the final compiled-contract evidence verifier replays the conditional path,
+  requires the fallback when the primary CI state was external-resource, and
+  checks that the merge request SHA matches the selected verified CI output.
+
+This does not weaken the merge action. `merge-verified-pull-request` remains
+a high-risk action and its existing approval requirements still apply.
+

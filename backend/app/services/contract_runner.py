@@ -572,6 +572,11 @@ def _resolve_binding(
         value = _value_at(outputs[step_id], output_path)
         return value is not None, value
 
+    if source.startswith("parent.input."):
+        path = source.removeprefix("parent.input.")
+        value = _value_at(parent_task.input_data or {}, path)
+        return value is not None, value
+
     if source == "upstream.verified_commit_sha":
         upstream = (parent_task.input_data or {}).get("upstream_evidence")
         if isinstance(upstream, dict):
@@ -579,6 +584,28 @@ def _resolve_binding(
             return value is not None, value
         return False, None
 
+    return False, None
+
+
+def _resolve_binding_source(
+    source: Any,
+    *,
+    artifact: dict[str, str] | None,
+    outputs: dict[str, Any],
+    parent_task: Task,
+) -> tuple[bool, Any]:
+    candidates = source if isinstance(source, list) else [source]
+    for candidate in candidates:
+        if not isinstance(candidate, str):
+            continue
+        resolved, value = _resolve_binding(
+            candidate,
+            artifact=artifact,
+            outputs=outputs,
+            parent_task=parent_task,
+        )
+        if resolved:
+            return True, value
     return False, None
 
 
@@ -595,10 +622,7 @@ def _tool_payload(
     unresolved: list[str] = []
     if isinstance(bindings, dict):
         for field, source in bindings.items():
-            if not isinstance(source, str):
-                unresolved.append(str(field))
-                continue
-            resolved, value = _resolve_binding(
+            resolved, value = _resolve_binding_source(
                 source,
                 artifact=artifact,
                 outputs=outputs,
@@ -715,6 +739,9 @@ def verify_compiled_contract_evidence(
     ]
     verified_refs: list[str] = []
     canonical_receipts: list[dict[str, Any]] = []
+    verified_states: dict[str, str] = {}
+    verified_outputs: dict[str, Any] = {}
+
     for step in expected_tool_steps:
         step_id = str(step["id"])
         acceptance = step.get("acceptance")
@@ -722,11 +749,30 @@ def verify_compiled_contract_evidence(
             isinstance(acceptance, dict)
             and acceptance.get("repeat_for_each") == "model.artifacts"
         )
-        expected_count = len(artifacts) if repeat else 1
         rows = [
             row for row in receipt_rows
             if str(row.get("step_id") or "") == step_id
         ]
+
+        fallback_source = step.get("run_when_external_resource_from")
+        if isinstance(fallback_source, str) and fallback_source:
+            if fallback_source not in verified_states:
+                return (
+                    False,
+                    f"compiled_contract_fallback_source_missing:{step_id}",
+                    [],
+                )
+            if verified_states.get(fallback_source) != "external-resource":
+                if rows:
+                    return (
+                        False,
+                        f"compiled_contract_unexpected_fallback_receipt:{step_id}",
+                        [],
+                    )
+                verified_states[step_id] = "skipped"
+                continue
+
+        expected_count = len(artifacts) if repeat else 1
         if len(rows) != expected_count:
             return False, f"compiled_contract_receipt_count:{step_id}", []
 
@@ -764,11 +810,60 @@ def verify_compiled_contract_evidence(
                 child=child,
                 step=step,
             )
-            if state != "passed" or receipt is None:
+            fallback_step_id = (
+                acceptance.get("fallback_step_id")
+                if isinstance(acceptance, dict)
+                else None
+            )
+            external_fallback_allowed = (
+                state == "external-resource"
+                and isinstance(fallback_step_id, str)
+                and bool(fallback_step_id)
+            )
+            if (
+                state != "passed"
+                and not external_fallback_allowed
+            ) or receipt is None:
                 return False, f"compiled_contract_acceptance:{step_id}:{reason}", []
+
             for key in ("tool_run_id", "receipt_id"):
                 if str(row.get(key) or "") != str(receipt.get(key) or ""):
                     return False, f"compiled_contract_receipt_mismatch:{step_id}", []
+
+            if state == "passed":
+                verified_states[step_id] = "passed"
+                if not repeat:
+                    verified_outputs[step_id] = receipt["tool_output"]
+            else:
+                verified_states[step_id] = "external-resource"
+
+            if step_id == "merge-verified-pull-request" and state == "passed":
+                bindings = step.get("bindings")
+                sha_source = (
+                    bindings.get("sha")
+                    if isinstance(bindings, dict)
+                    else None
+                )
+                resolved_sha, expected_sha = _resolve_binding_source(
+                    sha_source,
+                    artifact=None,
+                    outputs=verified_outputs,
+                    parent_task=task,
+                )
+                request = (child.input_data or {}).get("tool_request")
+                request_input = (
+                    request.get("input")
+                    if isinstance(request, dict)
+                    else None
+                )
+                actual_sha = (
+                    request_input.get("sha")
+                    if isinstance(request_input, dict)
+                    else None
+                )
+                if not resolved_sha or actual_sha != expected_sha:
+                    return False, "compiled_contract_merge_sha_mismatch", []
+
             canonical_receipts.append(receipt)
             verified_refs.extend(
                 [
@@ -776,6 +871,25 @@ def verify_compiled_contract_evidence(
                     f"tool-run:{receipt['tool_run_id']}",
                 ]
             )
+
+    for step in expected_tool_steps:
+        step_id = str(step["id"])
+        if verified_states.get(step_id) != "external-resource":
+            continue
+        acceptance = step.get("acceptance")
+        fallback_step_id = (
+            acceptance.get("fallback_step_id")
+            if isinstance(acceptance, dict)
+            else None
+        )
+        if (
+            not isinstance(fallback_step_id, str)
+            or verified_states.get(fallback_step_id) != "passed"
+        ):
+            return False, f"compiled_contract_fallback_missing:{step_id}", []
+
+    if not canonical_receipts:
+        return False, "compiled_contract_machine_evidence_missing", []
 
     contract_version = str(contract.get("version") or "")
     expected_chain_receipt = _chain_receipt_id(
@@ -881,7 +995,7 @@ def advance_compiled_contract(
     unavailable = [
         str(step.get("id"))
         for step in tool_steps
-        if not step.get("tool_slug")
+        if not step.get("tool_slug") and not step.get("optional")
     ]
     if unavailable:
         return _blocked_report(
@@ -900,6 +1014,7 @@ def advance_compiled_contract(
         )
         for step in tool_steps
         if step.get("status") == "input-unresolved"
+        and not step.get("optional")
     ]
     if unresolved_inputs:
         details = ";".join(
@@ -1064,6 +1179,54 @@ def advance_compiled_contract(
                 executed_steps=executed_steps,
             )
 
+        fallback_source = step.get("run_when_external_resource_from")
+        if isinstance(fallback_source, str) and fallback_source:
+            source_result = next(
+                (
+                    item
+                    for item in reversed(step_results)
+                    if item.get("step_id") == fallback_source
+                ),
+                None,
+            )
+            if source_result is None:
+                return _blocked_report(
+                    task=task,
+                    contract=contract,
+                    reason=f"fallback_source_missing:{fallback_source}",
+                    match_score=match_score,
+                    step_results=step_results,
+                    executed_steps=executed_steps,
+                )
+            if (
+                source_result.get("status")
+                != "external-resource-fallback"
+            ):
+                step_results.append(
+                    {
+                        "step_id": step_id,
+                        "kind": kind,
+                        "status": "skipped",
+                        "reason": (
+                            "fallback_source_not_external_resource:"
+                            f"{fallback_source}"
+                        ),
+                    }
+                )
+                continue
+            if not step.get("tool_slug"):
+                return _blocked_report(
+                    task=task,
+                    contract=contract,
+                    reason=(
+                        f"external_resource:{step_id}:"
+                        "portable_ci_verifier_unavailable"
+                    ),
+                    match_score=match_score,
+                    step_results=step_results,
+                    executed_steps=executed_steps,
+                )
+
         outputs = _step_outputs(
             session,
             children=children,
@@ -1113,6 +1276,30 @@ def advance_compiled_contract(
                     )
                     continue
                 if state == "external-resource":
+                    fallback_step_id = (
+                        acceptance.get("fallback_step_id")
+                        if isinstance(acceptance, dict)
+                        else None
+                    )
+                    if (
+                        isinstance(fallback_step_id, str)
+                        and fallback_step_id
+                        and receipt is not None
+                    ):
+                        accepted_receipts.append(receipt)
+                        step_results.append(
+                            {
+                                "step_id": step_id,
+                                "kind": kind,
+                                "repeat_index": repeat_index,
+                                "status": "external-resource-fallback",
+                                "reason": reason,
+                                "fallback_step_id": fallback_step_id,
+                                "child_task_id": str(child.id),
+                                "receipt_id": receipt["receipt_id"],
+                            }
+                        )
+                        continue
                     step_results.append(
                         {
                             "step_id": step_id,
@@ -1181,13 +1368,20 @@ def advance_compiled_contract(
                 parent_task=task,
             )
             if payload is None:
+                if isinstance(fallback_source, str) and fallback_source:
+                    reason = (
+                        f"external_resource:{step_id}:"
+                        "portable_ci_evidence_missing"
+                    )
+                else:
+                    reason = (
+                        f"binding_unresolved:{step_id}:"
+                        + ",".join(unresolved)
+                    )
                 return _blocked_report(
                     task=task,
                     contract=contract,
-                    reason=(
-                        f"binding_unresolved:{step_id}:"
-                        + ",".join(unresolved)
-                    ),
+                    reason=reason,
                     match_score=match_score,
                     step_results=step_results,
                     executed_steps=executed_steps,
@@ -1291,6 +1485,30 @@ def advance_compiled_contract(
                 )
                 continue
             if state == "external-resource":
+                fallback_step_id = (
+                    acceptance.get("fallback_step_id")
+                    if isinstance(acceptance, dict)
+                    else None
+                )
+                if (
+                    isinstance(fallback_step_id, str)
+                    and fallback_step_id
+                    and receipt is not None
+                ):
+                    accepted_receipts.append(receipt)
+                    step_results.append(
+                        {
+                            "step_id": step_id,
+                            "kind": kind,
+                            "repeat_index": repeat_index,
+                            "status": "external-resource-fallback",
+                            "reason": reason,
+                            "fallback_step_id": fallback_step_id,
+                            "child_task_id": str(child.id),
+                            "receipt_id": receipt["receipt_id"],
+                        }
+                    )
+                    continue
                 step_results.append(
                     {
                         "step_id": step_id,
