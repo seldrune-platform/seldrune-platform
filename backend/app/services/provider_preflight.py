@@ -9,7 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.models.secret_reference import SecretReference
-from backend.app.services.external_actions import default_external_action_catalog
+from backend.app.services.external_actions import (
+    _github_app_config,
+    _github_headers,
+    default_external_action_catalog,
+)
+from backend.app.services.tool_gateway import ToolGatewayError
 from backend.app.services.secret_vault import SecretVaultError, resolve_secret
 from backend.app.services.tool_input_defaults import production_runtime_targets
 
@@ -89,13 +94,152 @@ def _gmail_preflight(credential: str) -> dict[str, Any]:
     )
 
 
+def _github_repository_result(
+    *,
+    headers: dict[str, str],
+    identity: dict[str, Any],
+    full_name: str,
+    auth_label: str,
+) -> dict[str, Any]:
+    repository = httpx.get(
+        f"https://api.github.com/repos/{full_name}",
+        headers=headers,
+        timeout=_TIMEOUT_SECONDS,
+    )
+    repository_data = _response_json(repository)
+    scoped_identity = {**identity, "repository": full_name}
+    if repository.status_code == 404:
+        return _result(
+            "github",
+            status="repository_not_found",
+            verified=False,
+            detail=(
+                f"GitHub {auth_label} is valid, but the configured repository "
+                f"{full_name} was not found or is not visible."
+            ),
+            identity=scoped_identity,
+            http_status=404,
+        )
+    if repository.status_code in {401, 403}:
+        return _result(
+            "github",
+            status="repository_access_denied",
+            verified=False,
+            detail=(
+                f"GitHub {auth_label} is valid, but access to {full_name} is denied."
+            ),
+            identity=scoped_identity,
+            http_status=repository.status_code,
+        )
+    if repository.status_code != 200:
+        return _result(
+            "github",
+            status="provider_error",
+            verified=False,
+            detail=(
+                f"GitHub repository preflight for {full_name} returned "
+                f"HTTP {repository.status_code}."
+            ),
+            identity=scoped_identity,
+            http_status=repository.status_code,
+        )
+    if isinstance(repository_data, dict):
+        scoped_identity["repository"] = (
+            repository_data.get("full_name") or full_name
+        )
+        scoped_identity["default_branch"] = repository_data.get(
+            "default_branch"
+        )
+    return _result(
+        "github",
+        status="verified",
+        verified=True,
+        detail=(
+            "GitHub credential and configured production repository are accessible."
+        ),
+        identity=scoped_identity,
+        http_status=200,
+    )
+
+
 def _github_preflight(credential: str) -> dict[str, Any]:
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {credential}",
-        "X-GitHub-Api-Version": _GITHUB_API_VERSION,
-        "User-Agent": "Seldrune-STI",
-    }
+    targets = production_runtime_targets()
+    full_name = str(targets.get("github_full_name") or "").strip()
+
+    try:
+        app_config = _github_app_config(credential)
+        headers = _github_headers(credential)
+    except ToolGatewayError as exc:
+        detail = str(exc)
+        configuration_error = (
+            "app id and installation id are required" in detail.lower()
+        )
+        return _result(
+            "github",
+            status=(
+                "configuration_error"
+                if configuration_error
+                else "credential_invalid"
+            ),
+            verified=False,
+            detail=detail,
+        )
+
+    if app_config is not None:
+        app_id, installation_id, _private_key = app_config
+        identity = {
+            "auth_type": "github_app",
+            "app_id": app_id,
+            "installation_id": installation_id,
+        }
+        if full_name:
+            return _github_repository_result(
+                headers=headers,
+                identity=identity,
+                full_name=full_name,
+                auth_label="App installation",
+            )
+
+        repositories = httpx.get(
+            "https://api.github.com/installation/repositories",
+            headers=headers,
+            timeout=_TIMEOUT_SECONDS,
+        )
+        repositories_data = _response_json(repositories)
+        if repositories.status_code == 200:
+            if isinstance(repositories_data, dict):
+                identity["repository_count"] = repositories_data.get(
+                    "total_count"
+                )
+            return _result(
+                "github",
+                status="verified",
+                verified=True,
+                detail="GitHub App installation token is valid.",
+                identity=identity,
+                http_status=200,
+            )
+        if repositories.status_code in {401, 403}:
+            return _result(
+                "github",
+                status="credential_invalid",
+                verified=False,
+                detail="GitHub rejected the configured App installation credential.",
+                identity=identity,
+                http_status=repositories.status_code,
+            )
+        return _result(
+            "github",
+            status="provider_error",
+            verified=False,
+            detail=(
+                "GitHub App installation preflight returned "
+                f"HTTP {repositories.status_code}."
+            ),
+            identity=identity,
+            http_status=repositories.status_code,
+        )
+
     response = httpx.get(
         "https://api.github.com/user",
         headers=headers,
@@ -104,66 +248,22 @@ def _github_preflight(credential: str) -> dict[str, Any]:
     data = _response_json(response)
     if response.status_code == 200 and isinstance(data, dict):
         identity = {
+            "auth_type": "token",
             "login": data.get("login"),
             "id": data.get("id"),
         }
-        targets = production_runtime_targets()
-        full_name = targets.get("github_full_name")
         if full_name:
-            repository = httpx.get(
-                f"https://api.github.com/repos/{full_name}",
+            return _github_repository_result(
                 headers=headers,
-                timeout=_TIMEOUT_SECONDS,
+                identity=identity,
+                full_name=full_name,
+                auth_label="credential",
             )
-            repository_data = _response_json(repository)
-            if repository.status_code == 404:
-                return _result(
-                    "github",
-                    status="repository_not_found",
-                    verified=False,
-                    detail=(
-                        f"GitHub credential is valid, but the configured repository "
-                        f"{full_name} was not found or is not visible to this token."
-                    ),
-                    identity={**identity, "repository": full_name},
-                    http_status=404,
-                )
-            if repository.status_code in {401, 403}:
-                return _result(
-                    "github",
-                    status="repository_access_denied",
-                    verified=False,
-                    detail=(
-                        f"GitHub credential is valid, but access to {full_name} is denied. "
-                        "Grant the token repository access."
-                    ),
-                    identity={**identity, "repository": full_name},
-                    http_status=repository.status_code,
-                )
-            if repository.status_code != 200:
-                return _result(
-                    "github",
-                    status="provider_error",
-                    verified=False,
-                    detail=(
-                        f"GitHub repository preflight for {full_name} returned "
-                        f"HTTP {repository.status_code}."
-                    ),
-                    identity={**identity, "repository": full_name},
-                    http_status=repository.status_code,
-                )
-            if isinstance(repository_data, dict):
-                identity["repository"] = repository_data.get("full_name") or full_name
-                identity["default_branch"] = repository_data.get("default_branch")
         return _result(
             "github",
             status="verified",
             verified=True,
-            detail=(
-                "GitHub credential and configured production repository are accessible."
-                if full_name
-                else "GitHub authenticated-user request succeeded."
-            ),
+            detail="GitHub authenticated-user request succeeded.",
             identity=identity,
             http_status=200,
         )
