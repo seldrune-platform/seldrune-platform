@@ -103,6 +103,7 @@ with open(path, "w", encoding="utf-8") as handle:
     handle.write("\n")
 
 print(f"SELDRUNE_CI_RECEIPT={path}")
+print("SELDRUNE_CI_RECEIPT_JSON=" + json.dumps(receipt, separators=(",", ":"), sort_keys=True))
 
 signing_key = os.getenv("SELDRUNE_CI_RECEIPT_HMAC_KEY")
 if signing_key:
