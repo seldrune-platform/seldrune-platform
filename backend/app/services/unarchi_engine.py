@@ -6,7 +6,8 @@ import re
 from typing import Any
 
 
-UNARCHI_VERSION = "unarchi-v0.30"
+UNARCHI_VERSION = "unarchi-v0.31"
+_LEGACY_UNARCHI_VERSIONS = {"unarchi-v0.30"}
 _STOPWORDS = {
     "a",
     "an",
@@ -772,6 +773,59 @@ class ContextValidityReactivationDriftResolution:
 
 
 @dataclass(frozen=True)
+class ContextValidityRenewedRecoveryValidation:
+    id: int
+    drift_resolution_id: int
+    drift_watch_id: int
+    prior_holdout_validation_id: int
+    hypothesis_id: int
+    rollback_selection_id: int
+    rollback_map_id: int
+    blocked_descendant_map_id: int
+    observed_outcome_ids: tuple[int, ...]
+    excluded_prior_outcome_ids: tuple[int, ...]
+    degraded_signatures: tuple[str, ...]
+    mean_recovery_advantage: float
+    prior_degraded_advantage: float
+    improvement_delta: float
+    status: str
+    reactivation_allowed: bool
+    evidence_refs: tuple[str, ...]
+    holdout_gate_watermark_id: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ContextValidityRenewedHoldoutValidation:
+    id: int
+    recovery_validation_id: int
+    drift_resolution_id: int
+    drift_watch_id: int
+    prior_holdout_validation_id: int
+    hypothesis_id: int
+    rollback_selection_id: int
+    rollback_map_id: int
+    blocked_descendant_map_id: int
+    recovery_outcome_ids: tuple[int, ...]
+    holdout_outcome_ids: tuple[int, ...]
+    excluded_prior_outcome_ids: tuple[int, ...]
+    degraded_signatures: tuple[str, ...]
+    mean_recovery_advantage: float
+    mean_holdout_advantage: float
+    prior_degraded_advantage: float
+    holdout_improvement_delta: float
+    recovery_to_holdout_delta: float
+    status: str
+    reactivation_allowed: bool
+    evidence_refs: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class ContextValidityClassification:
     map_id: int
     hypothesis_id: int
@@ -920,7 +974,7 @@ class UnarchiEngine:
     """
     CPU-only experimental cognitive kernel.
 
-    v0.30 includes causal internal dynamics, bounded endogenous goals, a
+    v0.31 includes causal internal dynamics, bounded endogenous goals, a
     calibrated predictive self-model, prospective memory, evidence-grounded
     metacognition, explicit value arbitration, competing causal hypotheses,
     controlled self-intervention trials, a bounded recurrent global workspace,
@@ -937,7 +991,9 @@ class UnarchiEngine:
     evidence-triggered active-revision degradation recommendations, explicit
     recommendation resolution, separate rollback recovery/holdout gates,
     post-reactivation drift monitoring, and renewed-degradation resolution
-    that invalidates stale reactivation authorization after a second rollback.
+    that invalidates stale reactivation authorization after a second rollback,
+    plus a renewed recovery and independent holdout cycle that forbids evidence
+    reuse across earlier rollback, holdout, reactivation, and drift episodes.
     """
 
     state: UnarchiState = field(default_factory=UnarchiState)
@@ -1055,6 +1111,14 @@ class UnarchiEngine:
         ContextValidityReactivationDriftResolution
     ] = field(default_factory=list)
     next_context_validity_reactivation_drift_resolution_id: int = 1
+    context_validity_renewed_recovery_validations: list[
+        ContextValidityRenewedRecoveryValidation
+    ] = field(default_factory=list)
+    next_context_validity_renewed_recovery_validation_id: int = 1
+    context_validity_renewed_holdout_validations: list[
+        ContextValidityRenewedHoldoutValidation
+    ] = field(default_factory=list)
+    next_context_validity_renewed_holdout_validation_id: int = 1
     success_prediction_bias: float = 0.0
     uncertainty_prediction_bias: float = 0.0
     stress_prediction_bias: float = 0.0
@@ -5332,10 +5396,25 @@ class UnarchiEngine:
                     rollback_selection is not None
                     and rollback_selection.selected_map_id == previous_map_id
                 ):
-                    raise ValueError(
-                        "re-advance blocked until renewed-degradation rollback "
-                        "completes a new evidence cycle"
+                    renewed_holdout = next(
+                        (
+                            item
+                            for item in reversed(
+                                self.context_validity_renewed_holdout_validations
+                            )
+                            if item.drift_resolution_id == drift_resolution.id
+                            and item.blocked_descendant_map_id == selected.id
+                        ),
+                        None,
                     )
+                    if (
+                        renewed_holdout is None
+                        or not renewed_holdout.reactivation_allowed
+                    ):
+                        raise ValueError(
+                            "re-advance blocked until renewed-degradation rollback "
+                            "completes a fresh recovery and independent holdout cycle"
+                        )
 
             accepted = next(
                 (
@@ -6519,6 +6598,369 @@ class UnarchiEngine:
             salience=0.78 if normalized == "rollback_review" else 0.55,
             evidence_refs=(
                 f"context_validity_reactivation_drift_resolution:{record.id}",
+                *record.evidence_refs[-4:],
+            ),
+        )
+        return record
+
+
+    def _prior_context_validity_cycle_outcome_ids(
+        self,
+        hypothesis_id: int,
+    ) -> set[int]:
+        prior: set[int] = set()
+        for item in self.context_validity_rollback_validations:
+            if item.hypothesis_id == hypothesis_id:
+                prior.update(item.observed_outcome_ids)
+        for item in self.context_validity_rollback_holdout_validations:
+            if item.hypothesis_id == hypothesis_id:
+                prior.update(item.recovery_outcome_ids)
+                prior.update(item.holdout_outcome_ids)
+        for item in self.context_validity_reactivation_drift_watches:
+            if item.hypothesis_id == hypothesis_id:
+                prior.update(item.observed_outcome_ids)
+        for item in self.context_validity_renewed_recovery_validations:
+            if item.hypothesis_id == hypothesis_id:
+                prior.update(item.observed_outcome_ids)
+        for item in self.context_validity_renewed_holdout_validations:
+            if item.hypothesis_id == hypothesis_id:
+                prior.update(item.recovery_outcome_ids)
+                prior.update(item.holdout_outcome_ids)
+        return prior
+
+    def validate_context_validity_renewed_rollback(
+        self,
+        drift_resolution_id: int,
+        *,
+        min_samples: int = 3,
+        improvement_margin: float = 0.05,
+    ) -> ContextValidityRenewedRecoveryValidation:
+        """
+        Validate the fresh recovery batch required after renewed degradation.
+
+        Only outcomes created after the second rollback watermark are eligible.
+        Any overlap with evidence from earlier recovery, holdout, reactivation,
+        drift, or renewed-cycle episodes fails the validation closed.
+        """
+        resolution = next(
+            (
+                item
+                for item in self.context_validity_reactivation_drift_resolutions
+                if item.id == drift_resolution_id
+            ),
+            None,
+        )
+        if resolution is None:
+            raise ValueError("unknown reactivation drift resolution")
+        if (
+            resolution.decision != "rollback_review"
+            or not resolution.requires_new_evidence_cycle
+            or resolution.rollback_selection_id is None
+            or resolution.rollback_target_map_id is None
+            or resolution.blocked_descendant_map_id is None
+        ):
+            raise ValueError(
+                "renewed recovery requires a renewed-degradation rollback review"
+            )
+
+        watch = next(
+            (
+                item
+                for item in self.context_validity_reactivation_drift_watches
+                if item.id == resolution.drift_watch_id
+            ),
+            None,
+        )
+        prior_holdout = next(
+            (
+                item
+                for item in self.context_validity_rollback_holdout_validations
+                if item.id == resolution.holdout_validation_id
+            ),
+            None,
+        )
+        rollback_selection = next(
+            (
+                item
+                for item in self.context_validity_map_selection_history
+                if item.id == resolution.rollback_selection_id
+            ),
+            None,
+        )
+        if watch is None or prior_holdout is None or rollback_selection is None:
+            raise ValueError("renewed rollback evidence is incomplete")
+
+        active = self.active_context_causal_validity_map(
+            resolution.hypothesis_id
+        )
+        if (
+            active is None
+            or active.id != resolution.rollback_target_map_id
+            or rollback_selection.selected_map_id != active.id
+        ):
+            raise ValueError(
+                "renewed recovery requires the second rollback map to remain active"
+            )
+
+        min_samples = max(2, min(int(min_samples), 20))
+        margin = _clamp(improvement_margin, 0.01, 0.50)
+        degraded = set(watch.degraded_signatures)
+        gate_map = {
+            item.id: item
+            for item in self.context_validity_decision_gates
+            if item.validity_map_id == active.id
+            and item.id > rollback_selection.decision_gate_watermark_id
+            and item.environment_signature in degraded
+        }
+        outcomes = [
+            item
+            for item in self.context_validity_gate_outcomes
+            if item.gate_id in gate_map
+        ]
+        outcome_ids = {item.id for item in outcomes}
+        prior_ids = self._prior_context_validity_cycle_outcome_ids(
+            resolution.hypothesis_id
+        )
+        reused_ids = outcome_ids & prior_ids
+
+        counts: dict[str, int] = {}
+        for outcome in outcomes:
+            signature = gate_map[outcome.gate_id].environment_signature
+            counts[signature] = counts.get(signature, 0) + 1
+        enough = bool(degraded) and all(
+            counts.get(signature, 0) >= min_samples
+            for signature in degraded
+        )
+        mean_advantage = (
+            sum(item.gated_advantage_vs_alternative for item in outcomes)
+            / len(outcomes)
+            if outcomes
+            else 0.0
+        )
+        improvement = mean_advantage - watch.mean_post_reactivation_advantage
+
+        if reused_ids:
+            status = "renewed_recovery_evidence_reused"
+            recovery_passed = False
+        elif not enough:
+            status = "insufficient_renewed_recovery_evidence"
+            recovery_passed = False
+        elif mean_advantage >= margin and improvement >= margin:
+            status = "renewed_recovery_passed"
+            recovery_passed = True
+        else:
+            status = "renewed_recovery_not_improved"
+            recovery_passed = False
+
+        refs = [
+            f"context_validity_reactivation_drift_resolution:{resolution.id}",
+            f"context_validity_reactivation_drift_watch:{watch.id}",
+            f"context_validity_map_selection:{rollback_selection.id}",
+        ]
+        refs.extend(
+            f"context_validity_gate_outcome:{item.id}"
+            for item in outcomes
+        )
+        record = ContextValidityRenewedRecoveryValidation(
+            id=self.next_context_validity_renewed_recovery_validation_id,
+            drift_resolution_id=resolution.id,
+            drift_watch_id=watch.id,
+            prior_holdout_validation_id=prior_holdout.id,
+            hypothesis_id=resolution.hypothesis_id,
+            rollback_selection_id=rollback_selection.id,
+            rollback_map_id=active.id,
+            blocked_descendant_map_id=resolution.blocked_descendant_map_id,
+            observed_outcome_ids=tuple(sorted(outcome_ids)),
+            excluded_prior_outcome_ids=tuple(sorted(prior_ids)),
+            degraded_signatures=tuple(sorted(degraded)),
+            mean_recovery_advantage=round(mean_advantage, 6),
+            prior_degraded_advantage=watch.mean_post_reactivation_advantage,
+            improvement_delta=round(improvement, 6),
+            status=status,
+            reactivation_allowed=False,
+            evidence_refs=tuple(dict.fromkeys(refs)),
+            holdout_gate_watermark_id=(
+                max(
+                    (item.id for item in self.context_validity_decision_gates),
+                    default=0,
+                )
+                if recovery_passed
+                else 0
+            ),
+        )
+        self.next_context_validity_renewed_recovery_validation_id += 1
+        self.context_validity_renewed_recovery_validations.append(record)
+        if len(self.context_validity_renewed_recovery_validations) > self.max_memory:
+            self.context_validity_renewed_recovery_validations = (
+                self.context_validity_renewed_recovery_validations[-self.max_memory:]
+            )
+
+        self.stage_global_workspace_item(
+            source="intervention",
+            content=(
+                f"context validity renewed recovery={record.id}; "
+                f"resolution={resolution.id}; status={record.status}; "
+                f"holdout_watermark={record.holdout_gate_watermark_id}"
+            ),
+            salience=0.76 if recovery_passed else 0.62,
+            evidence_refs=(
+                f"context_validity_renewed_recovery_validation:{record.id}",
+                *record.evidence_refs[-4:],
+            ),
+        )
+        return record
+
+    def validate_context_validity_renewed_rollback_holdout(
+        self,
+        recovery_validation_id: int,
+        *,
+        min_samples: int = 3,
+        confirmation_margin: float = 0.05,
+        max_recovery_drop: float = 0.05,
+    ) -> ContextValidityRenewedHoldoutValidation:
+        """
+        Confirm renewed recovery on a later independent holdout batch.
+
+        Recovery evidence, all earlier episode evidence, and the new holdout
+        evidence must be pairwise disjoint before reactivation can be allowed.
+        """
+        recovery = next(
+            (
+                item
+                for item in self.context_validity_renewed_recovery_validations
+                if item.id == recovery_validation_id
+            ),
+            None,
+        )
+        if recovery is None:
+            raise ValueError("unknown renewed recovery validation")
+        if (
+            recovery.status != "renewed_recovery_passed"
+            or recovery.holdout_gate_watermark_id <= 0
+        ):
+            raise ValueError("renewed holdout requires a passed recovery batch")
+
+        resolution = next(
+            (
+                item
+                for item in self.context_validity_reactivation_drift_resolutions
+                if item.id == recovery.drift_resolution_id
+            ),
+            None,
+        )
+        if resolution is None:
+            raise ValueError("renewed recovery resolution is missing")
+        active = self.active_context_causal_validity_map(
+            recovery.hypothesis_id
+        )
+        if active is None or active.id != recovery.rollback_map_id:
+            raise ValueError(
+                "renewed holdout requires rollback map to remain active"
+            )
+
+        min_samples = max(2, min(int(min_samples), 20))
+        margin = _clamp(confirmation_margin, 0.01, 0.50)
+        max_drop = _clamp(max_recovery_drop, 0.0, 0.50)
+        degraded = set(recovery.degraded_signatures)
+        gate_map = {
+            item.id: item
+            for item in self.context_validity_decision_gates
+            if item.validity_map_id == recovery.rollback_map_id
+            and item.id > recovery.holdout_gate_watermark_id
+            and item.environment_signature in degraded
+        }
+        outcomes = [
+            item
+            for item in self.context_validity_gate_outcomes
+            if item.gate_id in gate_map
+        ]
+        outcome_ids = {item.id for item in outcomes}
+        prior_ids = set(recovery.excluded_prior_outcome_ids)
+        prior_ids.update(recovery.observed_outcome_ids)
+        reused_ids = outcome_ids & prior_ids
+
+        counts: dict[str, int] = {}
+        for outcome in outcomes:
+            signature = gate_map[outcome.gate_id].environment_signature
+            counts[signature] = counts.get(signature, 0) + 1
+        enough = bool(degraded) and all(
+            counts.get(signature, 0) >= min_samples
+            for signature in degraded
+        )
+        mean_holdout = (
+            sum(item.gated_advantage_vs_alternative for item in outcomes)
+            / len(outcomes)
+            if outcomes
+            else 0.0
+        )
+        improvement = mean_holdout - recovery.prior_degraded_advantage
+        recovery_delta = mean_holdout - recovery.mean_recovery_advantage
+
+        if reused_ids:
+            status = "renewed_holdout_evidence_reused"
+            allowed = False
+        elif not enough:
+            status = "insufficient_renewed_holdout_evidence"
+            allowed = False
+        elif (
+            mean_holdout >= margin
+            and improvement >= margin
+            and recovery_delta >= -max_drop
+        ):
+            status = "renewed_holdout_confirmed"
+            allowed = True
+        else:
+            status = "renewed_holdout_not_confirmed"
+            allowed = False
+
+        refs = [
+            f"context_validity_renewed_recovery_validation:{recovery.id}",
+            f"context_validity_reactivation_drift_resolution:{resolution.id}",
+        ]
+        refs.extend(
+            f"context_validity_gate_outcome:{item.id}"
+            for item in outcomes
+        )
+        record = ContextValidityRenewedHoldoutValidation(
+            id=self.next_context_validity_renewed_holdout_validation_id,
+            recovery_validation_id=recovery.id,
+            drift_resolution_id=recovery.drift_resolution_id,
+            drift_watch_id=recovery.drift_watch_id,
+            prior_holdout_validation_id=recovery.prior_holdout_validation_id,
+            hypothesis_id=recovery.hypothesis_id,
+            rollback_selection_id=recovery.rollback_selection_id,
+            rollback_map_id=recovery.rollback_map_id,
+            blocked_descendant_map_id=recovery.blocked_descendant_map_id,
+            recovery_outcome_ids=recovery.observed_outcome_ids,
+            holdout_outcome_ids=tuple(sorted(outcome_ids)),
+            excluded_prior_outcome_ids=recovery.excluded_prior_outcome_ids,
+            degraded_signatures=recovery.degraded_signatures,
+            mean_recovery_advantage=recovery.mean_recovery_advantage,
+            mean_holdout_advantage=round(mean_holdout, 6),
+            prior_degraded_advantage=recovery.prior_degraded_advantage,
+            holdout_improvement_delta=round(improvement, 6),
+            recovery_to_holdout_delta=round(recovery_delta, 6),
+            status=status,
+            reactivation_allowed=allowed,
+            evidence_refs=tuple(dict.fromkeys(refs)),
+        )
+        self.next_context_validity_renewed_holdout_validation_id += 1
+        self.context_validity_renewed_holdout_validations.append(record)
+        if len(self.context_validity_renewed_holdout_validations) > self.max_memory:
+            self.context_validity_renewed_holdout_validations = (
+                self.context_validity_renewed_holdout_validations[-self.max_memory:]
+            )
+
+        self.stage_global_workspace_item(
+            source="intervention",
+            content=(
+                f"context validity renewed holdout={record.id}; "
+                f"recovery={recovery.id}; status={record.status}; "
+                f"reactivation_allowed={record.reactivation_allowed}"
+            ),
+            salience=0.80 if allowed else 0.62,
+            evidence_refs=(
+                f"context_validity_renewed_holdout_validation:{record.id}",
                 *record.evidence_refs[-4:],
             ),
         )
@@ -9324,6 +9766,20 @@ class UnarchiEngine:
             "next_context_validity_reactivation_drift_resolution_id": (
                 self.next_context_validity_reactivation_drift_resolution_id
             ),
+            "context_validity_renewed_recovery_validations": [
+                item.to_dict()
+                for item in self.context_validity_renewed_recovery_validations
+            ],
+            "next_context_validity_renewed_recovery_validation_id": (
+                self.next_context_validity_renewed_recovery_validation_id
+            ),
+            "context_validity_renewed_holdout_validations": [
+                item.to_dict()
+                for item in self.context_validity_renewed_holdout_validations
+            ],
+            "next_context_validity_renewed_holdout_validation_id": (
+                self.next_context_validity_renewed_holdout_validation_id
+            ),
             "success_prediction_bias": self.success_prediction_bias,
             "uncertainty_prediction_bias": self.uncertainty_prediction_bias,
             "stress_prediction_bias": self.stress_prediction_bias,
@@ -9337,7 +9793,10 @@ class UnarchiEngine:
     @classmethod
     def from_export(cls, payload: dict[str, Any]) -> UnarchiEngine:
         """Restore a previously exported UNARCHI engine without a model call."""
-        if payload.get("version") != UNARCHI_VERSION:
+        if payload.get("version") not in {
+            UNARCHI_VERSION,
+            *_LEGACY_UNARCHI_VERSIONS,
+        }:
             raise ValueError("unsupported UNARCHI state version")
 
         state_payload = payload.get("state")
@@ -9435,6 +9894,14 @@ class UnarchiEngine:
         )
         context_validity_reactivation_drift_resolutions_payload = payload.get(
             "context_validity_reactivation_drift_resolutions",
+            [],
+        )
+        context_validity_renewed_recovery_validations_payload = payload.get(
+            "context_validity_renewed_recovery_validations",
+            [],
+        )
+        context_validity_renewed_holdout_validations_payload = payload.get(
+            "context_validity_renewed_holdout_validations",
             [],
         )
         value_weights_payload = payload.get("value_weights", _default_value_weights())
@@ -9543,6 +10010,20 @@ class UnarchiEngine:
         ):
             raise ValueError(
                 "invalid UNARCHI context validity reactivation drift resolutions"
+            )
+        if not isinstance(
+            context_validity_renewed_recovery_validations_payload,
+            list,
+        ):
+            raise ValueError(
+                "invalid UNARCHI context validity renewed recovery validations"
+            )
+        if not isinstance(
+            context_validity_renewed_holdout_validations_payload,
+            list,
+        ):
+            raise ValueError(
+                "invalid UNARCHI context validity renewed holdout validations"
             )
 
         memory: list[Experience] = []
@@ -10115,6 +10596,47 @@ class UnarchiEngine:
                 ContextValidityReactivationDriftResolution(**restored_item)
             )
 
+        context_validity_renewed_recovery_validations: list[
+            ContextValidityRenewedRecoveryValidation
+        ] = []
+        for item in context_validity_renewed_recovery_validations_payload:
+            if not isinstance(item, dict):
+                raise ValueError(
+                    "invalid UNARCHI context validity renewed recovery validation"
+                )
+            restored_item = dict(item)
+            for key in (
+                "observed_outcome_ids",
+                "excluded_prior_outcome_ids",
+                "degraded_signatures",
+                "evidence_refs",
+            ):
+                restored_item[key] = tuple(restored_item.get(key, ()))
+            context_validity_renewed_recovery_validations.append(
+                ContextValidityRenewedRecoveryValidation(**restored_item)
+            )
+
+        context_validity_renewed_holdout_validations: list[
+            ContextValidityRenewedHoldoutValidation
+        ] = []
+        for item in context_validity_renewed_holdout_validations_payload:
+            if not isinstance(item, dict):
+                raise ValueError(
+                    "invalid UNARCHI context validity renewed holdout validation"
+                )
+            restored_item = dict(item)
+            for key in (
+                "recovery_outcome_ids",
+                "holdout_outcome_ids",
+                "excluded_prior_outcome_ids",
+                "degraded_signatures",
+                "evidence_refs",
+            ):
+                restored_item[key] = tuple(restored_item.get(key, ()))
+            context_validity_renewed_holdout_validations.append(
+                ContextValidityRenewedHoldoutValidation(**restored_item)
+            )
+
         max_memory = max(16, min(int(payload.get("max_memory") or 256), 4096))
         max_active = max(
             1,
@@ -10509,6 +11031,44 @@ class UnarchiEngine:
                 )
                 + 1,
             ),
+            context_validity_renewed_recovery_validations=(
+                context_validity_renewed_recovery_validations[-max_memory:]
+            ),
+            next_context_validity_renewed_recovery_validation_id=max(
+                int(
+                    payload.get(
+                        "next_context_validity_renewed_recovery_validation_id"
+                    )
+                    or 1
+                ),
+                max(
+                    (
+                        item.id
+                        for item in context_validity_renewed_recovery_validations
+                    ),
+                    default=0,
+                )
+                + 1,
+            ),
+            context_validity_renewed_holdout_validations=(
+                context_validity_renewed_holdout_validations[-max_memory:]
+            ),
+            next_context_validity_renewed_holdout_validation_id=max(
+                int(
+                    payload.get(
+                        "next_context_validity_renewed_holdout_validation_id"
+                    )
+                    or 1
+                ),
+                max(
+                    (
+                        item.id
+                        for item in context_validity_renewed_holdout_validations
+                    ),
+                    default=0,
+                )
+                + 1,
+            ),
             success_prediction_bias=float(
                 payload.get("success_prediction_bias") or 0.0
             ),
@@ -10712,6 +11272,19 @@ class UnarchiEngine:
             ),
             "post_reactivation_drift_watch_count": len(
                 self.context_validity_reactivation_drift_watches
+            ),
+            "renewed_recovery_validation_count": len(
+                self.context_validity_renewed_recovery_validations
+            ),
+            "renewed_holdout_validation_count": len(
+                self.context_validity_renewed_holdout_validations
+            ),
+            "renewed_reactivation_allowed_count": len(
+                [
+                    item
+                    for item in self.context_validity_renewed_holdout_validations
+                    if item.reactivation_allowed
+                ]
             ),
             "renewed_degradation_count": len(
                 [
