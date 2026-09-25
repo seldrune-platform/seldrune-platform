@@ -24,6 +24,21 @@ query deployment($id: String!) {
 }
 """
 
+_DEPLOYMENTS_QUERY = """
+query deployments($input: DeploymentListInput!, $first: Int) {
+  deployments(input: $input, first: $first) {
+    edges {
+      node {
+        id
+        status
+        createdAt
+        meta
+      }
+    }
+  }
+}
+"""
+
 _DEPLOYMENT_LOGS_QUERY = """
 query deploymentLogs($deploymentId: String!, $limit: Int) {
   deploymentLogs(deploymentId: $deploymentId, limit: $limit) {
@@ -169,6 +184,98 @@ class RailwayPortableCIProvider:
             "status": status,
             "commit_sha": commit_sha,
             "provider_status": provider_status,
+        }
+
+    def find_exact_successful_receipt(
+        self,
+        *,
+        expected_sha: str,
+        project_id: str,
+        service_id: str,
+        environment_id: str,
+    ) -> dict[str, Any]:
+        normalized_sha = str(expected_sha or "").strip().lower()
+        if not normalized_sha:
+            raise RailwayCIProviderError("expected_sha is required")
+
+        scope = {
+            "projectId": str(project_id or "").strip(),
+            "serviceId": str(service_id or "").strip(),
+            "environmentId": str(environment_id or "").strip(),
+        }
+        missing = [key for key, value in scope.items() if not value]
+        if missing:
+            raise RailwayCIProviderError(
+                "Railway CI scope is incomplete: " + ", ".join(missing)
+            )
+
+        data = self._query(
+            query=_DEPLOYMENTS_QUERY,
+            variables={"input": scope, "first": 50},
+        )
+        deployments = data.get("deployments")
+        if not isinstance(deployments, dict):
+            raise RailwayCIProviderError("Railway deployment list is unavailable")
+        edges = deployments.get("edges")
+        if not isinstance(edges, list):
+            raise RailwayCIProviderError("Railway deployment list is invalid")
+
+        deployment_id: str | None = None
+        created_at: Any = None
+        for edge in edges:
+            node = edge.get("node") if isinstance(edge, dict) else None
+            if not isinstance(node, dict):
+                continue
+            if str(node.get("status") or "").strip().upper() != "SUCCESS":
+                continue
+            meta = node.get("meta")
+            if not isinstance(meta, dict):
+                continue
+            commit_sha = str(
+                meta.get("commitHash")
+                or meta.get("commit_hash")
+                or ""
+            ).strip().lower()
+            if commit_sha != normalized_sha:
+                continue
+            candidate_id = str(node.get("id") or "").strip()
+            if not candidate_id:
+                continue
+            deployment_id = candidate_id
+            created_at = node.get("createdAt")
+            break
+
+        if not deployment_id:
+            raise RailwayCIProviderError(
+                "No successful Railway deployment matches expected_sha"
+            )
+
+        execution = self.fetch_execution(run_id=deployment_id)
+        if (
+            execution.get("status") != "success"
+            or str(execution.get("commit_sha") or "").strip().lower()
+            != normalized_sha
+        ):
+            raise RailwayCIProviderError(
+                "Railway deployment no longer matches expected_sha"
+            )
+
+        bundle = self.fetch_receipt_bundle(run_id=deployment_id)
+        return {
+            "deployment_id": deployment_id,
+            "status": "success",
+            "conclusion": "success",
+            "head_sha": normalized_sha,
+            "provider_status": execution.get("provider_status"),
+            "created_at": created_at,
+            "receipt": bundle["receipt"],
+            "signature": bundle["signature"],
+            "evidence": {
+                "receipt_id": (
+                    f"railway-portable-ci:{deployment_id}:{normalized_sha}"
+                ),
+                "provider": self.provider_name,
+            },
         }
 
     def fetch_receipt_bundle(self, *, run_id: str) -> dict[str, Any]:
