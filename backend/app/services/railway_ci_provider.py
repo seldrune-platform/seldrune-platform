@@ -23,6 +23,19 @@ query deployment($id: String!) {
 }
 """
 
+_DEPLOYMENT_LOGS_QUERY = """
+query deploymentLogs($deploymentId: String!, $limit: Int) {
+  deploymentLogs(deploymentId: $deploymentId, limit: $limit) {
+    timestamp
+    message
+    severity
+  }
+}
+"""
+
+_RECEIPT_PREFIX = "SELDRUNE_CI_RECEIPT_JSON="
+_SIGNATURE_PREFIX = "SELDRUNE_CI_RECEIPT_SIGNATURE="
+
 
 class RailwayCIProviderError(ValueError):
     pass
@@ -157,6 +170,57 @@ class RailwayPortableCIProvider:
             "provider_status": provider_status,
         }
 
+    def fetch_receipt_bundle(self, *, run_id: str) -> dict[str, Any]:
+        normalized_run_id = str(run_id or "").strip()
+        if not normalized_run_id:
+            raise RailwayCIProviderError("run_id is required")
+
+        data = self._query(
+            query=_DEPLOYMENT_LOGS_QUERY,
+            variables={"deploymentId": normalized_run_id, "limit": 500},
+        )
+        logs = data.get("deploymentLogs")
+        if not isinstance(logs, list):
+            raise RailwayCIProviderError("Railway deployment logs are unavailable")
+
+        receipt_text: str | None = None
+        signature: str | None = None
+        for item in logs:
+            if not isinstance(item, dict):
+                continue
+            message = str(item.get("message") or "").strip()
+            if message.startswith(_RECEIPT_PREFIX):
+                receipt_text = message[len(_RECEIPT_PREFIX):].strip()
+            elif message.startswith(_SIGNATURE_PREFIX):
+                signature = message[len(_SIGNATURE_PREFIX):].strip()
+
+        if not receipt_text:
+            raise RailwayCIProviderError(
+                "Railway deployment did not emit a portable CI receipt"
+            )
+        if not signature or signature == "unsigned":
+            raise RailwayCIProviderError(
+                "Railway deployment did not emit a signed portable CI receipt"
+            )
+
+        try:
+            import json
+
+            receipt = json.loads(receipt_text)
+        except ValueError as exc:
+            raise RailwayCIProviderError(
+                "Railway portable CI receipt is invalid JSON"
+            ) from exc
+        if not isinstance(receipt, dict):
+            raise RailwayCIProviderError(
+                "Railway portable CI receipt must be an object"
+            )
+
+        return {
+            "receipt": receipt,
+            "signature": signature,
+        }
+
 
 def ingest_railway_portable_ci_evidence(
     session: Session,
@@ -185,6 +249,37 @@ def ingest_railway_portable_ci_evidence(
         run_id=deployment_id,
         receipt=receipt,
         signature=signature,
+        signing_key=signing_key,
+        provider_adapter=adapter,
+    )
+
+
+def ingest_railway_portable_ci_run(
+    session: Session,
+    *,
+    task: Task,
+    actor_user_id: UUID | None,
+    expected_sha: str,
+    deployment_id: str,
+    signing_key: str,
+    railway_token: str,
+    token_kind: str = "account",
+) -> dict[str, Any]:
+    """Retrieve and ingest a signed receipt from an authenticated Railway run."""
+
+    adapter = RailwayPortableCIProvider(
+        token=railway_token,
+        token_kind=token_kind,
+    )
+    bundle = adapter.fetch_receipt_bundle(run_id=deployment_id)
+    return ingest_portable_ci_evidence(
+        session,
+        task=task,
+        actor_user_id=actor_user_id,
+        expected_sha=expected_sha,
+        run_id=deployment_id,
+        receipt=bundle["receipt"],
+        signature=bundle["signature"],
         signing_key=signing_key,
         provider_adapter=adapter,
     )
