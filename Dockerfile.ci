@@ -1,0 +1,22 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml README.md alembic.ini ./
+COPY backend ./backend
+COPY services ./services
+COPY migrations ./migrations
+COPY scripts ./scripts
+COPY tests ./tests
+
+RUN python -m pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -e ".[dev]"
+
+CMD ["bash", "scripts/ci_verify.sh"]
