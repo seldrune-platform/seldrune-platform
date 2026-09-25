@@ -458,3 +458,22 @@ replaced.
 After successful hydration, the compiled contract is retried. The normal merge
 step remains a governed high-risk action; automatic evidence hydration does not
 grant merge approval or convert a hosted CI failure into hosted CI success.
+
+## One-Go portable-CI fallback hardening
+
+Automatic fallback now derives the expected CI commit only from a receipt-backed
+`github-workflow-run-status` execution. The selected `verify-ci` child must
+be succeeded, identify the expected tool slug, reference a succeeded ToolRun in
+the same organization/task scope, and carry the same provider receipt ID as the
+persisted ToolRun output. Stored task output alone is not sufficient to choose a
+fallback commit.
+
+Railway CI scope resolution also accepts both
+`SELDRUNE_CI_RAILWAY_*` and `SELDRUNE_RAILWAY_CI_*` naming conventions,
+with Railway-native project/service/environment IDs as a final runtime fallback.
+Explicit Seldrune CI target variables take precedence. Railway API credentials
+and the receipt HMAC key remain separately required secrets.
+
+These checks preserve the existing rule: automatic hydration can supply
+evidence, but it cannot grant merge approval or convert a genuine repository
+test failure into a passing result.

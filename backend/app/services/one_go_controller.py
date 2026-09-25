@@ -8,9 +8,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.core.tasking import AgentStatus, TaskStatus
+from backend.app.core.tools import ToolRunStatus
 from backend.app.models.agent import Agent
 from backend.app.models.governance_policy import GovernancePolicy
 from backend.app.models.task import Task, TaskEvent
+from backend.app.models.tool_run import ToolRun
 from backend.app.services.agent_runtime import AgentRuntimeError, execute_agent_task
 from backend.app.services.audit import record_audit
 from backend.app.services.cognitive_evidence import (
@@ -180,11 +182,12 @@ def _assign_best_agent(
     return agent, score
 
 
-def _contract_step_tool_output(
+def _contract_step_verified_tool_output(
     session: Session,
     *,
     parent_task: Task,
     step_id: str,
+    expected_tool_slug: str,
 ) -> dict[str, Any] | None:
     children = list(
         session.scalars(
@@ -199,13 +202,59 @@ def _contract_step_tool_output(
         if (child.input_data or {}).get("contract_parent_task_id")
         == str(parent_task.id)
         and (child.input_data or {}).get("contract_step_id") == step_id
+        and TaskStatus(child.status) is TaskStatus.SUCCEEDED
     ]
     if not matches:
         return None
+
     child = max(matches, key=lambda item: (item.created_at, item.id))
     output = child.output_data or {}
-    tool_output = output.get("tool_output") if isinstance(output, dict) else None
-    return tool_output if isinstance(tool_output, dict) else None
+    if (
+        not isinstance(output, dict)
+        or output.get("execution_type") != "tool"
+        or str(output.get("tool_slug") or "") != expected_tool_slug
+    ):
+        return None
+
+    evidence = output.get("evidence")
+    if not isinstance(evidence, dict):
+        return None
+    try:
+        run_id = UUID(str(evidence.get("tool_run_id") or ""))
+    except ValueError:
+        return None
+
+    run = session.get(ToolRun, run_id)
+    if (
+        run is None
+        or run.organization_id != child.organization_id
+        or run.task_id != child.id
+        or run.status != ToolRunStatus.SUCCEEDED.value
+    ):
+        return None
+
+    run_output = run.output_data or {}
+    if not isinstance(run_output, dict):
+        return None
+    provider_evidence = run_output.get("evidence")
+    expected_receipt = (
+        str(provider_evidence.get("receipt_id"))
+        if isinstance(provider_evidence, dict)
+        and provider_evidence.get("receipt_id")
+        else f"tool-run:{run.id}"
+    )
+    if str(evidence.get("receipt_id") or "") != expected_receipt:
+        return None
+
+    return run_output
+
+
+def _first_env(*names: str) -> str:
+    for name in names:
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return ""
 
 
 def _try_auto_portable_ci_fallback(
@@ -217,10 +266,11 @@ def _try_auto_portable_ci_fallback(
     if isinstance((task.input_data or {}).get("portable_ci_evidence"), dict):
         return False, "portable_ci_evidence_already_present"
 
-    verify_ci_output = _contract_step_tool_output(
+    verify_ci_output = _contract_step_verified_tool_output(
         session,
         parent_task=task,
         step_id="verify-ci",
+        expected_tool_slug="github-workflow-run-status",
     )
     if not isinstance(verify_ci_output, dict):
         return False, "verify_ci_output_missing"
@@ -230,14 +280,23 @@ def _try_auto_portable_ci_fallback(
         return False, "verify_ci_head_sha_missing"
 
     config = {
-        "railway_token": os.getenv("SELDRUNE_RAILWAY_API_TOKEN", "").strip(),
-        "signing_key": os.getenv("SELDRUNE_CI_RECEIPT_HMAC_KEY", "").strip(),
-        "project_id": os.getenv("SELDRUNE_CI_RAILWAY_PROJECT_ID", "").strip(),
-        "service_id": os.getenv("SELDRUNE_CI_RAILWAY_SERVICE_ID", "").strip(),
-        "environment_id": os.getenv(
+        "railway_token": _first_env("SELDRUNE_RAILWAY_API_TOKEN"),
+        "signing_key": _first_env("SELDRUNE_CI_RECEIPT_HMAC_KEY"),
+        "project_id": _first_env(
+            "SELDRUNE_CI_RAILWAY_PROJECT_ID",
+            "SELDRUNE_RAILWAY_CI_PROJECT_ID",
+            "RAILWAY_PROJECT_ID",
+        ),
+        "service_id": _first_env(
+            "SELDRUNE_CI_RAILWAY_SERVICE_ID",
+            "SELDRUNE_RAILWAY_CI_SERVICE_ID",
+            "RAILWAY_SERVICE_ID",
+        ),
+        "environment_id": _first_env(
             "SELDRUNE_CI_RAILWAY_ENVIRONMENT_ID",
-            "",
-        ).strip(),
+            "SELDRUNE_RAILWAY_CI_ENVIRONMENT_ID",
+            "RAILWAY_ENVIRONMENT_ID",
+        ),
     }
     missing = sorted(key for key, value in config.items() if not value)
     if missing:
