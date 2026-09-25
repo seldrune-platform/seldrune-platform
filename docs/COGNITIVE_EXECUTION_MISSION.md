@@ -352,3 +352,21 @@ The fallback is conditional and fail-closed:
 This does not weaken the merge action. `merge-verified-pull-request` remains
 a high-risk action and its existing approval requirements still apply.
 
+## Authenticated provider evidence bridge
+
+Signed portable receipts and authenticated provider execution metadata are now
+treated as complementary evidence, not substitutes.
+
+The signed receipt proves that the repository-owned verifier produced an
+untampered result for a particular release SHA. The provider-evidence validator
+separately requires authenticated execution provenance, a successful provider
+run, and an exact provider commit SHA match before portable CI evidence can be
+trusted by a future provider adapter.
+
+The provider-evidence validator remains internal-only. Owner-supplied JSON,
+free-form model output, or an unverified service status cannot call it as a
+merge shortcut. Repository contracts still use the fail-closed portable CI
+fallback only after the primary GitHub CI step has been classified as an
+external-resource blocker, and the high-risk merge step continues to require
+its normal approval path.
+
