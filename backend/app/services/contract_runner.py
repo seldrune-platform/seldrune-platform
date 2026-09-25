@@ -22,6 +22,7 @@ from backend.app.services.orchestrator import (
     build_agent_performance_evidence,
     select_best_agent,
 )
+from backend.app.services.stage_compiler import compile_stage_execution_contract
 from backend.app.services.task_engine import transition_task
 
 
@@ -70,6 +71,107 @@ def _child_tasks(
         if (task.input_data or {}).get("contract_parent_task_id")
         == str(parent_task.id)
     ]
+
+
+def _required_unavailable_step_ids(
+    contract: dict[str, Any],
+) -> list[str]:
+    return [
+        str(step.get("id") or "")
+        for step in contract.get("steps") or []
+        if isinstance(step, dict)
+        and step.get("kind") == "tool"
+        and not step.get("optional")
+        and not step.get("tool_slug")
+    ]
+
+
+def _refresh_stale_contract_tools(
+    session: Session,
+    *,
+    task: Task,
+    actor_user_id: UUID,
+    contract: dict[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    old_unavailable = _required_unavailable_step_ids(contract)
+    if not old_unavailable:
+        return contract, False
+
+    if TaskStatus(task.status) not in {TaskStatus.QUEUED, TaskStatus.ASSIGNED}:
+        return contract, False
+    if _child_tasks(session, parent_task=task):
+        return contract, False
+
+    stage_id = _stage_id(task)
+    if not stage_id:
+        return contract, False
+
+    input_data = dict(task.input_data or {})
+    capabilities = input_data.get("required_capabilities")
+    if not isinstance(capabilities, list):
+        capabilities = []
+
+    refreshed = compile_stage_execution_contract(
+        session,
+        organization_id=task.organization_id,
+        stage={
+            "id": stage_id,
+            "title": task.title,
+            "objective": task.objective,
+            "workstream": str(input_data.get("workstream") or ""),
+            "capabilities": [
+                str(item)
+                for item in capabilities
+                if str(item).strip()
+            ],
+            "execution_mode": str(
+                input_data.get("execution_mode")
+                or contract.get("execution_mode")
+                or "automatic"
+            ),
+        },
+    )
+    new_unavailable = _required_unavailable_step_ids(refreshed)
+    if len(new_unavailable) >= len(old_unavailable):
+        return contract, False
+
+    task.input_data = {
+        **input_data,
+        "compiled_execution_contract": refreshed,
+    }
+    rebound = sorted(set(old_unavailable) - set(new_unavailable))
+    session.add(
+        TaskEvent(
+            organization_id=task.organization_id,
+            task_id=task.id,
+            actor_user_id=actor_user_id,
+            event_type="compiled_contract.tools_refreshed",
+            details={
+                "stage_id": stage_id,
+                "contract_version": refreshed.get("version"),
+                "rebound_step_ids": rebound,
+                "previous_blocking_reasons": contract.get("blocking_reasons") or [],
+                "blocking_reasons": refreshed.get("blocking_reasons") or [],
+            },
+        )
+    )
+    record_audit(
+        session,
+        organization_id=task.organization_id,
+        actor_user_id=actor_user_id,
+        action="compiled_contract.tools_refreshed",
+        resource_type="task",
+        resource_id=str(task.id),
+        details={
+            "stage_id": stage_id,
+            "rebound_step_ids": rebound,
+            "old_unavailable_count": len(old_unavailable),
+            "new_unavailable_count": len(new_unavailable),
+        },
+    )
+    session.commit()
+    session.refresh(task)
+    return refreshed, True
 
 
 def _child_step_id(task: Task) -> str | None:
@@ -957,6 +1059,13 @@ def advance_compiled_contract(
             contract=contract,
             reason=f"execution_mode:{contract.get('execution_mode')}",
         )
+
+    contract, _refreshed = _refresh_stale_contract_tools(
+        session,
+        task=task,
+        actor_user_id=actor_user_id,
+        contract=contract,
+    )
 
     if TaskStatus(task.status) is TaskStatus.SUCCEEDED:
         verified, reason, refs = verify_compiled_contract_evidence(
