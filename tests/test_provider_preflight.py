@@ -25,6 +25,7 @@ def test_provider_preflight_is_non_destructive_and_redacts_credentials(
     client,
     monkeypatch,
 ) -> None:
+    monkeypatch.delenv("SELDRUNE_CI_RECEIPT_HMAC_KEY", raising=False)
     monkeypatch.setenv("SELDRUNE_GMAIL_TOOL_CREDENTIAL", "gmail-secret-token")
     monkeypatch.setenv("SELDRUNE_GITHUB_TOOL_TOKEN", "github-secret-token")
     monkeypatch.setenv("SELDRUNE_RENDER_API_KEY", "render-secret-token")
@@ -82,7 +83,7 @@ def test_provider_preflight_is_non_destructive_and_redacts_credentials(
     assert response.status_code == 200
     body = response.json()
     assert body["verified"] == 2
-    assert body["total"] == 3
+    assert body["total"] == 4
 
     providers = {item["provider"]: item for item in body["providers"]}
     assert providers["gmail"]["status"] == "scope_limited"
@@ -94,6 +95,7 @@ def test_provider_preflight_is_non_destructive_and_redacts_credentials(
     )
     assert providers["render"]["status"] == "verified"
     assert providers["render"]["identity"]["id"] == "usr-c123"
+    assert providers["portable-ci"]["status"] == "not_configured"
 
     assert {
         url
@@ -117,6 +119,7 @@ def test_provider_preflight_reports_invalid_remote_credential(
     monkeypatch.delenv("SELDRUNE_GMAIL_TOOL_CREDENTIAL", raising=False)
     monkeypatch.setenv("SELDRUNE_GITHUB_TOOL_TOKEN", "bad-github-token")
     monkeypatch.delenv("SELDRUNE_RENDER_API_KEY", raising=False)
+    monkeypatch.delenv("SELDRUNE_CI_RECEIPT_HMAC_KEY", raising=False)
 
     def fake_get(url, *, headers, timeout):
         assert url == "https://api.github.com/user"
@@ -153,6 +156,7 @@ def test_provider_preflight_handles_network_failure_without_leaking_secret(
     monkeypatch.delenv("SELDRUNE_GMAIL_TOOL_CREDENTIAL", raising=False)
     monkeypatch.delenv("SELDRUNE_GITHUB_TOOL_TOKEN", raising=False)
     monkeypatch.setenv("SELDRUNE_RENDER_API_KEY", "render-network-secret")
+    monkeypatch.delenv("SELDRUNE_CI_RECEIPT_HMAC_KEY", raising=False)
 
     def failing_get(url, *, headers, timeout):
         raise httpx.ConnectError(

@@ -17,7 +17,8 @@
     </div>
     <div class="cognitive-mission-actions">
       <button id="mission-refresh" type="button" class="ghost">Sync roadmap</button>
-      <button id="mission-queue-ready" type="button">Queue ready wave</button>
+      <button id="mission-queue-ready" type="button" class="ghost">Queue ready wave</button>
+      <button id="mission-run-one-go" type="button">Run One-Go</button>
     </div>
   </div>
   <div class="mission-summary-grid">
@@ -47,6 +48,26 @@
   </div>
   <p id="mission-basis"></p>
   <p id="mission-sync-status">Synchronizing cognitive mission…</p>
+  <section class="mission-controller-report" aria-labelledby="mission-controller-title">
+    <div class="mission-controller-head">
+      <div>
+        <p class="eyebrow">ONE-GO EXECUTION CONTROLLER</p>
+        <h3 id="mission-controller-title">Evidence-gated execution waves</h3>
+      </div>
+      <span id="mission-one-go-version" class="mission-pill">not run</span>
+    </div>
+    <div class="mission-controller-grid">
+      <article><small>Waves</small><strong id="mission-one-go-waves">0</strong></article>
+      <article><small>Executed</small><strong id="mission-one-go-executed">0</strong></article>
+      <article><small>Verified</small><strong id="mission-one-go-verified">0</strong></article>
+      <article><small>Unverified</small><strong id="mission-one-go-unverified">0</strong></article>
+      <article><small>Blocked</small><strong id="mission-one-go-blocked">0</strong></article>
+      <article><small>Failed</small><strong id="mission-one-go-failed">0</strong></article>
+    </div>
+    <p id="mission-one-go-status">
+      Ready. Model output alone will not complete a roadmap stage.
+    </p>
+  </section>
   <div>
     <div class="section-head">
       <div>

@@ -1,4 +1,7 @@
 import base64
+import hashlib
+import hmac
+import json
 from email import policy
 from email.parser import BytesParser
 
@@ -234,6 +237,11 @@ def test_github_dispatch_uses_workflow_run_receipt(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(external_actions.httpx, "post", fake_post)
+    monkeypatch.setattr(
+        external_actions,
+        "_workflow_dispatch_runs",
+        lambda **_: [],
+    )
     output = external_actions.github_dispatch_workflow(
         {
             "owner": "acme",
@@ -255,6 +263,16 @@ def test_github_dispatch_accepts_request_id_for_legacy_empty_response(monkeypatc
         )
 
     monkeypatch.setattr(external_actions.httpx, "post", fake_post)
+    monkeypatch.setattr(
+        external_actions,
+        "_workflow_dispatch_runs",
+        lambda **_: [],
+    )
+    monkeypatch.setattr(
+        external_actions,
+        "_discover_dispatched_workflow_run",
+        lambda **_: None,
+    )
     output = external_actions.github_dispatch_workflow(
         {
             "owner": "acme",
@@ -306,3 +324,106 @@ def test_external_adapter_requires_credential() -> None:
             {"to": "a@example.com", "subject": "Hi", "body": "Hello"},
             None,
         )
+
+def _portable_ci_receipt(release_sha: str = "abc123") -> dict:
+    return {
+        "version": "seldrune-ci-v1",
+        "status": "success",
+        "release_sha": release_sha,
+        "checks": [
+            "postgres-ready",
+            "ruff",
+            "pytest",
+            "alembic-upgrade-head",
+            "production-ready",
+        ],
+        "ready": {
+            "ready": True,
+            "status": "ready",
+            "environment": "production",
+            "release": {
+                "sha": release_sha,
+                "source": "seldrune",
+            },
+        },
+    }
+
+
+def _portable_ci_signature(receipt: dict, key: str) -> str:
+    canonical = json.dumps(
+        receipt,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    digest = hmac.new(
+        key.encode("utf-8"),
+        canonical,
+        hashlib.sha256,
+    ).hexdigest()
+    return f"sha256={digest}"
+
+
+def test_portable_ci_signed_receipt_verifies_exact_release() -> None:
+    key = "portable-ci-test-signing-key"
+    receipt = _portable_ci_receipt("deadbeef")
+    output = external_actions.portable_ci_verify_receipt(
+        {
+            "receipt": receipt,
+            "signature": _portable_ci_signature(receipt, key),
+        },
+        key,
+    )
+
+    assert output["verified"] is True
+    assert output["conclusion"] == "success"
+    assert output["release_sha"] == "deadbeef"
+    assert output["head_sha"] == "deadbeef"
+    assert output["signature_verified"] is True
+    assert output["evidence"]["provider"] == "portable-ci"
+    assert output["evidence"]["receipt_id"].startswith(
+        "portable-ci:deadbeef:"
+    )
+
+
+def test_portable_ci_receipt_rejects_tampering() -> None:
+    key = "portable-ci-test-signing-key"
+    receipt = _portable_ci_receipt("deadbeef")
+    signature = _portable_ci_signature(receipt, key)
+    receipt["release_sha"] = "forged"
+
+    with pytest.raises(ToolGatewayError, match="signature mismatch"):
+        external_actions.portable_ci_verify_receipt(
+            {
+                "receipt": receipt,
+                "signature": signature,
+            },
+            key,
+        )
+
+
+def test_portable_ci_receipt_requires_all_evidence_checks() -> None:
+    key = "portable-ci-test-signing-key"
+    receipt = _portable_ci_receipt("deadbeef")
+    receipt["checks"].remove("pytest")
+
+    with pytest.raises(ToolGatewayError, match="missing required checks: pytest"):
+        external_actions.portable_ci_verify_receipt(
+            {
+                "receipt": receipt,
+                "signature": _portable_ci_signature(receipt, key),
+            },
+            key,
+        )
+
+
+def test_portable_ci_catalog_uses_secret_backed_credential() -> None:
+    entry = next(
+        item
+        for item in external_actions.default_external_action_catalog()
+        if item["provider"] == "portable-ci"
+        and item["action_name"] == "verify-receipt"
+    )
+    assert entry["risk_level"] == "low"
+    assert entry["credential_env_locator"] == "SELDRUNE_CI_RECEIPT_HMAC_KEY"
+    assert entry["input_schema"]["required"] == ["receipt", "signature"]
+
