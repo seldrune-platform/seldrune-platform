@@ -110,8 +110,10 @@ def _compile_tool_step(
     provider: str,
     action_name: str,
     input_data: dict[str, Any] | None = None,
-    bindings: dict[str, str] | None = None,
+    bindings: dict[str, Any] | None = None,
     acceptance: dict[str, Any] | None = None,
+    optional: bool = False,
+    run_when_external_resource_from: str | None = None,
 ) -> dict[str, Any]:
     tool = tools.get((provider, action_name))
     resolved_input = dict(input_data or {})
@@ -152,6 +154,8 @@ def _compile_tool_step(
         "missing_fields": missing,
         "bound_fields": bound,
         "status": status,
+        "optional": optional,
+        "run_when_external_resource_from": run_when_external_resource_from,
         "acceptance": dict(acceptance or {}),
     }
 
@@ -281,6 +285,7 @@ def _repository_contract(
                     "github_actions_billing_block",
                     "github_actions_runner_unavailable",
                 ],
+                "fallback_step_id": "verify-portable-ci",
                 "pending_status_path": "status",
                 "pending_status_values": [
                     "queued",
@@ -293,6 +298,23 @@ def _repository_contract(
         ),
         _compile_tool_step(
             tools,
+            step_id="verify-portable-ci",
+            provider="portable-ci",
+            action_name="verify-receipt",
+            bindings={
+                "receipt": "parent.input.portable_ci_evidence.receipt",
+                "signature": "parent.input.portable_ci_evidence.signature",
+            },
+            acceptance={
+                "receipt_required": True,
+                "output_path": "conclusion",
+                "equals": "success",
+            },
+            optional=True,
+            run_when_external_resource_from="verify-ci",
+        ),
+        _compile_tool_step(
+            tools,
             step_id="merge-verified-pull-request",
             provider="github",
             action_name="merge-pull-request",
@@ -302,7 +324,10 @@ def _repository_contract(
             },
             bindings={
                 "pull_number": "steps.open-pull-request.output.number",
-                "sha": "steps.verify-ci.output.head_sha",
+                "sha": [
+                    "steps.verify-ci.output.head_sha",
+                    "steps.verify-portable-ci.output.head_sha",
+                ],
             },
             acceptance={
                 "receipt_required": True,
@@ -391,11 +416,12 @@ def compile_stage_execution_contract(
     runtime_bindings: list[str] = []
     for step in tool_steps:
         status = str(step.get("status") or "")
-        if status == "tool-unavailable":
+        optional = bool(step.get("optional"))
+        if status == "tool-unavailable" and not optional:
             blocking.append(
                 f"tool_unavailable:{step.get('provider')}:{step.get('action_name')}"
             )
-        elif status == "input-unresolved":
+        elif status == "input-unresolved" and not optional:
             blocking.append(
                 f"input_unresolved:{step.get('id')}:"
                 + ",".join(step.get("missing_fields") or [])
