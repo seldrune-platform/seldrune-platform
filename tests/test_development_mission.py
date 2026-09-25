@@ -200,7 +200,7 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
     assert first.status_code == 200
     payload = first.json()
     assert payload["created"] is True
-    assert payload["overall_percentage"] == 61.9
+    assert payload["overall_percentage"] == 62.9
     assert payload["auto_queued_count"] == 4
     assert set(payload["auto_queued_stage_ids"]) == {
         "unarchi_v32",
@@ -245,11 +245,11 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
     unarchi = next(
         item
         for item in stages
-        if item["input_data"]["cognitive_mission_stage_id"] == "unarchi_v31"
+        if item["input_data"]["cognitive_mission_stage_id"] == "unarchi_v32"
     )
     contract = unarchi["input_data"]["compiled_execution_contract"]
     assert contract["version"] == "stage-compiler-v1"
-    assert contract["stage_id"] == "unarchi_v31"
+    assert contract["stage_id"] == "unarchi_v32"
     assert contract["profile"] == "repository-engineering"
     assert contract["executable_now"] is False
     assert contract["evidence_contract"] == {
@@ -333,7 +333,7 @@ def test_mission_queue_ready_is_idempotent(client: TestClient) -> None:
     assert queued.status_code == 200
     assert queued.json()["queued_count"] == 0
     assert set(queued.json()["ready_stage_ids"]) == {
-        "unarchi_v31",
+        "unarchi_v32",
         "model_router_unified",
         "pdf_local_labels",
         "provider_connectors",
@@ -442,18 +442,18 @@ def test_one_go_blocks_compiled_work_before_model_without_tools(
         by_stage["pdf_local_labels"]["reason"]
         == "owner-gated_requires_explicit_execution"
     )
-    assert by_stage["unarchi_v31"]["disposition"] == "blocked"
-    assert by_stage["unarchi_v31"]["reason"].startswith(
+    assert by_stage["unarchi_v32"]["disposition"] == "blocked"
+    assert by_stage["unarchi_v32"]["reason"].startswith(
         "compiled_tools_unavailable:"
     )
     assert (
-        by_stage["unarchi_v31"]["contract_execution"]["executed_steps"]
+        by_stage["unarchi_v32"]["contract_execution"]["executed_steps"]
         == 0
     )
-    assert by_stage["unarchi_v31"]["compiled_contract_version"] == "stage-compiler-v1"
-    assert by_stage["unarchi_v31"]["compiled_profile"] == "repository-engineering"
-    assert by_stage["unarchi_v31"]["compiled_executable_now"] is False
-    assert by_stage["unarchi_v31"]["compiled_blocking_reasons"]
+    assert by_stage["unarchi_v32"]["compiled_contract_version"] == "stage-compiler-v1"
+    assert by_stage["unarchi_v32"]["compiled_profile"] == "repository-engineering"
+    assert by_stage["unarchi_v32"]["compiled_executable_now"] is False
+    assert by_stage["unarchi_v32"]["compiled_blocking_reasons"]
 
     mission = client.get(
         f"{base}/development-mission",
@@ -490,7 +490,7 @@ def test_one_go_verified_tool_receipt_unlocks_next_dependency(
     unarchi = next(
         item
         for item in tasks.json()
-        if item["input_data"].get("cognitive_mission_stage_id") == "unarchi_v31"
+        if item["input_data"].get("cognitive_mission_stage_id") == "unarchi_v32"
     )
     assigned = client.post(
         f"{base}/tasks/{unarchi['id']}/assign",
@@ -570,8 +570,8 @@ def test_one_go_verified_tool_receipt_unlocks_next_dependency(
     report = executed.json()
     assert report["tasks_verified"] == 1
     assert report["tasks_unverified"] == 0
-    assert report["ending_percentage"] == 61.9
-    assert report["stage_results"][0]["stage_id"] == "unarchi_v31"
+    assert report["ending_percentage"] == 62.9
+    assert report["stage_results"][0]["stage_id"] == "unarchi_v32"
     assert report["stage_results"][0]["disposition"] == "verified"
     assert report["stage_results"][0]["reason"] == "verified_tool_receipt"
 
@@ -586,10 +586,10 @@ def test_one_go_verified_tool_receipt_unlocks_next_dependency(
         item["id"]: item
         for item in payload["stages"]
     }
-    assert stages["unarchi_v31"]["status"] == "completed"
-    assert stages["unarchi_v31"]["completion_source"] == "runtime_verified"
-    assert stages["unarchi_v32"]["ready"] is True
-    assert "unarchi_v32" in payload["parallel_ready_stage_ids"]
+    assert stages["unarchi_v32"]["status"] == "completed"
+    assert stages["unarchi_v32"]["completion_source"] == "runtime_verified"
+    assert stages["unarchi_v33"]["ready"] is True
+    assert "unarchi_v33" in payload["parallel_ready_stage_ids"]
 
 
 def test_one_go_respects_autonomous_execution_governance(
