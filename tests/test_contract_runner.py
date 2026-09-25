@@ -332,34 +332,61 @@ def test_contract_runner_verifies_receipts_and_detects_tampering(
     assert second_report["reason"] == "compiled_contract_chain_receipt_mismatch"
 
 def test_portable_ci_fallback_bindings_are_exact_and_coalesced() -> None:
-    parent = Task(
-        input_data={
-            "portable_ci_evidence": {
-                "receipt": {
-                    "version": "seldrune-ci-v1",
-                    "status": "success",
-                    "release_sha": "portable-sha",
-                },
-                "signature": "sha256=signed",
-            }
-        }
-    )
-    fallback_step = {
-        "input": {},
+    parent = Task(input_data={})
+    retrieve_step = {
+        "input": {
+            "project_id": "project-1",
+            "service_id": "service-1",
+            "environment_id": "environment-1",
+        },
         "bindings": {
-            "receipt": "parent.input.portable_ci_evidence.receipt",
-            "signature": "parent.input.portable_ci_evidence.signature",
+            "expected_sha": "steps.verify-ci.output.head_sha",
         },
         "missing_fields": [],
     }
     payload, unresolved = contract_runner._tool_payload(
-        fallback_step,
+        retrieve_step,
         artifact=None,
-        outputs={},
+        outputs={"verify-ci": {"head_sha": "portable-sha"}},
         parent_task=parent,
     )
     assert unresolved == []
-    assert payload == parent.input_data["portable_ci_evidence"]
+    assert payload == {
+        "project_id": "project-1",
+        "service_id": "service-1",
+        "environment_id": "environment-1",
+        "expected_sha": "portable-sha",
+    }
+
+    fallback_step = {
+        "input": {},
+        "bindings": {
+            "receipt": "steps.retrieve-portable-ci.output.receipt",
+            "signature": "steps.retrieve-portable-ci.output.signature",
+        },
+        "missing_fields": [],
+    }
+    receipt = {
+        "version": "seldrune-ci-v1",
+        "status": "success",
+        "release_sha": "portable-sha",
+    }
+    payload, unresolved = contract_runner._tool_payload(
+        fallback_step,
+        artifact=None,
+        outputs={
+            "retrieve-portable-ci": {
+                "receipt": receipt,
+                "signature": "sha256=signed",
+            }
+        },
+        parent_task=parent,
+    )
+    assert unresolved == []
+    assert payload == {
+        "receipt": receipt,
+        "signature": "sha256=signed",
+    }
 
     merge_step = {
         "input": {},
