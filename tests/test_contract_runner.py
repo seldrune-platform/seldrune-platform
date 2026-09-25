@@ -10,7 +10,7 @@ from backend.app import models  # noqa: F401
 from backend.app.db.base import Base
 from backend.app.db.session import get_db
 from backend.app.main import app
-from backend.app.models.task import Task
+from backend.app.models.task import Task, TaskEvent
 from backend.app.models.tool_definition import ToolDefinition
 from backend.app.services import contract_runner
 
@@ -155,6 +155,140 @@ def _stale_repository_contract() -> dict:
         ],
     }
 
+
+
+def test_model_failure_retryable_for_exhausted_quota(
+    client: TestClient,
+    session_factory,
+) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    owner_id = UUID(
+        client.get("/api/v1/auth/me", headers=headers).json()["user"]["id"]
+    )
+
+    with session_factory() as session:
+        child = Task(
+            organization_id=UUID(organization_id),
+            created_by_user_id=owner_id,
+            title="Retryable model child",
+            objective="Retry transient provider failure.",
+            status="failed",
+            input_data={
+                "contract_step_id": "produce-artifacts",
+                "contract_step_attempt": 1,
+            },
+        )
+        session.add(child)
+        session.flush()
+        session.add(
+            TaskEvent(
+                organization_id=UUID(organization_id),
+                task_id=child.id,
+                event_type="agent.runtime.failed",
+                details={
+                    "error": (
+                        "OpenAI request failed (RateLimitError): "
+                        "429 credit_balance_exhausted"
+                    )
+                },
+            )
+        )
+        session.commit()
+
+        retryable, reason = contract_runner._retryable_model_failure(
+            session,
+            child=child,
+        )
+
+        assert retryable is True
+        assert reason == "retryable_provider_failure"
+
+
+def test_model_failure_does_not_retry_deterministic_error(
+    client: TestClient,
+    session_factory,
+) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    owner_id = UUID(
+        client.get("/api/v1/auth/me", headers=headers).json()["user"]["id"]
+    )
+
+    with session_factory() as session:
+        child = Task(
+            organization_id=UUID(organization_id),
+            created_by_user_id=owner_id,
+            title="Deterministic model child",
+            objective="Do not repeat invalid model output.",
+            status="failed",
+            input_data={
+                "contract_step_id": "produce-artifacts",
+                "contract_step_attempt": 1,
+            },
+        )
+        session.add(child)
+        session.flush()
+        session.add(
+            TaskEvent(
+                organization_id=UUID(organization_id),
+                task_id=child.id,
+                event_type="agent.runtime.failed",
+                details={"error": "Model structured output failed schema validation"},
+            )
+        )
+        session.commit()
+
+        retryable, reason = contract_runner._retryable_model_failure(
+            session,
+            child=child,
+        )
+
+        assert retryable is False
+        assert reason == "deterministic_model_failure"
+
+
+def test_model_failure_retry_limit_is_bounded(
+    client: TestClient,
+    session_factory,
+) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    owner_id = UUID(
+        client.get("/api/v1/auth/me", headers=headers).json()["user"]["id"]
+    )
+
+    with session_factory() as session:
+        child = Task(
+            organization_id=UUID(organization_id),
+            created_by_user_id=owner_id,
+            title="Bounded model child",
+            objective="Stop after bounded provider retries.",
+            status="failed",
+            input_data={
+                "contract_step_id": "produce-artifacts",
+                "contract_step_attempt": contract_runner.MAX_MODEL_STEP_ATTEMPTS,
+            },
+        )
+        session.add(child)
+        session.flush()
+        session.add(
+            TaskEvent(
+                organization_id=UUID(organization_id),
+                task_id=child.id,
+                event_type="agent.runtime.failed",
+                details={"error": "429 credit_balance_exhausted"},
+            )
+        )
+        session.commit()
+
+        retryable, reason = contract_runner._retryable_model_failure(
+            session,
+            child=child,
+        )
+
+        assert retryable is False
+        assert reason == "model_retry_limit_reached"
 
 
 def test_stale_contract_refresh_rebinds_newly_available_tools(
