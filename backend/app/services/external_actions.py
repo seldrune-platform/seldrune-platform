@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
+import json
 import time
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
@@ -852,6 +855,101 @@ def github_dispatch_workflow(
     }
 
 
+
+_PORTABLE_CI_REQUIRED_CHECKS = frozenset(
+    {
+        "postgres-ready",
+        "ruff",
+        "pytest",
+        "alembic-upgrade-head",
+        "production-ready",
+    }
+)
+
+
+def portable_ci_verify_receipt(
+    payload: dict[str, Any],
+    credential: str | None,
+) -> dict[str, Any]:
+    signing_key = _credential(credential, "Portable CI")
+    receipt = payload.get("receipt")
+    if not isinstance(receipt, dict):
+        raise ToolGatewayError("receipt must be an object")
+
+    signature = _text(payload, "signature")
+    if signature.startswith("sha256="):
+        signature = signature.removeprefix("sha256=")
+    if len(signature) != 64:
+        raise ToolGatewayError("portable CI receipt signature is invalid")
+
+    canonical = json.dumps(
+        receipt,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    expected = hmac.new(
+        signing_key.encode("utf-8"),
+        canonical,
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(signature.lower(), expected.lower()):
+        raise ToolGatewayError("portable CI receipt signature mismatch")
+
+    if receipt.get("version") != "seldrune-ci-v1":
+        raise ToolGatewayError("unsupported portable CI receipt version")
+    if receipt.get("status") != "success":
+        raise ToolGatewayError("portable CI receipt did not report success")
+
+    release_sha = receipt.get("release_sha")
+    if not isinstance(release_sha, str) or not release_sha.strip():
+        raise ToolGatewayError("portable CI receipt release_sha is required")
+    release_sha = release_sha.strip()
+
+    checks = receipt.get("checks")
+    if not isinstance(checks, list) or not all(
+        isinstance(item, str) for item in checks
+    ):
+        raise ToolGatewayError("portable CI receipt checks are invalid")
+    missing_checks = sorted(_PORTABLE_CI_REQUIRED_CHECKS - set(checks))
+    if missing_checks:
+        raise ToolGatewayError(
+            "portable CI receipt is missing required checks: "
+            + ", ".join(missing_checks)
+        )
+
+    ready = receipt.get("ready")
+    if not isinstance(ready, dict):
+        raise ToolGatewayError("portable CI receipt ready payload is required")
+    if ready.get("ready") is not True or ready.get("status") != "ready":
+        raise ToolGatewayError("portable CI readiness did not pass")
+    if ready.get("environment") != "production":
+        raise ToolGatewayError("portable CI readiness was not production mode")
+
+    release = ready.get("release")
+    if not isinstance(release, dict):
+        raise ToolGatewayError("portable CI readiness release is required")
+    if release.get("sha") != release_sha:
+        raise ToolGatewayError("portable CI readiness SHA does not match receipt")
+    if release.get("source") != "seldrune":
+        raise ToolGatewayError("portable CI readiness release source is invalid")
+
+    digest = hashlib.sha256(canonical).hexdigest()
+    return {
+        "verified": True,
+        "status": "success",
+        "conclusion": "success",
+        "release_sha": release_sha,
+        "head_sha": release_sha,
+        "checks": checks,
+        "receipt_digest": digest,
+        "signature_verified": True,
+        "evidence": {
+            "receipt_id": f"portable-ci:{release_sha}:{digest}",
+            "provider": "portable-ci",
+        },
+    }
+
+
 def render_deploy_service(
     payload: dict[str, Any],
     credential: str | None,
@@ -1198,6 +1296,28 @@ DEFAULT_EXTERNAL_ACTION_CATALOG: tuple[dict[str, Any], ...] = (
         },
     },
     {
+        "provider": "portable-ci",
+        "action_name": "verify-receipt",
+        "name": "Portable CI · Verify signed receipt",
+        "default_tool_slug": "portable-ci-verify-receipt",
+        "credential_slug": "portable-ci-receipt-hmac-key",
+        "credential_name": "Portable CI receipt HMAC key",
+        "credential_env_locator": "SELDRUNE_CI_RECEIPT_HMAC_KEY",
+        "description": (
+            "Verify a signed portable CI receipt and bind it to an exact "
+            "release SHA."
+        ),
+        "risk_level": "low",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "receipt": {"type": "object"},
+                "signature": {"type": "string"},
+            },
+            "required": ["receipt", "signature"],
+        },
+    },
+    {
         "provider": "render",
         "action_name": "deploy-status",
         "name": "Render · Deploy status",
@@ -1256,6 +1376,11 @@ def register_default_external_actions() -> None:
     register_external_action("github", "create-pull-request", github_create_pull_request)
     register_external_action("github", "merge-pull-request", github_merge_pull_request)
     register_external_action("github", "dispatch-workflow", github_dispatch_workflow)
+    register_external_action(
+        "portable-ci",
+        "verify-receipt",
+        portable_ci_verify_receipt,
+    )
     register_external_action("render", "deploy-status", render_deploy_status)
     register_external_action("render", "deploy-service", render_deploy_service)
 
