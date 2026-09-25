@@ -298,3 +298,31 @@ Hosted CI providers upload/store that receipt after success. This creates a
 portable evidence format without weakening the existing rule that merge and
 deployment require a successful CI conclusion for the exact head.
 
+## Signed portable CI attestation
+
+Portable CI receipts can now be authenticated independently of the provider
+that executed the verifier. When `SELDRUNE_CI_RECEIPT_HMAC_KEY` is present,
+`scripts/ci_verify.sh` canonicalizes the successful receipt and emits an
+HMAC-SHA256 signature beside the JSON receipt.
+
+Seldrune exposes a low-risk `portable-ci/verify-receipt` tool backed by the
+same secret through `SELDRUNE_CI_RECEIPT_HMAC_KEY`. The verifier rejects:
+
+- unsigned or incorrectly signed receipts;
+- any receipt changed after signing;
+- non-success receipt states;
+- missing PostgreSQL, Ruff, pytest, Alembic, or production-readiness checks;
+- readiness payloads that are not production-ready; and
+- readiness release SHAs that do not equal the signed receipt SHA.
+
+A successful verification returns `conclusion=success`,
+`signature_verified=true`, and a provider receipt id derived from the exact
+release SHA plus the canonical receipt digest.
+
+The signature mechanism is intentionally not a merge bypass. A bare JSON
+object, owner-supplied success flag, or Railway service status is insufficient
+to satisfy repository completion. The trusted verifier is the provider-neutral
+building block for recovery when hosted CI is unavailable; merge/deployment
+contracts continue to require exact-head evidence and their existing governed
+approval path.
+
