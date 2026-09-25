@@ -435,3 +435,38 @@ The one-call Railway ingestion path now performs the complete sequence:
 5. persist only verified evidence to the task and audit trail.
 
 This still does not bypass normal GitHub CI or the governed merge step.
+
+## One-Go automatic Railway CI fallback
+
+Repository execution contracts no longer require an owner to pre-populate
+`portable_ci_evidence` when GitHub hosted CI is blocked by an explicitly
+classified external resource condition.
+
+The automatic fallback sequence is now:
+
+1. GitHub remains the primary CI provider and its workflow result is checked.
+2. Fallback activates only for the allowlisted hosted-runner/billing resource
+   classifications already encoded in the contract.
+3. Seldrune takes the exact GitHub workflow head SHA and asks the authenticated
+   Railway adapter for a successful CI deployment of that same SHA inside the
+   configured CI project/service/environment.
+4. Railway deployment status and commit metadata are revalidated, then the
+   signed receipt and signature are retrieved from authenticated deployment
+   logs.
+5. The existing portable-CI HMAC verifier independently validates the receipt,
+   required checks, production readiness payload, and exact release SHA.
+6. Only the verified primary GitHub SHA or the verified portable-CI SHA can be
+   bound into the governed merge step.
+
+Railway discovery is read-only and low risk. It uses
+`SELDRUNE_RAILWAY_API_TOKEN` and the non-secret targets
+`SELDRUNE_RAILWAY_CI_PROJECT_ID`, `SELDRUNE_RAILWAY_CI_SERVICE_ID`, and
+`SELDRUNE_RAILWAY_CI_ENVIRONMENT_ID`. When running inside Railway, the
+standard `RAILWAY_PROJECT_ID`, `RAILWAY_SERVICE_ID`, and
+`RAILWAY_ENVIRONMENT_ID` values are fallback defaults. Explicit Seldrune CI
+targets take precedence so production can point at a dedicated verifier.
+
+The merge action remains high-risk and governed. A normal repository test
+failure never activates this fallback, and missing provider credentials,
+missing CI scope, missing exact-SHA deployment, unsigned evidence, receipt
+tampering, or SHA disagreement all fail closed.
