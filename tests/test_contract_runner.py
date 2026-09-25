@@ -161,18 +161,13 @@ def test_model_failure_retryable_for_exhausted_quota(
     client: TestClient,
     session_factory,
 ) -> None:
-    _token, organization_id = register_owner(client)
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    owner_id = UUID(client.get("/api/v1/auth/me", headers=headers).json()["user"]["id"])
     with session_factory() as session:
         child = Task(
             organization_id=UUID(organization_id),
-            created_by_user_id=next(
-                session.scalars(
-                    contract_runner.select(Task.created_by_user_id).where(
-                        Task.organization_id == UUID(organization_id)
-                    )
-                ),
-                None,
-            ) or UUID(int=0),
+            created_by_user_id=owner_id,
             title="Retryable model child",
             objective="Retry transient provider failure.",
             status="failed",
@@ -213,12 +208,12 @@ def test_model_failure_does_not_retry_deterministic_error(
 ) -> None:
     token, organization_id = register_owner(client)
     headers = {"Authorization": f"Bearer {token}"}
-    agent = create_agent(client, headers, organization_id)
+    owner_id = UUID(client.get("/api/v1/auth/me", headers=headers).json()["user"]["id"])
 
     with session_factory() as session:
         child = Task(
             organization_id=UUID(organization_id),
-            created_by_user_id=UUID(agent["created_by_user_id"]),
+            created_by_user_id=owner_id,
             title="Deterministic model child",
             objective="Do not repeat invalid model output.",
             status="failed",
@@ -254,12 +249,12 @@ def test_model_failure_retry_limit_is_bounded(
 ) -> None:
     token, organization_id = register_owner(client)
     headers = {"Authorization": f"Bearer {token}"}
-    agent = create_agent(client, headers, organization_id)
+    owner_id = UUID(client.get("/api/v1/auth/me", headers=headers).json()["user"]["id"])
 
     with session_factory() as session:
         child = Task(
             organization_id=UUID(organization_id),
-            created_by_user_id=UUID(agent["created_by_user_id"]),
+            created_by_user_id=owner_id,
             title="Bounded model child",
             objective="Stop after bounded provider retries.",
             status="failed",
