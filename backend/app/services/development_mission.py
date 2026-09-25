@@ -97,9 +97,15 @@ STAGES = (
         "Prevent evidence reuse across repeated failure and recovery episodes.",
         "unarchi",
         4,
-        "pending",
+        "completed",
         ("unarchi_v31",),
         ("reasoning", "validation"),
+        evidence_refs=(
+            "pr:315",
+            "git:main:64a0ea6bb07f9de0d89bd0ef520ebac52692ed8c",
+            "railway:fd71abb3-9b1f-4f55-b5f4-6df3829f7c7e",
+            "benchmark:repeated_episode_isolation",
+        ),
     ),
     StageDefinition(
         "unarchi_v33",
