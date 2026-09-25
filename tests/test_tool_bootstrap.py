@@ -6,6 +6,10 @@ pytest_plugins = ["tests.test_autonomous_execution"]
 _BOOTSTRAP_ENV_VARS = (
     "SELDRUNE_GMAIL_TOOL_CREDENTIAL",
     "GMAIL_ACCESS_TOKEN",
+    "SELDRUNE_GITHUB_TOOL_CREDENTIAL",
+    "SELDRUNE_GITHUB_APP_PRIVATE_KEY",
+    "SELDRUNE_GITHUB_APP_ID",
+    "SELDRUNE_GITHUB_APP_INSTALLATION_ID",
     "SELDRUNE_GITHUB_TOOL_TOKEN",
     "GITHUB_TOKEN",
     "SELDRUNE_RENDER_API_KEY",
@@ -169,3 +173,83 @@ def test_owner_command_auto_activates_configured_provider_tools(
     assert second.status_code == 201
     tools = client.get(tools_url, headers=headers).json()
     assert len([item for item in tools if item["provider"] == "render"]) == 2
+
+
+
+def test_tool_bootstrap_activates_complete_github_app_bundle(
+    client,
+    monkeypatch,
+) -> None:
+    _clear_bootstrap_env(monkeypatch)
+    monkeypatch.setenv(
+        "SELDRUNE_GITHUB_APP_PRIVATE_KEY",
+        "-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----",
+    )
+    monkeypatch.setenv("SELDRUNE_GITHUB_APP_ID", "4992848")
+    monkeypatch.setenv("SELDRUNE_GITHUB_APP_INSTALLATION_ID", "161346097")
+    token, organization_id = register_owner(client)
+    headers = _headers(token)
+
+    response = client.post(
+        f"/api/v1/organizations/{organization_id}/tool-bootstrap",
+        headers=headers,
+        json={},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "github-tool-token" in body["created_references"]
+    assert "github-repository-info" in body["created_tools"]
+    references = client.get(
+        f"/api/v1/organizations/{organization_id}/secret-references",
+        headers=headers,
+    ).json()
+    github_reference = next(
+        item for item in references if item["slug"] == "github-tool-token"
+    )
+    assert github_reference["locator"] == "SELDRUNE_GITHUB_APP_PRIVATE_KEY"
+    status = client.get(
+        f"/api/v1/organizations/{organization_id}/tool-bootstrap/status",
+        headers=headers,
+    ).json()
+    github = next(
+        item for item in status["providers"] if item["provider"] == "github"
+    )
+    assert github["ready"] is True
+    assert github["active_credential_env_locator"] == (
+        "SELDRUNE_GITHUB_APP_PRIVATE_KEY"
+    )
+
+
+def test_tool_bootstrap_rejects_incomplete_github_app_bundle(
+    client,
+    monkeypatch,
+) -> None:
+    _clear_bootstrap_env(monkeypatch)
+    monkeypatch.setenv(
+        "SELDRUNE_GITHUB_APP_PRIVATE_KEY",
+        "-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----",
+    )
+    monkeypatch.setenv("SELDRUNE_GITHUB_APP_ID", "4992848")
+    token, organization_id = register_owner(client)
+    headers = _headers(token)
+
+    response = client.post(
+        f"/api/v1/organizations/{organization_id}/tool-bootstrap",
+        headers=headers,
+        json={},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "github-tool-token" not in body["created_references"]
+    assert "SELDRUNE_GITHUB_TOOL_TOKEN" in body["missing_env_locators"]
+    status = client.get(
+        f"/api/v1/organizations/{organization_id}/tool-bootstrap/status",
+        headers=headers,
+    ).json()
+    github = next(
+        item for item in status["providers"] if item["provider"] == "github"
+    )
+    assert github["ready"] is False
+    assert github["secret_available"] is False
