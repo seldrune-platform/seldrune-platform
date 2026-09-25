@@ -167,7 +167,7 @@ def test_snapshot_never_claims_phenomenal_consciousness() -> None:
     snapshot = engine.snapshot()
 
     assert snapshot["claims_phenomenal_consciousness"] is False
-    assert snapshot["version"] == "unarchi-v0.30"
+    assert snapshot["version"] == "unarchi-v0.31"
 
 
 def test_export_restore_preserves_identity_state_and_memory() -> None:
@@ -5166,6 +5166,134 @@ def test_renewed_degradation_rollback_invalidates_old_holdout() -> None:
         assert "new evidence cycle" in str(exc)
     else:
         raise AssertionError("stale holdout must not authorize re-advance")
+
+
+
+def test_v031_renewed_recovery_requires_fresh_independent_holdout() -> None:
+    (
+        engine,
+        base_map,
+        revision_two,
+        _,
+        old_holdout,
+        drift,
+    ) = _build_renewed_degradation_resolution_engine()
+
+    resolution = engine.resolve_reactivated_context_validity_drift(
+        drift.id,
+        decision="rollback_review",
+        reason="start a fresh v0.31 evidence cycle",
+        evidence_refs=("v031:test:second_rollback",),
+    )
+
+    insufficient = engine.validate_context_validity_renewed_rollback(
+        resolution.id
+    )
+    assert insufficient.status == "insufficient_renewed_recovery_evidence"
+    assert insufficient.reactivation_allowed is False
+    assert insufficient.observed_outcome_ids == ()
+
+    for index in range(3):
+        gate = engine.evaluate_active_context_validity_gated_decision(
+            base_map.hypothesis_id,
+            environment_signature=drift.degraded_signatures[0],
+            candidates=_validity_gate_candidates(),
+            context="production release",
+        )
+        engine.record_context_validity_gate_outcome(
+            gate.id,
+            actual_success_by_action={
+                "run automated release check": False,
+                "request independent review": True,
+            },
+            evidence_refs=(f"v031:test:renewed_recovery:{index}",),
+        )
+
+    recovery = engine.validate_context_validity_renewed_rollback(
+        resolution.id
+    )
+    assert recovery.status == "renewed_recovery_passed"
+    assert recovery.reactivation_allowed is False
+    assert len(recovery.observed_outcome_ids) == 3
+    old_episode_ids = (
+        set(old_holdout.recovery_outcome_ids)
+        | set(old_holdout.holdout_outcome_ids)
+        | set(drift.observed_outcome_ids)
+    )
+    assert not old_episode_ids.intersection(recovery.observed_outcome_ids)
+    assert old_episode_ids <= set(recovery.excluded_prior_outcome_ids)
+
+    try:
+        engine.select_context_validity_map_revision(
+            base_map.hypothesis_id,
+            map_id=revision_two.id,
+            reason="recovery alone must not authorize v0.31 re-advance",
+        )
+    except ValueError as exc:
+        assert "fresh recovery and independent holdout cycle" in str(exc)
+    else:
+        raise AssertionError("renewed recovery alone must not authorize re-advance")
+
+    insufficient_holdout = (
+        engine.validate_context_validity_renewed_rollback_holdout(
+            recovery.id
+        )
+    )
+    assert (
+        insufficient_holdout.status
+        == "insufficient_renewed_holdout_evidence"
+    )
+    assert insufficient_holdout.holdout_outcome_ids == ()
+
+    for index in range(3):
+        gate = engine.evaluate_active_context_validity_gated_decision(
+            base_map.hypothesis_id,
+            environment_signature=drift.degraded_signatures[0],
+            candidates=_validity_gate_candidates(),
+            context="production release",
+        )
+        assert gate.id > recovery.holdout_gate_watermark_id
+        engine.record_context_validity_gate_outcome(
+            gate.id,
+            actual_success_by_action={
+                "run automated release check": False,
+                "request independent review": True,
+            },
+            evidence_refs=(f"v031:test:renewed_holdout:{index}",),
+        )
+
+    holdout = engine.validate_context_validity_renewed_rollback_holdout(
+        recovery.id
+    )
+    assert holdout.status == "renewed_holdout_confirmed"
+    assert holdout.reactivation_allowed is True
+    assert len(holdout.holdout_outcome_ids) == 3
+    assert not set(recovery.observed_outcome_ids).intersection(
+        holdout.holdout_outcome_ids
+    )
+    assert not old_episode_ids.intersection(holdout.holdout_outcome_ids)
+
+    advanced = engine.select_context_validity_map_revision(
+        base_map.hypothesis_id,
+        map_id=revision_two.id,
+        reason="fresh v0.31 recovery and holdout confirmed",
+        evidence_refs=(
+            f"context_validity_renewed_holdout_validation:{holdout.id}",
+        ),
+    )
+    assert advanced.action == "advance"
+    assert advanced.selected_map_id == revision_two.id
+
+    restored = UnarchiEngine.from_export(engine.export_state())
+    assert restored.context_validity_renewed_recovery_validations == (
+        engine.context_validity_renewed_recovery_validations
+    )
+    assert restored.context_validity_renewed_holdout_validations == (
+        engine.context_validity_renewed_holdout_validations
+    )
+    assert restored.active_context_causal_validity_map(
+        base_map.hypothesis_id
+    ).id == revision_two.id
 
 
 def test_renewed_degradation_resolution_terminal_rules() -> None:
