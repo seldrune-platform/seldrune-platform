@@ -638,7 +638,7 @@ def build_development_mission(
         )
 
     stream_rows: list[dict[str, Any]] = []
-    overall = 0.0
+    overall_weighted_basis = 0
     for stream in WORKSTREAMS:
         stream_stages = [
             stage for stage in STAGES if stage.workstream == stream.id
@@ -649,7 +649,7 @@ def build_development_mission(
             if stage.id in completed
         )
         percentage = float(completed_weight)
-        overall += percentage * (stream.weight / 100)
+        overall_weighted_basis += completed_weight * stream.weight
         stream_rows.append(
             {
                 "id": stream.id,
@@ -670,6 +670,7 @@ def build_development_mission(
     execution_wave = [
         row for row in stage_rows if row["id"] in ready_stage_ids
     ]
+    overall = ((overall_weighted_basis + 5) // 10) / 10
     return {
         "kind": MISSION_KIND,
         "version": MISSION_VERSION,
