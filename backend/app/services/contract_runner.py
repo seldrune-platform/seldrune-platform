@@ -739,6 +739,9 @@ def verify_compiled_contract_evidence(
     ]
     verified_refs: list[str] = []
     canonical_receipts: list[dict[str, Any]] = []
+    verified_states: dict[str, str] = {}
+    verified_outputs: dict[str, Any] = {}
+
     for step in expected_tool_steps:
         step_id = str(step["id"])
         acceptance = step.get("acceptance")
@@ -746,11 +749,24 @@ def verify_compiled_contract_evidence(
             isinstance(acceptance, dict)
             and acceptance.get("repeat_for_each") == "model.artifacts"
         )
-        expected_count = len(artifacts) if repeat else 1
         rows = [
             row for row in receipt_rows
             if str(row.get("step_id") or "") == step_id
         ]
+
+        fallback_source = step.get("run_when_external_resource_from")
+        if isinstance(fallback_source, str) and fallback_source:
+            if verified_states.get(fallback_source) != "external-resource":
+                if rows:
+                    return (
+                        False,
+                        f"compiled_contract_unexpected_fallback_receipt:{step_id}",
+                        [],
+                    )
+                verified_states[step_id] = "skipped"
+                continue
+
+        expected_count = len(artifacts) if repeat else 1
         if len(rows) != expected_count:
             return False, f"compiled_contract_receipt_count:{step_id}", []
 
@@ -788,11 +804,60 @@ def verify_compiled_contract_evidence(
                 child=child,
                 step=step,
             )
-            if state != "passed" or receipt is None:
+            fallback_step_id = (
+                acceptance.get("fallback_step_id")
+                if isinstance(acceptance, dict)
+                else None
+            )
+            external_fallback_allowed = (
+                state == "external-resource"
+                and isinstance(fallback_step_id, str)
+                and bool(fallback_step_id)
+            )
+            if (
+                state != "passed"
+                and not external_fallback_allowed
+            ) or receipt is None:
                 return False, f"compiled_contract_acceptance:{step_id}:{reason}", []
+
             for key in ("tool_run_id", "receipt_id"):
                 if str(row.get(key) or "") != str(receipt.get(key) or ""):
                     return False, f"compiled_contract_receipt_mismatch:{step_id}", []
+
+            if state == "passed":
+                verified_states[step_id] = "passed"
+                if not repeat:
+                    verified_outputs[step_id] = receipt["tool_output"]
+            else:
+                verified_states[step_id] = "external-resource"
+
+            if step_id == "merge-verified-pull-request" and state == "passed":
+                bindings = step.get("bindings")
+                sha_source = (
+                    bindings.get("sha")
+                    if isinstance(bindings, dict)
+                    else None
+                )
+                resolved_sha, expected_sha = _resolve_binding_source(
+                    sha_source,
+                    artifact=None,
+                    outputs=verified_outputs,
+                    parent_task=task,
+                )
+                request = (child.input_data or {}).get("tool_request")
+                request_input = (
+                    request.get("input")
+                    if isinstance(request, dict)
+                    else None
+                )
+                actual_sha = (
+                    request_input.get("sha")
+                    if isinstance(request_input, dict)
+                    else None
+                )
+                if not resolved_sha or actual_sha != expected_sha:
+                    return False, "compiled_contract_merge_sha_mismatch", []
+
             canonical_receipts.append(receipt)
             verified_refs.extend(
                 [
@@ -800,6 +865,22 @@ def verify_compiled_contract_evidence(
                     f"tool-run:{receipt['tool_run_id']}",
                 ]
             )
+
+    for step in expected_tool_steps:
+        step_id = str(step["id"])
+        if verified_states.get(step_id) != "external-resource":
+            continue
+        acceptance = step.get("acceptance")
+        fallback_step_id = (
+            acceptance.get("fallback_step_id")
+            if isinstance(acceptance, dict)
+            else None
+        )
+        if (
+            not isinstance(fallback_step_id, str)
+            or verified_states.get(fallback_step_id) != "passed"
+        ):
+            return False, f"compiled_contract_fallback_missing:{step_id}", []
 
     contract_version = str(contract.get("version") or "")
     expected_chain_receipt = _chain_receipt_id(
