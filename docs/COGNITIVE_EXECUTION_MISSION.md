@@ -276,3 +276,25 @@ success acceptance rule, and no merge or deployment gate is bypassed.
 The Owner Console recognizes the billing classification and tells the owner to
 check the organization Actions budget and payment state before rerunning.
 
+## Portable CI verification receipt
+
+CircleCI and GitHub Actions now call the same repository-owned verifier:
+`bash scripts/ci_verify.sh`. The verifier is provider-neutral and can also be
+run by another isolated Linux/Python 3.12 runner with PostgreSQL.
+
+The runner requires:
+
+- `SELDRUNE_DATABASE_URL` for the application database;
+- `SELDRUNE_CI_POSTGRES_DSN` for the PostgreSQL readiness probe; and
+- `SELDRUNE_CI_RELEASE_SHA` for binding the evidence to an exact commit.
+
+It performs the same evidence sequence regardless of provider: PostgreSQL
+readiness, Ruff, pytest, Alembic upgrade to head, and a production-mode
+`/api/v1/ready` smoke test. A successful run writes
+`seldrune-ci-receipt.json` with the release SHA, check names, and readiness
+payload.
+
+Hosted CI providers upload/store that receipt after success. This creates a
+portable evidence format without weakening the existing rule that merge and
+deployment require a successful CI conclusion for the exact head.
+
