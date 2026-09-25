@@ -572,6 +572,11 @@ def _resolve_binding(
         value = _value_at(outputs[step_id], output_path)
         return value is not None, value
 
+    if source.startswith("parent.input."):
+        path = source.removeprefix("parent.input.")
+        value = _value_at(parent_task.input_data or {}, path)
+        return value is not None, value
+
     if source == "upstream.verified_commit_sha":
         upstream = (parent_task.input_data or {}).get("upstream_evidence")
         if isinstance(upstream, dict):
@@ -579,6 +584,28 @@ def _resolve_binding(
             return value is not None, value
         return False, None
 
+    return False, None
+
+
+def _resolve_binding_source(
+    source: Any,
+    *,
+    artifact: dict[str, str] | None,
+    outputs: dict[str, Any],
+    parent_task: Task,
+) -> tuple[bool, Any]:
+    candidates = source if isinstance(source, list) else [source]
+    for candidate in candidates:
+        if not isinstance(candidate, str):
+            continue
+        resolved, value = _resolve_binding(
+            candidate,
+            artifact=artifact,
+            outputs=outputs,
+            parent_task=parent_task,
+        )
+        if resolved:
+            return True, value
     return False, None
 
 
@@ -595,10 +622,7 @@ def _tool_payload(
     unresolved: list[str] = []
     if isinstance(bindings, dict):
         for field, source in bindings.items():
-            if not isinstance(source, str):
-                unresolved.append(str(field))
-                continue
-            resolved, value = _resolve_binding(
+            resolved, value = _resolve_binding_source(
                 source,
                 artifact=artifact,
                 outputs=outputs,
@@ -881,7 +905,7 @@ def advance_compiled_contract(
     unavailable = [
         str(step.get("id"))
         for step in tool_steps
-        if not step.get("tool_slug")
+        if not step.get("tool_slug") and not step.get("optional")
     ]
     if unavailable:
         return _blocked_report(
@@ -900,6 +924,7 @@ def advance_compiled_contract(
         )
         for step in tool_steps
         if step.get("status") == "input-unresolved"
+        and not step.get("optional")
     ]
     if unresolved_inputs:
         details = ";".join(
