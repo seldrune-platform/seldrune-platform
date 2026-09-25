@@ -184,7 +184,18 @@ def test_ingestion_fails_closed(
 def test_ingestion_rejects_validly_signed_wrong_release_sha() -> None:
     session = Mock()
     task = _task()
-    receipt = _receipt(release_sha="deadbeef")
+    receipt = _receipt(
+        release_sha="deadbeef",
+        ready={
+            "ready": True,
+            "status": "ready",
+            "environment": "production",
+            "release": {
+                "sha": "deadbeef",
+                "source": "seldrune",
+            },
+        },
+    )
 
     with pytest.raises(
         PortableCIIngestionError,
