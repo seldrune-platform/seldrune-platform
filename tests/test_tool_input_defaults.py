@@ -334,3 +334,40 @@ def test_seldrune_repository_is_the_final_github_runtime_default(monkeypatch) ->
     assert targets["github_repo"] == "seldrune-platform"
     assert targets["github_full_name"] == "seldrune-platform/seldrune-platform"
     assert targets["github_ref"] == "main"
+
+
+def test_explicit_railway_ci_targets_override_platform_runtime(monkeypatch) -> None:
+    monkeypatch.setenv("RAILWAY_PROJECT_ID", "runtime-project")
+    monkeypatch.setenv("RAILWAY_SERVICE_ID", "runtime-service")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID", "runtime-environment")
+    monkeypatch.setenv("SELDRUNE_RAILWAY_CI_PROJECT_ID", "ci-project")
+    monkeypatch.setenv("SELDRUNE_RAILWAY_CI_SERVICE_ID", "ci-service")
+    monkeypatch.setenv("SELDRUNE_RAILWAY_CI_ENVIRONMENT_ID", "ci-environment")
+    monkeypatch.setenv("SELDRUNE_RAILWAY_TOKEN_KIND", "project")
+
+    targets = tool_input_defaults.production_runtime_targets()
+
+    assert targets["railway_ci_project_id"] == "ci-project"
+    assert targets["railway_ci_service_id"] == "ci-service"
+    assert targets["railway_ci_environment_id"] == "ci-environment"
+    assert targets["railway_token_kind"] == "project"
+
+
+def test_railway_ci_targets_fall_back_to_railway_runtime(monkeypatch) -> None:
+    for name in (
+        "SELDRUNE_RAILWAY_CI_PROJECT_ID",
+        "SELDRUNE_RAILWAY_CI_SERVICE_ID",
+        "SELDRUNE_RAILWAY_CI_ENVIRONMENT_ID",
+        "SELDRUNE_RAILWAY_TOKEN_KIND",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("RAILWAY_PROJECT_ID", "runtime-project")
+    monkeypatch.setenv("RAILWAY_SERVICE_ID", "runtime-service")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID", "runtime-environment")
+
+    targets = tool_input_defaults.production_runtime_targets()
+
+    assert targets["railway_ci_project_id"] == "runtime-project"
+    assert targets["railway_ci_service_id"] == "runtime-service"
+    assert targets["railway_ci_environment_id"] == "runtime-environment"
+    assert targets["railway_token_kind"] == "account"
