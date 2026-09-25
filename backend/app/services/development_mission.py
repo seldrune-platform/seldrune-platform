@@ -81,9 +81,14 @@ STAGES = (
         "Require a fresh recovery and independent holdout after second rollback.",
         "unarchi",
         4,
-        "pending",
+        "completed",
         ("unarchi_v01_v30",),
         ("reasoning", "validation", "engineering"),
+        evidence_refs=(
+            "code:backend/app/services/unarchi_engine.py",
+            "benchmark:renewed_degradation_recovery_cycle",
+            "pr:312",
+        ),
     ),
     StageDefinition(
         "unarchi_v32",
