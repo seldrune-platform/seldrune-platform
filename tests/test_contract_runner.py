@@ -11,6 +11,7 @@ from backend.app.db.base import Base
 from backend.app.db.session import get_db
 from backend.app.main import app
 from backend.app.models.task import Task
+from backend.app.models.tool_definition import ToolDefinition
 from backend.app.services import contract_runner
 
 
@@ -86,6 +87,196 @@ def create_agent(
     )
     assert response.status_code == 201
     return response.json()
+
+
+def _add_repository_github_tools(
+    session: Session,
+    *,
+    organization_id: UUID,
+    created_by_user_id: UUID,
+) -> None:
+    actions = (
+        "repository-info",
+        "create-branch",
+        "upsert-file",
+        "create-pull-request",
+        "dispatch-workflow",
+        "workflow-run-status",
+        "merge-pull-request",
+    )
+    for action in actions:
+        session.add(
+            ToolDefinition(
+                organization_id=organization_id,
+                created_by_user_id=created_by_user_id,
+                name=f"GitHub {action}",
+                slug=f"github-{action}",
+                provider="github",
+                action_name=action,
+                status="active",
+                risk_level=(
+                    "high"
+                    if action in {"dispatch-workflow", "merge-pull-request"}
+                    else "low"
+                ),
+                approval_mode=(
+                    "always"
+                    if action in {"dispatch-workflow", "merge-pull-request"}
+                    else "never"
+                ),
+                input_schema={},
+            )
+        )
+    session.commit()
+
+
+def _stale_repository_contract() -> dict:
+    return {
+        "version": "stage-compiler-v1",
+        "stage_id": "unarchi_v31",
+        "title": "UNARCHI v0.31",
+        "profile": "repository-engineering",
+        "execution_mode": "automatic",
+        "blocking_reasons": ["tool_unavailable:github:repository-info"],
+        "steps": [
+            {
+                "id": "inspect-repository",
+                "kind": "tool",
+                "provider": "github",
+                "action_name": "repository-info",
+                "tool_slug": None,
+                "tool_id": None,
+                "status": "tool-unavailable",
+                "optional": False,
+                "input": {},
+                "bindings": {},
+                "missing_fields": [],
+            }
+        ],
+    }
+
+
+
+def test_stale_contract_refresh_rebinds_newly_available_tools(
+    client: TestClient,
+    session_factory,
+) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    task_response = client.post(
+        f"/api/v1/organizations/{organization_id}/tasks",
+        headers=headers,
+        json={
+            "title": "UNARCHI v0.31",
+            "objective": "Refresh stale repository bindings.",
+            "input_data": {
+                "cognitive_mission_stage_id": "unarchi_v31",
+                "workstream": "unarchi",
+                "required_capabilities": ["engineering", "validation"],
+                "execution_mode": "automatic",
+                "compiled_execution_contract": _stale_repository_contract(),
+            },
+        },
+    )
+    assert task_response.status_code == 201
+
+    with session_factory() as session:
+        task = session.get(Task, UUID(task_response.json()["id"]))
+        assert task is not None
+        _add_repository_github_tools(
+            session,
+            organization_id=UUID(organization_id),
+            created_by_user_id=task.created_by_user_id,
+        )
+
+        refreshed, changed = contract_runner._refresh_stale_contract_tools(
+            session,
+            task=task,
+            actor_user_id=task.created_by_user_id,
+            contract=(task.input_data or {})["compiled_execution_contract"],
+        )
+
+        assert changed is True
+        assert refreshed["profile"] == "repository-engineering"
+        assert contract_runner._required_unavailable_step_ids(refreshed) == []
+        github_steps = [
+            step
+            for step in refreshed["steps"]
+            if step.get("kind") == "tool"
+            and step.get("provider") == "github"
+            and not step.get("optional")
+        ]
+        assert github_steps
+        assert all(step.get("tool_slug") for step in github_steps)
+        assert all(step.get("tool_id") for step in github_steps)
+
+        persisted = session.get(Task, task.id)
+        assert persisted is not None
+        persisted_contract = (
+            persisted.input_data or {}
+        )["compiled_execution_contract"]
+        assert persisted_contract["blocking_reasons"] == []
+
+
+def test_stale_contract_refresh_does_not_rewrite_execution_history(
+    client: TestClient,
+    session_factory,
+) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    task_response = client.post(
+        f"/api/v1/organizations/{organization_id}/tasks",
+        headers=headers,
+        json={
+            "title": "UNARCHI v0.31",
+            "objective": "Preserve prior execution evidence.",
+            "input_data": {
+                "cognitive_mission_stage_id": "unarchi_v31",
+                "workstream": "unarchi",
+                "required_capabilities": ["engineering", "validation"],
+                "execution_mode": "automatic",
+                "compiled_execution_contract": _stale_repository_contract(),
+            },
+        },
+    )
+    assert task_response.status_code == 201
+
+    with session_factory() as session:
+        task = session.get(Task, UUID(task_response.json()["id"]))
+        assert task is not None
+        _add_repository_github_tools(
+            session,
+            organization_id=UUID(organization_id),
+            created_by_user_id=task.created_by_user_id,
+        )
+        child = Task(
+            organization_id=UUID(organization_id),
+            created_by_user_id=task.created_by_user_id,
+            title="Existing execution child",
+            objective="Prior contract execution history.",
+            status="queued",
+            input_data={
+                "contract_parent_task_id": str(task.id),
+                "contract_step_id": "inspect-repository",
+                "contract_step_attempt": 1,
+            },
+        )
+        session.add(child)
+        session.commit()
+
+        original = dict(
+            (task.input_data or {})["compiled_execution_contract"]
+        )
+        refreshed, changed = contract_runner._refresh_stale_contract_tools(
+            session,
+            task=task,
+            actor_user_id=task.created_by_user_id,
+            contract=original,
+        )
+
+        assert changed is False
+        assert refreshed == original
+        assert refreshed["steps"][0]["tool_slug"] is None
 
 
 def test_contract_preflight_blocks_before_model_cost(
