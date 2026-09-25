@@ -628,3 +628,50 @@ def test_one_go_respects_autonomous_execution_governance(
     assert report["tasks_executed"] == 0
     assert report["tasks_verified"] == 0
     assert report["halted_reason"] == "governance_autonomous_execution_disabled"
+
+
+
+def test_one_go_auto_bootstraps_available_tools_before_execution(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    for name in (
+        "SELDRUNE_GITHUB_TOOL_CREDENTIAL",
+        "SELDRUNE_GITHUB_APP_PRIVATE_KEY",
+        "SELDRUNE_GITHUB_APP_ID",
+        "SELDRUNE_GITHUB_APP_INSTALLATION_ID",
+        "SELDRUNE_GITHUB_TOOL_TOKEN",
+        "GITHUB_TOKEN",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    base = f"/api/v1/organizations/{organization_id}"
+    synchronized = client.post(
+        f"{base}/development-mission/sync",
+        headers=headers,
+    )
+    assert synchronized.status_code == 200
+    create_mission_agent(client, headers, organization_id)
+
+    executed = client.post(
+        f"{base}/development-mission/execute",
+        headers=headers,
+        json={"max_waves": 1, "max_tasks": 2},
+    )
+    assert executed.status_code == 200
+
+    tools = client.get(f"{base}/tools", headers=headers)
+    assert tools.status_code == 200
+    slugs = {item["slug"] for item in tools.json()}
+    assert {
+        "internal-json-validate",
+        "internal-json-pretty",
+        "internal-sha256-text",
+        "internal-csv-preview",
+    } <= slugs
+    assert not any(
+        item["provider"] == "github"
+        for item in tools.json()
+    )
