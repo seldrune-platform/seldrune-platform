@@ -298,3 +298,26 @@ Hosted CI providers upload/store that receipt after success. This creates a
 portable evidence format without weakening the existing rule that merge and
 deployment require a successful CI conclusion for the exact head.
 
+
+## Trusted portable CI evidence
+
+Portable CI receipts are not trusted merely because a JSON document says
+`status: success`. Seldrune validates the receipt together with authenticated
+provider execution metadata.
+
+The internal validator in
+`backend/app/services/portable_ci_evidence.py` requires:
+
+- authenticated provider provenance;
+- provider run status `success`;
+- provider commit SHA exactly equal to the expected commit;
+- receipt version `seldrune-ci-v1`;
+- receipt `release_sha` exactly equal to the expected commit;
+- all required checks: PostgreSQL readiness, Ruff, pytest, Alembic head, and
+  production readiness;
+- the readiness payload to report `ready` and the same exact release SHA.
+
+The validator is deliberately not exposed as an owner-input or free-form JSON
+tool. A future provider adapter may call it only after fetching execution
+metadata and the receipt through an authenticated provider channel. This keeps
+portable CI evidence from becoming a merge-gate bypass.
