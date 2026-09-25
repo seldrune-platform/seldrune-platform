@@ -167,7 +167,7 @@ def test_snapshot_never_claims_phenomenal_consciousness() -> None:
     snapshot = engine.snapshot()
 
     assert snapshot["claims_phenomenal_consciousness"] is False
-    assert snapshot["version"] == "unarchi-v0.31"
+    assert snapshot["version"] == "unarchi-v0.32"
 
 
 def test_export_restore_preserves_identity_state_and_memory() -> None:
@@ -5369,3 +5369,206 @@ def test_renewed_degradation_resolution_persists_and_is_explainable() -> None:
         ref.startswith("context_validity_reactivation_drift_resolution:")
         for ref in narrative.evidence_refs
     )
+
+
+def test_v032_repeated_episode_isolation_uses_latest_confirmed_holdout() -> None:
+    (
+        engine,
+        base_map,
+        revision_two,
+        _,
+        initial_holdout,
+        first_drift,
+    ) = _build_renewed_degradation_resolution_engine()
+    signature = first_drift.degraded_signatures[0]
+
+    first_resolution = engine.resolve_reactivated_context_validity_drift(
+        first_drift.id,
+        decision="rollback_review",
+        reason="start first isolated renewed episode",
+        evidence_refs=("v032:test:episode1:rollback",),
+    )
+    assert first_resolution.episode_id == 1
+    assert first_resolution.holdout_source == "initial"
+
+    for index in range(3):
+        gate = engine.evaluate_active_context_validity_gated_decision(
+            base_map.hypothesis_id,
+            environment_signature=signature,
+            candidates=_validity_gate_candidates(),
+            context="production release",
+        )
+        engine.record_context_validity_gate_outcome(
+            gate.id,
+            actual_success_by_action={
+                "run automated release check": False,
+                "request independent review": True,
+            },
+            evidence_refs=(f"v032:test:episode1:recovery:{index}",),
+        )
+    first_recovery = engine.validate_context_validity_renewed_rollback(
+        first_resolution.id
+    )
+    assert first_recovery.status == "renewed_recovery_passed"
+    assert first_recovery.episode_id == 1
+    assert first_recovery.prior_holdout_source == "initial"
+
+    for index in range(3):
+        gate = engine.evaluate_active_context_validity_gated_decision(
+            base_map.hypothesis_id,
+            environment_signature=signature,
+            candidates=_validity_gate_candidates(),
+            context="production release",
+        )
+        engine.record_context_validity_gate_outcome(
+            gate.id,
+            actual_success_by_action={
+                "run automated release check": False,
+                "request independent review": True,
+            },
+            evidence_refs=(f"v032:test:episode1:holdout:{index}",),
+        )
+    first_renewed_holdout = (
+        engine.validate_context_validity_renewed_rollback_holdout(
+            first_recovery.id
+        )
+    )
+    assert first_renewed_holdout.status == "renewed_holdout_confirmed"
+    assert first_renewed_holdout.episode_id == 1
+    assert first_renewed_holdout.prior_holdout_source == "initial"
+
+    engine.select_context_validity_map_revision(
+        base_map.hypothesis_id,
+        map_id=revision_two.id,
+        reason="episode one isolated recovery and holdout confirmed",
+        evidence_refs=(
+            "v032:test:episode1:reactivation",
+            f"context_validity_renewed_holdout_validation:{first_renewed_holdout.id}",
+        ),
+    )
+
+    for index in range(3):
+        gate = engine.evaluate_active_context_validity_gated_decision(
+            base_map.hypothesis_id,
+            environment_signature=signature,
+            candidates=_validity_gate_candidates(),
+            context="production release",
+        )
+        engine.record_context_validity_gate_outcome(
+            gate.id,
+            actual_success_by_action={
+                "run automated release check": True,
+                "request independent review": False,
+            },
+            evidence_refs=(f"v032:test:episode2:degradation:{index}",),
+        )
+
+    second_drift = engine.watch_reactivated_context_validity_drift(
+        base_map.hypothesis_id
+    )
+    assert second_drift.status == "renewed_degradation_detected"
+    assert second_drift.holdout_source == "renewed"
+    assert second_drift.holdout_validation_id == first_renewed_holdout.id
+    assert second_drift.episode_id == 2
+
+    second_resolution = engine.resolve_reactivated_context_validity_drift(
+        second_drift.id,
+        decision="rollback_review",
+        reason="start second isolated renewed episode",
+        evidence_refs=("v032:test:episode2:rollback",),
+    )
+    assert second_resolution.episode_id == 2
+    assert second_resolution.holdout_source == "renewed"
+
+    for index in range(3):
+        gate = engine.evaluate_active_context_validity_gated_decision(
+            base_map.hypothesis_id,
+            environment_signature=signature,
+            candidates=_validity_gate_candidates(),
+            context="production release",
+        )
+        engine.record_context_validity_gate_outcome(
+            gate.id,
+            actual_success_by_action={
+                "run automated release check": False,
+                "request independent review": True,
+            },
+            evidence_refs=(f"v032:test:episode2:recovery:{index}",),
+        )
+    second_recovery = engine.validate_context_validity_renewed_rollback(
+        second_resolution.id
+    )
+    assert second_recovery.status == "renewed_recovery_passed"
+    assert second_recovery.episode_id == 2
+    assert second_recovery.prior_holdout_source == "renewed"
+    assert second_recovery.prior_holdout_validation_id == first_renewed_holdout.id
+
+    for index in range(3):
+        gate = engine.evaluate_active_context_validity_gated_decision(
+            base_map.hypothesis_id,
+            environment_signature=signature,
+            candidates=_validity_gate_candidates(),
+            context="production release",
+        )
+        engine.record_context_validity_gate_outcome(
+            gate.id,
+            actual_success_by_action={
+                "run automated release check": False,
+                "request independent review": True,
+            },
+            evidence_refs=(f"v032:test:episode2:holdout:{index}",),
+        )
+    second_holdout = engine.validate_context_validity_renewed_rollback_holdout(
+        second_recovery.id
+    )
+    assert second_holdout.status == "renewed_holdout_confirmed"
+    assert second_holdout.reactivation_allowed is True
+    assert second_holdout.episode_id == 2
+    assert second_holdout.prior_holdout_source == "renewed"
+
+    episode_one_ids = (
+        set(first_drift.observed_outcome_ids)
+        | set(first_recovery.observed_outcome_ids)
+        | set(first_renewed_holdout.holdout_outcome_ids)
+    )
+    episode_two_ids = (
+        set(second_drift.observed_outcome_ids)
+        | set(second_recovery.observed_outcome_ids)
+        | set(second_holdout.holdout_outcome_ids)
+    )
+    assert episode_one_ids
+    assert episode_two_ids
+    assert not episode_one_ids.intersection(episode_two_ids)
+    assert episode_one_ids <= set(second_recovery.excluded_prior_outcome_ids)
+    assert not set(second_recovery.observed_outcome_ids).intersection(
+        second_holdout.holdout_outcome_ids
+    )
+    assert not set(initial_holdout.holdout_outcome_ids).intersection(
+        episode_two_ids
+    )
+
+    second_advance = engine.select_context_validity_map_revision(
+        base_map.hypothesis_id,
+        map_id=revision_two.id,
+        reason="episode two isolated recovery and holdout confirmed",
+        evidence_refs=(
+            f"context_validity_renewed_holdout_validation:{second_holdout.id}",
+        ),
+    )
+    assert second_advance.action == "advance"
+    assert engine.snapshot()["renewed_episode_count"] == 2
+
+    restored = UnarchiEngine.from_export(engine.export_state())
+    restored_active = restored.active_context_causal_validity_map(
+        base_map.hypothesis_id
+    )
+    assert restored_active is not None
+    assert restored_active.id == revision_two.id
+    assert restored.context_validity_reactivation_drift_watches[-1].episode_id == 2
+    assert (
+        restored.context_validity_reactivation_drift_watches[-1].holdout_source
+        == "renewed"
+    )
+    assert restored.context_validity_renewed_recovery_validations[-1].episode_id == 2
+    assert restored.context_validity_renewed_holdout_validations[-1].episode_id == 2
+    assert restored.snapshot()["renewed_episode_count"] == 2
