@@ -5413,7 +5413,8 @@ class UnarchiEngine:
                     ):
                         raise ValueError(
                             "re-advance blocked until renewed-degradation rollback "
-                            "completes a fresh recovery and independent holdout cycle"
+                            "completes a new evidence cycle: fresh recovery and "
+                            "independent holdout cycle required"
                         )
 
             accepted = next(
