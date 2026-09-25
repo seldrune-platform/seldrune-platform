@@ -266,6 +266,7 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
         "open-pull-request",
         "run-ci",
         "verify-ci",
+        "retrieve-portable-ci",
         "verify-portable-ci",
         "merge-verified-pull-request",
     ]
@@ -274,14 +275,23 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
     )
     assert verify_ci["acceptance"]["fallback_step_id"] == "verify-portable-ci"
 
+    retrieve_ci = next(
+        step for step in contract["steps"] if step["id"] == "retrieve-portable-ci"
+    )
+    assert retrieve_ci["optional"] is True
+    assert retrieve_ci["run_when_external_resource_from"] == "verify-ci"
+    assert retrieve_ci["bindings"] == {
+        "expected_sha": "steps.verify-ci.output.head_sha",
+    }
+
     portable_ci = next(
         step for step in contract["steps"] if step["id"] == "verify-portable-ci"
     )
     assert portable_ci["optional"] is True
     assert portable_ci["run_when_external_resource_from"] == "verify-ci"
     assert portable_ci["bindings"] == {
-        "receipt": "parent.input.portable_ci_evidence.receipt",
-        "signature": "parent.input.portable_ci_evidence.signature",
+        "receipt": "steps.retrieve-portable-ci.output.receipt",
+        "signature": "steps.retrieve-portable-ci.output.signature",
     }
 
     merge_step = next(
