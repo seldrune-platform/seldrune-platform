@@ -370,3 +370,25 @@ fallback only after the primary GitHub CI step has been classified as an
 external-resource blocker, and the high-risk merge step continues to require
 its normal approval path.
 
+## Authenticated portable CI ingestion
+
+Seldrune now has an internal ingestion bridge between authenticated provider
+execution metadata and the fail-closed portable CI fallback.
+
+The bridge does not accept free-form provider execution JSON. A registered
+internal provider adapter must fetch the run metadata itself. Ingestion then
+requires both trust layers to agree on the same exact commit:
+
+- the authenticated provider run must report success for the expected SHA;
+- the repository-owned portable receipt must carry a valid HMAC-SHA256
+  signature and the same release SHA.
+
+Only after both checks pass is the signed receipt stored on the parent task for
+the compiled contract to re-verify during fallback execution. The ingestion
+event and audit record store provider/run/commit identifiers and receipt
+digests, but never the signing key.
+
+This bridge still does not merge code or mark the mission stage complete.
+Normal GitHub CI remains primary, fallback remains limited to explicit hosted
+CI external-resource classifications, and the merge tool remains governed as a
+high-risk action.
