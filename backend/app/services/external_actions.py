@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import time
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
@@ -11,12 +12,14 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
+import jwt
 
 from backend.app.services.tool_gateway import ToolGatewayError, register_external_action
 
 
 _REQUEST_TIMEOUT_SECONDS = 20.0
 _GITHUB_API_VERSION = "2026-03-10"
+_GITHUB_APP_TOKEN_CACHE: dict[str, tuple[str, float]] = {}
 
 
 def _credential(value: str | None, provider: str) -> str:
@@ -121,7 +124,117 @@ def gmail_send_message(
     }
 
 
-def _github_headers(token: str) -> dict[str, str]:
+def _github_app_config(
+    credential: str,
+) -> tuple[str, str, str] | None:
+    normalized = credential.strip()
+
+    if normalized.startswith("{"):
+        try:
+            payload = json.loads(normalized)
+        except ValueError as exc:
+            raise ToolGatewayError("GitHub structured credential is invalid JSON") from exc
+        if not isinstance(payload, dict):
+            raise ToolGatewayError("GitHub structured credential must be an object")
+        app_id = str(payload.get("app_id") or "").strip()
+        installation_id = str(payload.get("installation_id") or "").strip()
+        private_key = str(payload.get("private_key") or "").strip()
+        if not (app_id or installation_id or private_key):
+            return None
+        if not (app_id and installation_id and private_key):
+            raise ToolGatewayError("GitHub App credential is incomplete")
+        return app_id, installation_id, private_key.replace("\\n", "\n")
+
+    if "BEGIN" in normalized and "PRIVATE KEY" in normalized:
+        app_id = os.getenv("SELDRUNE_GITHUB_APP_ID", "").strip()
+        installation_id = os.getenv(
+            "SELDRUNE_GITHUB_APP_INSTALLATION_ID",
+            "",
+        ).strip()
+        if not app_id or not installation_id:
+            raise ToolGatewayError(
+                "GitHub App id and installation id are required with the private key"
+            )
+        return app_id, installation_id, normalized.replace("\\n", "\n")
+
+    return None
+
+
+def _github_installation_token(
+    *,
+    app_id: str,
+    installation_id: str,
+    private_key: str,
+) -> str:
+    cache_key = hashlib.sha256(
+        f"{app_id}:{installation_id}:{private_key}".encode("utf-8")
+    ).hexdigest()
+    now = time.time()
+    cached = _GITHUB_APP_TOKEN_CACHE.get(cache_key)
+    if cached is not None and cached[1] > now + 60:
+        return cached[0]
+
+    issued_at = int(now) - 60
+    try:
+        app_jwt = jwt.encode(
+            {
+                "iat": issued_at,
+                "exp": issued_at + 540,
+                "iss": app_id,
+            },
+            private_key,
+            algorithm="RS256",
+        )
+    except Exception as exc:
+        raise ToolGatewayError("GitHub App private key could not sign a JWT") from exc
+
+    response = httpx.post(
+        (
+            "https://api.github.com/app/installations/"
+            f"{quote(installation_id, safe='')}/access_tokens"
+        ),
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {app_jwt}",
+            "X-GitHub-Api-Version": _GITHUB_API_VERSION,
+            "User-Agent": "Seldrune-STI",
+        },
+        json={},
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    data = _json_response(response, "GitHub App")
+    token = str(data.get("token") or "").strip()
+    if not token:
+        raise ToolGatewayError(
+            "GitHub App installation response did not include an access token"
+        )
+
+    expires_at = now + 480
+    raw_expiry = str(data.get("expires_at") or "").strip()
+    if raw_expiry:
+        try:
+            parsed = datetime.fromisoformat(raw_expiry.replace("Z", "+00:00"))
+            expires_at = min(expires_at, parsed.timestamp())
+        except ValueError:
+            pass
+    _GITHUB_APP_TOKEN_CACHE[cache_key] = (token, expires_at)
+    return token
+
+
+def _github_bearer_token(credential: str) -> str:
+    app_config = _github_app_config(credential)
+    if app_config is None:
+        return credential
+    app_id, installation_id, private_key = app_config
+    return _github_installation_token(
+        app_id=app_id,
+        installation_id=installation_id,
+        private_key=private_key,
+    )
+
+
+def _github_headers(credential: str) -> dict[str, str]:
+    token = _github_bearer_token(credential)
     return {
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {token}",
