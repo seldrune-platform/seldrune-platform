@@ -1089,6 +1089,43 @@ def advance_compiled_contract(
                 executed_steps=executed_steps,
             )
 
+        fallback_source = step.get("run_when_external_resource_from")
+        if isinstance(fallback_source, str) and fallback_source:
+            source_result = next(
+                (
+                    item
+                    for item in reversed(step_results)
+                    if item.get("step_id") == fallback_source
+                ),
+                None,
+            )
+            if not (
+                isinstance(source_result, dict)
+                and source_result.get("status")
+                == "external-resource-fallback"
+            ):
+                step_results.append(
+                    {
+                        "step_id": step_id,
+                        "kind": kind,
+                        "status": "skipped",
+                        "reason": (
+                            "fallback_source_not_external_resource:"
+                            f"{fallback_source}"
+                        ),
+                    }
+                )
+                continue
+            if not step.get("tool_slug"):
+                return _blocked_report(
+                    task=task,
+                    contract=contract,
+                    reason=f"fallback_tool_unavailable:{step_id}",
+                    match_score=match_score,
+                    step_results=step_results,
+                    executed_steps=executed_steps,
+                )
+
         outputs = _step_outputs(
             session,
             children=children,
@@ -1138,6 +1175,30 @@ def advance_compiled_contract(
                     )
                     continue
                 if state == "external-resource":
+                    fallback_step_id = (
+                        acceptance.get("fallback_step_id")
+                        if isinstance(acceptance, dict)
+                        else None
+                    )
+                    if (
+                        isinstance(fallback_step_id, str)
+                        and fallback_step_id
+                        and receipt is not None
+                    ):
+                        accepted_receipts.append(receipt)
+                        step_results.append(
+                            {
+                                "step_id": step_id,
+                                "kind": kind,
+                                "repeat_index": repeat_index,
+                                "status": "external-resource-fallback",
+                                "reason": reason,
+                                "fallback_step_id": fallback_step_id,
+                                "child_task_id": str(child.id),
+                                "receipt_id": receipt["receipt_id"],
+                            }
+                        )
+                        continue
                     step_results.append(
                         {
                             "step_id": step_id,
@@ -1316,6 +1377,30 @@ def advance_compiled_contract(
                 )
                 continue
             if state == "external-resource":
+                fallback_step_id = (
+                    acceptance.get("fallback_step_id")
+                    if isinstance(acceptance, dict)
+                    else None
+                )
+                if (
+                    isinstance(fallback_step_id, str)
+                    and fallback_step_id
+                    and receipt is not None
+                ):
+                    accepted_receipts.append(receipt)
+                    step_results.append(
+                        {
+                            "step_id": step_id,
+                            "kind": kind,
+                            "repeat_index": repeat_index,
+                            "status": "external-resource-fallback",
+                            "reason": reason,
+                            "fallback_step_id": fallback_step_id,
+                            "child_task_id": str(child.id),
+                            "receipt_id": receipt["receipt_id"],
+                        }
+                    )
+                    continue
                 step_results.append(
                     {
                         "step_id": step_id,
