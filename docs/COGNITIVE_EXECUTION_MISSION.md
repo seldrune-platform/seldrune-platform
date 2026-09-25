@@ -413,3 +413,25 @@ must equal the expected commit before evidence is persisted.
 Railway tokens and the portable-receipt signing key are not stored in task
 evidence or audit details. This adapter does not trigger deployments, merge
 pull requests, or mark mission stages complete.
+
+## Railway signed-receipt retrieval
+
+The Railway provider adapter can now retrieve the portable CI receipt and its
+HMAC signature from the authenticated deployment log stream. The verifier emits
+only the non-secret receipt payload plus its signature; signing keys, Railway
+tokens, database credentials, and other secrets are never printed into the log
+channel.
+
+Receipt retrieval is bound to the deployment ID supplied to Railway's
+authenticated GraphQL API. Seldrune rejects missing, unsigned, malformed, or
+non-object receipts before they reach the ingestion bridge.
+
+The one-call Railway ingestion path now performs the complete sequence:
+
+1. fetch the signed receipt from the authenticated deployment logs;
+2. fetch authenticated Railway deployment status and source commit metadata;
+3. verify the HMAC receipt;
+4. require provider commit, receipt release SHA, and expected SHA to agree;
+5. persist only verified evidence to the task and audit trail.
+
+This still does not bypass normal GitHub CI or the governed merge step.
