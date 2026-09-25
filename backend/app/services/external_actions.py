@@ -60,6 +60,25 @@ def _json_response(response: httpx.Response, provider: str) -> dict[str, Any]:
     return data
 
 
+def _json_list_response(
+    response: httpx.Response,
+    provider: str,
+) -> list[dict[str, Any]]:
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise ToolGatewayError(
+            f"{provider} request failed with HTTP {response.status_code}"
+        ) from exc
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise ToolGatewayError(f"{provider} returned a non-JSON response") from exc
+    if not isinstance(data, list):
+        raise ToolGatewayError(f"{provider} returned an invalid response")
+    return [item for item in data if isinstance(item, dict)]
+
+
 def gmail_send_message(
     payload: dict[str, Any],
     credential: str | None,
@@ -336,17 +355,84 @@ def github_get_pull_request(
     }
 
 
+_GITHUB_BILLING_FAILURE_MARKERS = (
+    "payments have failed",
+    "spending limit needs to be increased",
+    "billing & plans",
+    "billing and plans",
+)
+_GITHUB_RUNNER_FAILURE_MARKERS = (
+    "not acquired by runner",
+    "runner of type hosted",
+    "hosted runner",
+)
+
+
+def _github_run_annotations(
+    *,
+    token: str,
+    owner: str,
+    repo: str,
+    head_sha: str | None,
+    run_id: int,
+) -> list[str]:
+    if not head_sha:
+        return []
+
+    checks_response = httpx.get(
+        (
+            f"https://api.github.com/repos/{owner}/{repo}/commits/"
+            f"{quote(head_sha, safe='')}/check-runs"
+        ),
+        headers=_github_headers(token),
+        params={"per_page": 100},
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    checks = _json_response(checks_response, "GitHub")
+    raw_runs = checks.get("check_runs")
+    check_runs = (
+        [item for item in raw_runs if isinstance(item, dict)]
+        if isinstance(raw_runs, list)
+        else []
+    )
+    run_marker = f"/actions/runs/{run_id}/"
+    messages: list[str] = []
+    for check_run in check_runs:
+        details_url = str(check_run.get("details_url") or "")
+        if run_marker not in details_url:
+            continue
+        check_run_id = check_run.get("id")
+        if check_run_id is None:
+            continue
+        annotations_response = httpx.get(
+            (
+                f"https://api.github.com/repos/{owner}/{repo}/check-runs/"
+                f"{check_run_id}/annotations"
+            ),
+            headers=_github_headers(token),
+            params={"per_page": 100},
+            timeout=_REQUEST_TIMEOUT_SECONDS,
+        )
+        annotations = _json_list_response(annotations_response, "GitHub")
+        for annotation in annotations:
+            message = str(annotation.get("message") or "").strip()
+            if message:
+                messages.append(message[:1000])
+    return messages
+
+
 def _github_workflow_failure_classification(
     *,
     token: str,
     owner: str,
     repo: str,
     run_id: int,
+    head_sha: str | None,
     status: Any,
     conclusion: Any,
-) -> tuple[str | None, bool | None]:
+) -> tuple[str | None, bool | None, str | None, str | None]:
     if status != "completed" or conclusion != "failure":
-        return None, None
+        return None, None, None, None
 
     response = httpx.get(
         f"https://api.github.com/repos/{owner}/{repo}/actions/runs/{run_id}/jobs",
@@ -361,9 +447,6 @@ def _github_workflow_failure_classification(
         if isinstance(raw_jobs, list)
         else []
     )
-    if not jobs:
-        return "hosted_runner_unavailable", False
-
     steps_executed = any(
         isinstance(job.get("steps"), list) and bool(job["steps"])
         for job in jobs
@@ -372,9 +455,38 @@ def _github_workflow_failure_classification(
         bool(job.get("runner_id")) or bool(job.get("runner_name"))
         for job in jobs
     )
-    if not steps_executed and not runner_allocated:
-        return "hosted_runner_unavailable", False
-    return None, steps_executed
+    if steps_executed or runner_allocated:
+        return None, steps_executed, None, None
+
+    annotations = _github_run_annotations(
+        token=token,
+        owner=owner,
+        repo=repo,
+        head_sha=head_sha,
+        run_id=run_id,
+    )
+    detail = annotations[0] if annotations else None
+    normalized = "\n".join(annotations).lower()
+    if any(marker in normalized for marker in _GITHUB_BILLING_FAILURE_MARKERS):
+        return (
+            "github_actions_billing_block",
+            False,
+            detail,
+            "Check organization Actions budget, payment state, and spending limits.",
+        )
+    if any(marker in normalized for marker in _GITHUB_RUNNER_FAILURE_MARKERS):
+        return (
+            "github_actions_runner_unavailable",
+            False,
+            detail,
+            "Retry later or use another isolated CI provider.",
+        )
+    return (
+        "hosted_runner_unavailable",
+        False,
+        detail,
+        "Retry the hosted runner or use another isolated CI provider.",
+    )
 
 
 def github_workflow_run_status(
@@ -395,15 +507,23 @@ def github_workflow_run_status(
     if not provider_run_id:
         raise ToolGatewayError("GitHub workflow response did not include a run id")
 
-    failure_classification, repository_steps_executed = (
-        _github_workflow_failure_classification(
-            token=token,
-            owner=owner,
-            repo=repo,
-            run_id=int(provider_run_id),
-            status=data.get("status"),
-            conclusion=data.get("conclusion"),
-        )
+    (
+        failure_classification,
+        repository_steps_executed,
+        failure_detail,
+        remediation,
+    ) = _github_workflow_failure_classification(
+        token=token,
+        owner=owner,
+        repo=repo,
+        run_id=int(provider_run_id),
+        head_sha=(
+            str(data.get("head_sha"))
+            if data.get("head_sha") is not None
+            else None
+        ),
+        status=data.get("status"),
+        conclusion=data.get("conclusion"),
     )
     return {
         "run_id": provider_run_id,
@@ -414,6 +534,8 @@ def github_workflow_run_status(
         "html_url": data.get("html_url"),
         "failure_classification": failure_classification,
         "repository_steps_executed": repository_steps_executed,
+        "failure_detail": failure_detail,
+        "remediation": remediation,
         "evidence": {
             "receipt_id": (
                 f"github-workflow-state:{provider_run_id}:"

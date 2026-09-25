@@ -334,6 +334,7 @@ def test_owner_console_contains_cognitive_mission_board() -> None:
         assert "/development-mission/queue-ready" in script.text
         assert "/development-mission/execute" in script.text
         assert "recovery_rounds" in script.text
+        assert "github_actions_billing_block" in script.text
         assert "runOneGo" in script.text
         assert "Synchronized" in script.text
 

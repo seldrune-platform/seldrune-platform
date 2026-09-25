@@ -234,6 +234,11 @@ def test_github_dispatch_uses_workflow_run_receipt(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(external_actions.httpx, "post", fake_post)
+    monkeypatch.setattr(
+        external_actions,
+        "_workflow_dispatch_runs",
+        lambda **_: [],
+    )
     output = external_actions.github_dispatch_workflow(
         {
             "owner": "acme",
@@ -255,6 +260,16 @@ def test_github_dispatch_accepts_request_id_for_legacy_empty_response(monkeypatc
         )
 
     monkeypatch.setattr(external_actions.httpx, "post", fake_post)
+    monkeypatch.setattr(
+        external_actions,
+        "_workflow_dispatch_runs",
+        lambda **_: [],
+    )
+    monkeypatch.setattr(
+        external_actions,
+        "_discover_dispatched_workflow_run",
+        lambda **_: None,
+    )
     output = external_actions.github_dispatch_workflow(
         {
             "owner": "acme",
