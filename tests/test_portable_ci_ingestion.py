@@ -139,12 +139,6 @@ def test_ingestion_requires_provider_and_signed_exact_head_evidence() -> None:
         ),
         (
             FakeRailwayAdapter(),
-            lambda value: value.update(release_sha="deadbeef"),
-            SIGNING_KEY,
-            "signed portable CI receipt does not match",
-        ),
-        (
-            FakeRailwayAdapter(),
             None,
             "wrong-signing-key",
             "signature mismatch",
@@ -181,6 +175,31 @@ def test_ingestion_fails_closed(
             signature=signature,
             signing_key=SIGNING_KEY,
             provider_adapter=adapter,
+        )
+
+    assert "portable_ci_evidence" not in task.input_data
+    session.commit.assert_not_called()
+
+
+def test_ingestion_rejects_validly_signed_wrong_release_sha() -> None:
+    session = Mock()
+    task = _task()
+    receipt = _receipt(release_sha="deadbeef")
+
+    with pytest.raises(
+        PortableCIIngestionError,
+        match="signed portable CI receipt does not match",
+    ):
+        ingest_portable_ci_evidence(
+            session,
+            task=task,
+            actor_user_id=task.created_by_user_id,
+            expected_sha=SHA,
+            run_id=RUN_ID,
+            receipt=receipt,
+            signature=_signature(receipt),
+            signing_key=SIGNING_KEY,
+            provider_adapter=FakeRailwayAdapter(),
         )
 
     assert "portable_ci_evidence" not in task.input_data
