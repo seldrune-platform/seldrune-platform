@@ -112,6 +112,93 @@ def test_provider_preflight_is_non_destructive_and_redacts_credentials(
     assert "render-secret-token" not in output
 
 
+
+def test_github_app_preflight_uses_installation_repository_access(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        provider_preflight,
+        "production_runtime_targets",
+        lambda: {
+            "github_full_name": "seldrune-platform/seldrune-platform",
+        },
+    )
+    monkeypatch.setattr(
+        provider_preflight,
+        "_github_app_config",
+        lambda credential: ("12345", "777", credential),
+    )
+    monkeypatch.setattr(
+        provider_preflight,
+        "_github_headers",
+        lambda credential: {
+            "Authorization": "Bearer installation-token",
+            "Accept": "application/vnd.github+json",
+        },
+    )
+
+    observed: list[str] = []
+
+    def fake_get(url, *, headers, timeout):
+        observed.append(url)
+        assert headers["Authorization"] == "Bearer installation-token"
+        assert url == (
+            "https://api.github.com/repos/"
+            "seldrune-platform/seldrune-platform"
+        )
+        return _response(
+            200,
+            json_data={
+                "id": 700,
+                "full_name": "seldrune-platform/seldrune-platform",
+                "default_branch": "main",
+            },
+        )
+
+    monkeypatch.setattr(provider_preflight.httpx, "get", fake_get)
+
+    result = provider_preflight.preflight_provider_credential(
+        "github",
+        "-----BEGIN PRIVATE KEY-----\nredacted\n-----END PRIVATE KEY-----",
+    )
+
+    assert result["verified"] is True
+    assert result["status"] == "verified"
+    assert result["identity"]["auth_type"] == "github_app"
+    assert result["identity"]["app_id"] == "12345"
+    assert result["identity"]["installation_id"] == "777"
+    assert result["identity"]["repository"] == (
+        "seldrune-platform/seldrune-platform"
+    )
+    assert observed == [
+        "https://api.github.com/repos/seldrune-platform/seldrune-platform"
+    ]
+
+
+def test_github_app_missing_ids_is_configuration_not_invalid_secret(
+    monkeypatch,
+) -> None:
+    def missing_config(_credential):
+        raise provider_preflight.ToolGatewayError(
+            "GitHub App id and installation id are required with the private key"
+        )
+
+    monkeypatch.setattr(
+        provider_preflight,
+        "_github_app_config",
+        missing_config,
+    )
+
+    result = provider_preflight.preflight_provider_credential(
+        "github",
+        "-----BEGIN PRIVATE KEY-----\nredacted\n-----END PRIVATE KEY-----",
+    )
+
+    assert result["verified"] is False
+    assert result["status"] == "configuration_error"
+    assert result["http_status"] is None
+
+
 def test_provider_preflight_reports_invalid_remote_credential(
     client,
     monkeypatch,
