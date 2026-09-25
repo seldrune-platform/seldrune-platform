@@ -8,7 +8,7 @@ from email.parser import BytesParser
 import httpx
 import pytest
 
-from backend.app.services import external_actions
+from backend.app.services import external_actions, railway_ci_provider
 from backend.app.services.tool_gateway import ToolGatewayError
 
 
@@ -427,3 +427,83 @@ def test_portable_ci_catalog_uses_secret_backed_credential() -> None:
     assert entry["credential_env_locator"] == "SELDRUNE_CI_RECEIPT_HMAC_KEY"
     assert entry["input_schema"]["required"] == ["receipt", "signature"]
 
+
+
+def test_railway_find_portable_ci_evidence_uses_authenticated_adapter(
+    monkeypatch,
+) -> None:
+    observed = {}
+
+    def fake_find(
+        self,
+        *,
+        expected_sha,
+        project_id,
+        service_id,
+        environment_id,
+    ):
+        observed.update(
+            {
+                "expected_sha": expected_sha,
+                "project_id": project_id,
+                "service_id": service_id,
+                "environment_id": environment_id,
+                "token_kind": self._token_kind,
+            }
+        )
+        return {
+            "deployment_id": "dep-123",
+            "status": "success",
+            "conclusion": "success",
+            "head_sha": expected_sha,
+            "receipt": {"release_sha": expected_sha},
+            "signature": "sha256=signed",
+            "evidence": {
+                "receipt_id": f"railway-portable-ci:dep-123:{expected_sha}",
+                "provider": "railway",
+            },
+        }
+
+    monkeypatch.setattr(
+        railway_ci_provider.RailwayPortableCIProvider,
+        "find_exact_successful_receipt",
+        fake_find,
+    )
+    output = external_actions.railway_find_portable_ci_evidence(
+        {
+            "project_id": "project-1",
+            "service_id": "service-1",
+            "environment_id": "environment-1",
+            "expected_sha": "abc123",
+            "token_kind": "project",
+        },
+        "railway-token",
+    )
+
+    assert output["conclusion"] == "success"
+    assert output["head_sha"] == "abc123"
+    assert output["evidence"]["provider"] == "railway"
+    assert observed == {
+        "expected_sha": "abc123",
+        "project_id": "project-1",
+        "service_id": "service-1",
+        "environment_id": "environment-1",
+        "token_kind": "project",
+    }
+
+
+def test_railway_portable_ci_catalog_uses_secret_backed_credential() -> None:
+    entry = next(
+        item
+        for item in external_actions.default_external_action_catalog()
+        if item["provider"] == "railway"
+        and item["action_name"] == "find-portable-ci-evidence"
+    )
+    assert entry["risk_level"] == "low"
+    assert entry["credential_env_locator"] == "SELDRUNE_RAILWAY_API_TOKEN"
+    assert entry["input_schema"]["required"] == [
+        "project_id",
+        "service_id",
+        "environment_id",
+        "expected_sha",
+    ]
