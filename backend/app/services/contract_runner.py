@@ -1218,7 +1218,10 @@ def advance_compiled_contract(
                 return _blocked_report(
                     task=task,
                     contract=contract,
-                    reason=f"fallback_tool_unavailable:{step_id}",
+                    reason=(
+                        f"external_resource:{step_id}:"
+                        "portable_ci_verifier_unavailable"
+                    ),
                     match_score=match_score,
                     step_results=step_results,
                     executed_steps=executed_steps,
@@ -1365,13 +1368,20 @@ def advance_compiled_contract(
                 parent_task=task,
             )
             if payload is None:
+                if isinstance(fallback_source, str) and fallback_source:
+                    reason = (
+                        f"external_resource:{step_id}:"
+                        "portable_ci_evidence_missing"
+                    )
+                else:
+                    reason = (
+                        f"binding_unresolved:{step_id}:"
+                        + ",".join(unresolved)
+                    )
                 return _blocked_report(
                     task=task,
                     contract=contract,
-                    reason=(
-                        f"binding_unresolved:{step_id}:"
-                        + ",".join(unresolved)
-                    ),
+                    reason=reason,
                     match_score=match_score,
                     step_results=step_results,
                     executed_steps=executed_steps,
