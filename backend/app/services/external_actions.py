@@ -950,6 +950,33 @@ def portable_ci_verify_receipt(
     }
 
 
+def railway_find_portable_ci_evidence(
+    payload: dict[str, Any],
+    credential: str | None,
+) -> dict[str, Any]:
+    token = _credential(credential, "Railway")
+    token_kind = _text(payload, "token_kind", required=False) or "account"
+
+    from backend.app.services.railway_ci_provider import (
+        RailwayCIProviderError,
+        RailwayPortableCIProvider,
+    )
+
+    adapter = RailwayPortableCIProvider(
+        token=token,
+        token_kind=token_kind,
+    )
+    try:
+        return adapter.find_exact_successful_receipt(
+            expected_sha=_text(payload, "expected_sha"),
+            project_id=_text(payload, "project_id"),
+            service_id=_text(payload, "service_id"),
+            environment_id=_text(payload, "environment_id"),
+        )
+    except RailwayCIProviderError as exc:
+        raise ToolGatewayError(str(exc)) from exc
+
+
 def render_deploy_service(
     payload: dict[str, Any],
     credential: str | None,
@@ -1296,6 +1323,39 @@ DEFAULT_EXTERNAL_ACTION_CATALOG: tuple[dict[str, Any], ...] = (
         },
     },
     {
+        "provider": "railway",
+        "action_name": "find-portable-ci-evidence",
+        "name": "Railway · Find exact-SHA portable CI evidence",
+        "default_tool_slug": "railway-find-portable-ci-evidence",
+        "credential_slug": "railway-api-token",
+        "credential_name": "Railway API token",
+        "credential_env_locator": "SELDRUNE_RAILWAY_API_TOKEN",
+        "description": (
+            "Find a successful Railway CI deployment for an exact commit and "
+            "retrieve its signed portable CI receipt from authenticated logs."
+        ),
+        "risk_level": "low",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string"},
+                "service_id": {"type": "string"},
+                "environment_id": {"type": "string"},
+                "expected_sha": {"type": "string"},
+                "token_kind": {
+                    "type": "string",
+                    "enum": ["account", "workspace", "oauth", "project"],
+                },
+            },
+            "required": [
+                "project_id",
+                "service_id",
+                "environment_id",
+                "expected_sha",
+            ],
+        },
+    },
+    {
         "provider": "portable-ci",
         "action_name": "verify-receipt",
         "name": "Portable CI · Verify signed receipt",
@@ -1376,6 +1436,11 @@ def register_default_external_actions() -> None:
     register_external_action("github", "create-pull-request", github_create_pull_request)
     register_external_action("github", "merge-pull-request", github_merge_pull_request)
     register_external_action("github", "dispatch-workflow", github_dispatch_workflow)
+    register_external_action(
+        "railway",
+        "find-portable-ci-evidence",
+        railway_find_portable_ci_evidence,
+    )
     register_external_action(
         "portable-ci",
         "verify-receipt",
