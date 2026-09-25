@@ -469,7 +469,7 @@ persisted ToolRun output. Stored task output alone is not sufficient to choose a
 fallback commit.
 
 Railway CI scope resolution also accepts both
-`SELDRUNE_CI_RAILWAY_* ` and `SELDRUNE_RAILWAY_CI_* ` naming conventions,
+`SELDRUNE_CI_RAILWAY_*` and `SELDRUNE_RAILWAY_CI_*` naming conventions,
 with Railway-native project/service/environment IDs as a final runtime fallback.
 Explicit Seldrune CI target variables take precedence. Railway API credentials
 and the receipt HMAC key remain separately required secrets.
