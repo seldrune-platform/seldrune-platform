@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 import httpx
+from sqlalchemy.orm import Session
+
+from backend.app.models.task import Task
+from backend.app.services.portable_ci_ingestion import ingest_portable_ci_evidence
 
 
 RAILWAY_GRAPHQL_URL = "https://backboard.railway.com/graphql/v2"
@@ -151,3 +156,35 @@ class RailwayPortableCIProvider:
             "commit_sha": commit_sha,
             "provider_status": provider_status,
         }
+
+
+def ingest_railway_portable_ci_evidence(
+    session: Session,
+    *,
+    task: Task,
+    actor_user_id: UUID | None,
+    expected_sha: str,
+    deployment_id: str,
+    receipt: dict[str, Any],
+    signature: str,
+    signing_key: str,
+    railway_token: str,
+    token_kind: str = "account",
+) -> dict[str, Any]:
+    """Ingest portable CI evidence using Railway-authenticated run metadata."""
+
+    adapter = RailwayPortableCIProvider(
+        token=railway_token,
+        token_kind=token_kind,
+    )
+    return ingest_portable_ci_evidence(
+        session,
+        task=task,
+        actor_user_id=actor_user_id,
+        expected_sha=expected_sha,
+        run_id=deployment_id,
+        receipt=receipt,
+        signature=signature,
+        signing_key=signing_key,
+        provider_adapter=adapter,
+    )
