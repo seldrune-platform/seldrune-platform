@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 from uuid import UUID
 
@@ -204,8 +205,6 @@ class RailwayPortableCIProvider:
             )
 
         try:
-            import json
-
             receipt = json.loads(receipt_text)
         except ValueError as exc:
             raise RailwayCIProviderError(
