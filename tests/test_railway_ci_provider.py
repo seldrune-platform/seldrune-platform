@@ -147,3 +147,46 @@ def test_fetch_execution_fails_closed(monkeypatch, payload, message) -> None:
 
     with pytest.raises(RailwayCIProviderError, match=message):
         adapter.fetch_execution(run_id=RUN_ID)
+
+
+def test_ingest_helper_routes_through_railway_adapter(monkeypatch) -> None:
+    captured = {}
+
+    def fake_ingest(session, **kwargs):
+        captured["session"] = session
+        captured.update(kwargs)
+        return {"verified": True, "provider": "railway"}
+
+    monkeypatch.setattr(
+        railway_ci_provider,
+        "ingest_portable_ci_evidence",
+        fake_ingest,
+    )
+
+    session = object()
+    task = object()
+    receipt = {"version": "seldrune-ci-v1"}
+    result = railway_ci_provider.ingest_railway_portable_ci_evidence(
+        session,
+        task=task,
+        actor_user_id=None,
+        expected_sha=SHA,
+        deployment_id=RUN_ID,
+        receipt=receipt,
+        signature="sha256=signature",
+        signing_key="receipt-signing-key",
+        railway_token="railway-account-token",
+        token_kind="workspace",
+    )
+
+    assert result == {"verified": True, "provider": "railway"}
+    assert captured["session"] is session
+    assert captured["task"] is task
+    assert captured["expected_sha"] == SHA
+    assert captured["run_id"] == RUN_ID
+    assert captured["receipt"] is receipt
+    assert captured["signature"] == "sha256=signature"
+    assert captured["signing_key"] == "receipt-signing-key"
+    adapter = captured["provider_adapter"]
+    assert isinstance(adapter, RailwayPortableCIProvider)
+    assert adapter.provider_name == "railway"
