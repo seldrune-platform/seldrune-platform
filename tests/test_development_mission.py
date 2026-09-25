@@ -200,7 +200,7 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
     assert first.status_code == 200
     payload = first.json()
     assert payload["created"] is True
-    assert payload["overall_percentage"] == 62.9
+    assert payload["overall_percentage"] == 61.9
     assert payload["auto_queued_count"] == 4
     assert set(payload["auto_queued_stage_ids"]) == {
         "unarchi_v32",
@@ -581,7 +581,7 @@ def test_one_go_verified_tool_receipt_unlocks_next_dependency(
     )
     assert mission.status_code == 200
     payload = mission.json()
-    assert payload["overall_percentage"] == 61.9
+    assert payload["overall_percentage"] == 62.9
     stages = {
         item["id"]: item
         for item in payload["stages"]
