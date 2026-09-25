@@ -435,3 +435,26 @@ The one-call Railway ingestion path now performs the complete sequence:
 5. persist only verified evidence to the task and audit trail.
 
 This still does not bypass normal GitHub CI or the governed merge step.
+
+## One-Go automatic Railway portable-CI fallback
+
+When the compiled contract's primary GitHub CI verification is classified as an
+explicit hosted-CI external-resource failure, One-Go can now attempt to hydrate
+portable CI evidence automatically.
+
+The expected fallback commit is taken from the recorded `verify-ci` tool
+output. It is not accepted from free-form task input. One-Go then requires
+Railway API credentials plus configured CI project/service/environment IDs,
+discovers a successful Railway deployment whose authenticated deployment
+metadata matches that exact commit, retrieves its signed portable-CI receipt,
+and passes the bundle through the existing provider-authentication and HMAC
+verification chain.
+
+If configuration is missing, no exact-head Railway deployment exists, the
+receipt is missing/unsigned, or any provider/receipt SHA check fails, the
+fallback remains blocked. Existing portable CI evidence is never silently
+replaced.
+
+After successful hydration, the compiled contract is retried. The normal merge
+step remains a governed high-risk action; automatic evidence hydration does not
+grant merge approval or convert a hosted CI failure into hosted CI success.
