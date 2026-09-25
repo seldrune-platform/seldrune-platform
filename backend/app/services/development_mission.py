@@ -670,7 +670,7 @@ def build_development_mission(
     execution_wave = [
         row for row in stage_rows if row["id"] in ready_stage_ids
     ]
-    overall = ((overall_weighted_basis + 5) // 10) / 10
+    overall = overall_weighted_basis / 100
     return {
         "kind": MISSION_KIND,
         "version": MISSION_VERSION,
