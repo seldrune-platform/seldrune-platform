@@ -6,8 +6,8 @@ import re
 from typing import Any
 
 
-UNARCHI_VERSION = "unarchi-v0.31"
-_LEGACY_UNARCHI_VERSIONS = {"unarchi-v0.30"}
+UNARCHI_VERSION = "unarchi-v0.32"
+_LEGACY_UNARCHI_VERSIONS = {"unarchi-v0.31", "unarchi-v0.30"}
 _STOPWORDS = {
     "a",
     "an",
@@ -748,6 +748,8 @@ class ContextValidityReactivationDriftWatch:
     recommended_action: str
     reason: str
     evidence_refs: tuple[str, ...]
+    holdout_source: str = "initial"
+    episode_id: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -767,6 +769,8 @@ class ContextValidityReactivationDriftResolution:
     blocked_descendant_map_id: int | None
     requires_new_evidence_cycle: bool
     evidence_refs: tuple[str, ...]
+    holdout_source: str = "initial"
+    episode_id: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -792,6 +796,8 @@ class ContextValidityRenewedRecoveryValidation:
     reactivation_allowed: bool
     evidence_refs: tuple[str, ...]
     holdout_gate_watermark_id: int = 0
+    prior_holdout_source: str = "initial"
+    episode_id: int = 1
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -820,6 +826,8 @@ class ContextValidityRenewedHoldoutValidation:
     status: str
     reactivation_allowed: bool
     evidence_refs: tuple[str, ...]
+    prior_holdout_source: str = "initial"
+    episode_id: int = 1
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -974,7 +982,7 @@ class UnarchiEngine:
     """
     CPU-only experimental cognitive kernel.
 
-    v0.31 includes causal internal dynamics, bounded endogenous goals, a
+    v0.32 includes causal internal dynamics, bounded endogenous goals, a
     calibrated predictive self-model, prospective memory, evidence-grounded
     metacognition, explicit value arbitration, competing causal hypotheses,
     controlled self-intervention trials, a bounded recurrent global workspace,
@@ -992,8 +1000,10 @@ class UnarchiEngine:
     recommendation resolution, separate rollback recovery/holdout gates,
     post-reactivation drift monitoring, and renewed-degradation resolution
     that invalidates stale reactivation authorization after a second rollback,
-    plus a renewed recovery and independent holdout cycle that forbids evidence
-    reuse across earlier rollback, holdout, reactivation, and drift episodes.
+    plus renewed recovery and independent holdout cycles that carry immutable
+    episode identities, bind each recurrence to its newest confirmed holdout,
+    and forbid evidence or reactivation authorization from leaking across
+    repeated degradation/recovery episodes.
     """
 
     state: UnarchiState = field(default_factory=UnarchiState)
@@ -6272,6 +6282,47 @@ class UnarchiEngine:
         )
         return record
 
+    def _latest_context_validity_reactivation_holdout(
+        self,
+        hypothesis_id: int,
+        active_map_id: int,
+    ) -> tuple[
+        str,
+        ContextValidityRollbackHoldoutValidation
+        | ContextValidityRenewedHoldoutValidation,
+    ] | None:
+        """Return the newest holdout that actually authorized the active descendant."""
+        renewed = next(
+            (
+                item
+                for item in reversed(
+                    self.context_validity_renewed_holdout_validations
+                )
+                if item.hypothesis_id == hypothesis_id
+                and item.reactivation_allowed
+                and item.blocked_descendant_map_id == active_map_id
+            ),
+            None,
+        )
+        if renewed is not None:
+            return "renewed", renewed
+
+        initial = next(
+            (
+                item
+                for item in reversed(
+                    self.context_validity_rollback_holdout_validations
+                )
+                if item.hypothesis_id == hypothesis_id
+                and item.reactivation_allowed
+                and item.blocked_descendant_map_id == active_map_id
+            ),
+            None,
+        )
+        if initial is not None:
+            return "initial", initial
+        return None
+
     def watch_reactivated_context_validity_drift(
         self,
         hypothesis_id: int,
@@ -6291,22 +6342,15 @@ class UnarchiEngine:
         if active is None:
             raise ValueError("no active validity map exists for hypothesis")
 
-        holdout = next(
-            (
-                item
-                for item in reversed(
-                    self.context_validity_rollback_holdout_validations
-                )
-                if item.hypothesis_id == hypothesis_id
-                and item.reactivation_allowed
-                and item.blocked_descendant_map_id == active.id
-            ),
-            None,
+        holdout_match = self._latest_context_validity_reactivation_holdout(
+            hypothesis_id,
+            active.id,
         )
-        if holdout is None:
+        if holdout_match is None:
             raise ValueError(
                 "reactivation drift watch requires a confirmed rollback holdout"
             )
+        holdout_source, holdout = holdout_match
 
         reactivation = next(
             (
@@ -6398,8 +6442,20 @@ class UnarchiEngine:
                 "strong enough to establish renewed degradation"
             )
 
+        holdout_ref = (
+            f"context_validity_renewed_holdout_validation:{holdout.id}"
+            if holdout_source == "renewed"
+            else f"context_validity_rollback_holdout_validation:{holdout.id}"
+        )
+        episode_id = 1 + sum(
+            1
+            for item in self.context_validity_reactivation_drift_resolutions
+            if item.hypothesis_id == hypothesis_id
+            and item.decision == "rollback_review"
+            and item.requires_new_evidence_cycle
+        )
         refs = [
-            f"context_validity_rollback_holdout_validation:{holdout.id}",
+            holdout_ref,
             f"context_validity_map_selection:{reactivation.id}",
             f"context_causal_validity_map:{active.id}",
         ]
@@ -6425,6 +6481,8 @@ class UnarchiEngine:
             recommended_action=recommended_action,
             reason=reason,
             evidence_refs=tuple(dict.fromkeys(refs)),
+            holdout_source=holdout_source,
+            episode_id=episode_id,
         )
         self.next_context_validity_reactivation_drift_watch_id += 1
         self.context_validity_reactivation_drift_watches.append(record)
@@ -6517,16 +6575,33 @@ class UnarchiEngine:
         if active.id != watch.active_map_id:
             raise ValueError("reactivation drift recommendation is stale")
 
-        holdout = next(
-            (
-                item
-                for item in self.context_validity_rollback_holdout_validations
-                if item.id == watch.holdout_validation_id
-            ),
-            None,
-        )
+        if watch.holdout_source == "renewed":
+            holdout = next(
+                (
+                    item
+                    for item in self.context_validity_renewed_holdout_validations
+                    if item.id == watch.holdout_validation_id
+                ),
+                None,
+            )
+        elif watch.holdout_source == "initial":
+            holdout = next(
+                (
+                    item
+                    for item in self.context_validity_rollback_holdout_validations
+                    if item.id == watch.holdout_validation_id
+                ),
+                None,
+            )
+        else:
+            raise ValueError("unknown reactivation drift holdout source")
         if holdout is None or not holdout.reactivation_allowed:
             raise ValueError("reactivation drift holdout evidence is incomplete")
+        holdout_ref = (
+            f"context_validity_renewed_holdout_validation:{holdout.id}"
+            if watch.holdout_source == "renewed"
+            else f"context_validity_rollback_holdout_validation:{holdout.id}"
+        )
 
         rollback_target_map_id: int | None = None
         rollback_selection_id: int | None = None
@@ -6552,13 +6627,25 @@ class UnarchiEngine:
                 ),
                 evidence_refs=(
                     f"context_validity_reactivation_drift_watch:{watch.id}",
-                    f"context_validity_rollback_holdout_validation:{holdout.id}",
+                    holdout_ref,
                     *refs,
                 ),
             )
             rollback_selection_id = rollback.id
             requires_new_evidence_cycle = True
 
+        episode_id = (
+            watch.episode_id
+            if watch.episode_id > 0
+            else 1
+            + sum(
+                1
+                for item in self.context_validity_reactivation_drift_resolutions
+                if item.hypothesis_id == watch.hypothesis_id
+                and item.decision == "rollback_review"
+                and item.requires_new_evidence_cycle
+            )
+        )
         record = ContextValidityReactivationDriftResolution(
             id=self.next_context_validity_reactivation_drift_resolution_id,
             drift_watch_id=watch.id,
@@ -6575,11 +6662,13 @@ class UnarchiEngine:
                 dict.fromkeys(
                     (
                         f"context_validity_reactivation_drift_watch:{watch.id}",
-                        f"context_validity_rollback_holdout_validation:{holdout.id}",
+                        holdout_ref,
                         *refs,
                     )
                 )
             ),
+            holdout_source=watch.holdout_source,
+            episode_id=episode_id,
         )
         self.next_context_validity_reactivation_drift_resolution_id += 1
         self.context_validity_reactivation_drift_resolutions.append(record)
@@ -6672,14 +6761,26 @@ class UnarchiEngine:
             ),
             None,
         )
-        prior_holdout = next(
-            (
-                item
-                for item in self.context_validity_rollback_holdout_validations
-                if item.id == resolution.holdout_validation_id
-            ),
-            None,
-        )
+        if resolution.holdout_source == "renewed":
+            prior_holdout = next(
+                (
+                    item
+                    for item in self.context_validity_renewed_holdout_validations
+                    if item.id == resolution.holdout_validation_id
+                ),
+                None,
+            )
+        elif resolution.holdout_source == "initial":
+            prior_holdout = next(
+                (
+                    item
+                    for item in self.context_validity_rollback_holdout_validations
+                    if item.id == resolution.holdout_validation_id
+                ),
+                None,
+            )
+        else:
+            raise ValueError("unknown renewed recovery holdout source")
         rollback_selection = next(
             (
                 item
@@ -6788,6 +6889,8 @@ class UnarchiEngine:
                 if recovery_passed
                 else 0
             ),
+            prior_holdout_source=resolution.holdout_source,
+            episode_id=max(1, resolution.episode_id),
         )
         self.next_context_validity_renewed_recovery_validation_id += 1
         self.context_validity_renewed_recovery_validations.append(record)
@@ -6944,6 +7047,8 @@ class UnarchiEngine:
             status=status,
             reactivation_allowed=allowed,
             evidence_refs=tuple(dict.fromkeys(refs)),
+            prior_holdout_source=recovery.prior_holdout_source,
+            episode_id=recovery.episode_id,
         )
         self.next_context_validity_renewed_holdout_validation_id += 1
         self.context_validity_renewed_holdout_validations.append(record)
@@ -11286,6 +11391,13 @@ class UnarchiEngine:
                     for item in self.context_validity_renewed_holdout_validations
                     if item.reactivation_allowed
                 ]
+            ),
+            "renewed_episode_count": max(
+                (
+                    item.episode_id
+                    for item in self.context_validity_renewed_holdout_validations
+                ),
+                default=0,
             ),
             "renewed_degradation_count": len(
                 [
