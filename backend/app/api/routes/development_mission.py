@@ -21,6 +21,7 @@ from backend.app.services.development_mission import (
     sync_development_mission_task,
 )
 from backend.app.services.one_go_controller import execute_one_go_controller
+from backend.app.services.tool_bootstrap import ensure_configured_external_tools
 
 
 router = APIRouter(
@@ -224,6 +225,11 @@ def execute_development_mission(
     current_user: CurrentUserDep,
     session: SessionDep,
 ) -> dict[str, Any]:
+    ensure_configured_external_tools(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+    )
     try:
         return execute_one_go_controller(
             session,
