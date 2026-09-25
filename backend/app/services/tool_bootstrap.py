@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from collections import defaultdict
 from typing import Any
@@ -30,7 +31,12 @@ from backend.app.services.tool_input_defaults import production_runtime_targets
 
 _CREDENTIAL_ENV_ALIASES: dict[str, tuple[str, ...]] = {
     "gmail": ("SELDRUNE_GMAIL_TOOL_CREDENTIAL", "GMAIL_ACCESS_TOKEN"),
-    "github": ("SELDRUNE_GITHUB_TOOL_TOKEN", "GITHUB_TOKEN"),
+    "github": (
+        "SELDRUNE_GITHUB_TOOL_CREDENTIAL",
+        "SELDRUNE_GITHUB_APP_PRIVATE_KEY",
+        "SELDRUNE_GITHUB_TOOL_TOKEN",
+        "GITHUB_TOKEN",
+    ),
     "render": ("SELDRUNE_RENDER_API_KEY", "RENDER_API_KEY"),
 }
 
@@ -41,11 +47,40 @@ def _credential_env_candidates(item: dict[str, Any]) -> tuple[str, ...]:
     return tuple(dict.fromkeys((primary, *aliases)))
 
 
-def _available_env_locator(item: dict[str, Any]) -> str | None:
-    return next(
-        (name for name in _credential_env_candidates(item) if os.getenv(name)),
-        None,
+def _github_structured_credential_available(value: str) -> bool:
+    try:
+        payload = json.loads(value)
+    except ValueError:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    return all(
+        str(payload.get(key) or "").strip()
+        for key in ("app_id", "installation_id", "private_key")
     )
+
+
+def _available_env_locator(item: dict[str, Any]) -> str | None:
+    provider = str(item["provider"])
+    for name in _credential_env_candidates(item):
+        value = os.getenv(name)
+        if not value:
+            continue
+        if provider != "github":
+            return name
+        if name == "SELDRUNE_GITHUB_TOOL_CREDENTIAL":
+            if _github_structured_credential_available(value):
+                return name
+            continue
+        if name == "SELDRUNE_GITHUB_APP_PRIVATE_KEY":
+            if (
+                os.getenv("SELDRUNE_GITHUB_APP_ID")
+                and os.getenv("SELDRUNE_GITHUB_APP_INSTALLATION_ID")
+            ):
+                return name
+            continue
+        return name
+    return None
 
 
 def _sync_agent_tool_grants(
