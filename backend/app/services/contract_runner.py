@@ -30,6 +30,21 @@ RUNNER_VERSION = "contract-runner-v1"
 MAX_ARTIFACTS = 20
 MAX_ARTIFACT_CONTENT_CHARS = 300_000
 MAX_TOTAL_ARTIFACT_CONTENT_CHARS = 1_000_000
+MAX_MODEL_STEP_ATTEMPTS = 3
+_RETRYABLE_MODEL_FAILURE_MARKERS = (
+    "credit_balance_exhausted",
+    "insufficient_quota",
+    "rate_limit",
+    "429",
+    "timeout",
+    "timed out",
+    "connection",
+    "temporarily unavailable",
+    "internal server error",
+    "502",
+    "503",
+    "504",
+)
 _RETRY_SAFE_READ_ACTIONS = {
     ("github", "repository-info"),
     ("github", "workflow-run-status"),
@@ -189,6 +204,49 @@ def _refresh_stale_contract_tools(
 def _child_step_id(task: Task) -> str | None:
     value = (task.input_data or {}).get("contract_step_id")
     return str(value) if value else None
+
+
+def _latest_model_failure_error(
+    session: Session,
+    *,
+    child: Task,
+) -> str:
+    events = list(
+        session.scalars(
+            select(TaskEvent)
+            .where(
+                TaskEvent.task_id == child.id,
+                TaskEvent.event_type == "agent.runtime.failed",
+            )
+            .order_by(TaskEvent.occurred_at.desc(), TaskEvent.id.desc())
+        )
+    )
+    if not events:
+        return ""
+    details = events[0].details or {}
+    if not isinstance(details, dict):
+        return ""
+    return str(details.get("error") or "").strip()
+
+
+def _retryable_model_failure(
+    session: Session,
+    *,
+    child: Task,
+) -> tuple[bool, str]:
+    if TaskStatus(child.status) is not TaskStatus.FAILED:
+        return False, "child_not_failed"
+    if _child_attempt(child) >= MAX_MODEL_STEP_ATTEMPTS:
+        return False, "model_retry_limit_reached"
+
+    error = _latest_model_failure_error(session, child=child)
+    if not error:
+        return False, "model_failure_reason_missing"
+
+    normalized = error.casefold()
+    if any(marker in normalized for marker in _RETRYABLE_MODEL_FAILURE_MARKERS):
+        return True, "retryable_provider_failure"
+    return False, "deterministic_model_failure"
 
 
 def _child_repeat_index(task: Task) -> int | None:
@@ -1199,6 +1257,40 @@ def advance_compiled_contract(
 
         if kind == "model":
             child = _latest_child(children, step_id=step_id)
+            if child is not None:
+                retryable, retry_reason = _retryable_model_failure(
+                    session,
+                    child=child,
+                )
+                if retryable:
+                    if executed_steps >= max_steps:
+                        return _blocked_report(
+                            task=task,
+                            contract=contract,
+                            reason="step_limit",
+                            match_score=match_score,
+                            step_results=step_results,
+                            executed_steps=executed_steps,
+                        )
+                    prior_child_id = str(child.id)
+                    child = _new_child_task(
+                        session,
+                        parent_task=task,
+                        agent=agent,
+                        actor_user_id=actor_user_id,
+                        step=step,
+                    )
+                    step_results.append(
+                        {
+                            "step_id": step_id,
+                            "kind": kind,
+                            "status": "retrying",
+                            "reason": retry_reason,
+                            "prior_child_task_id": prior_child_id,
+                            "child_task_id": str(child.id),
+                            "attempt": _child_attempt(child),
+                        }
+                    )
             if child is None:
                 if executed_steps >= max_steps:
                     return _blocked_report(
