@@ -43,6 +43,8 @@ server_pid=$!
 trap 'kill "$server_pid" 2>/dev/null || true' EXIT
 
 python - <<'PY'
+import hashlib
+import hmac
 import json
 import os
 import time
@@ -99,5 +101,27 @@ path = os.getenv(
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(receipt, handle, indent=2, sort_keys=True)
     handle.write("\n")
+
 print(f"SELDRUNE_CI_RECEIPT={path}")
+
+signing_key = os.getenv("SELDRUNE_CI_RECEIPT_HMAC_KEY")
+if signing_key:
+    canonical = json.dumps(
+        receipt,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    signature = hmac.new(
+        signing_key.encode("utf-8"),
+        canonical,
+        hashlib.sha256,
+    ).hexdigest()
+    signature_value = f"sha256={signature}"
+    signature_path = f"{path}.sig"
+    with open(signature_path, "w", encoding="utf-8") as handle:
+        handle.write(signature_value)
+        handle.write("\n")
+    print(f"SELDRUNE_CI_RECEIPT_SIGNATURE={signature_value}")
+else:
+    print("SELDRUNE_CI_RECEIPT_SIGNATURE=unsigned")
 PY
