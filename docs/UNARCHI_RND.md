@@ -1641,13 +1641,69 @@ auditable machine-control mechanism and does not establish subjective identity,
 sentience, phenomenal consciousness, qualia, or unrestricted real-world
 causation.
 
-## Next checkpoint: v0.31 renewed-degradation recovery cycle
+## v0.31 renewed-degradation recovery cycle checkpoint
 
-The next research step should define the fresh evidence cycle required after a
-v0.30 rollback review.
+UNARCHI v0.31 closes the evidence-governance gap intentionally left by v0.30
+after a second rollback caused by renewed post-reactivation degradation.
 
-The measurable target is non-reuse across repeated failures: start a new
-post-rollback watermark after renewed degradation, require a fresh recovery
-batch plus a fresh independent holdout batch, and permit another descendant
-reactivation only when neither batch reuses evidence from any earlier recovery,
-holdout, reactivation, or drift episode.
+A renewed-degradation rollback review now starts a new evidence cycle at the
+second rollback selection's decision-gate watermark. The renewed recovery
+validator admits only outcomes that:
+
+- were created after that second rollback watermark;
+- belong to the active rollback map;
+- concern the signatures that renewed degradation identified; and
+- do not reuse any outcome from earlier rollback recovery, independent holdout,
+  descendant reactivation drift, or any prior renewed cycle.
+
+Every degraded signature must reach the configured fresh sample threshold.
+Recovery is considered passed only when the new batch has positive gated-policy
+advantage and materially improves on the renewed-degradation batch. Passing
+recovery still does not authorize reactivation.
+
+A second watermark is frozen only after renewed recovery passes. The renewed
+holdout validator then accepts only later outcomes and checks that:
+
+- the holdout has no overlap with any prior episode evidence;
+- the holdout has no overlap with the renewed recovery batch;
+- every degraded signature has enough independent holdout samples;
+- holdout advantage remains positive and materially above the degraded
+  descendant; and
+- performance does not fall beyond the configured tolerated drop from renewed
+  recovery.
+
+Only `renewed_holdout_confirmed` sets
+`reactivation_allowed=true`. Normal validity-map selection consults this
+record before permitting another descendant advance after a renewed-degradation
+rollback review.
+
+The renewed recovery and holdout records persist through export/restore.
+v0.31 accepts v0.30 exports for backward-compatible state restoration while new
+snapshots identify themselves as `unarchi-v0.31`.
+
+The deterministic v0.31 benchmark requires:
+
+initial rollback recovery and holdout -> descendant reactivation -> fresh
+negative post-reactivation outcomes -> renewed degradation -> second rollback
+review -> stale earlier holdout remains blocked -> new recovery initially has
+insufficient evidence -> three later favorable recovery outcomes pass renewed
+recovery but still cannot reactivate -> a separate later holdout initially has
+insufficient evidence -> three later favorable holdout outcomes confirm the
+cycle -> earlier episode, renewed recovery, and renewed holdout outcome IDs are
+pairwise non-overlapping -> explicit descendant re-advance succeeds ->
+export/restore preserves the new cycle and active map.
+
+This remains bounded functional causal research. Fresh evidence-cycle
+governance does not establish subjective identity, sentience, phenomenal
+consciousness, qualia, or unrestricted real-world causation.
+
+## Next checkpoint: v0.32 repeated episode isolation
+
+The next research step should prevent evidence leakage when the same failure
+signature recurs across multiple complete degradation/recovery episodes.
+
+The measurable target is explicit episode identity and isolation: every new
+failure/recovery episode should carry its own immutable episode identifier,
+watermarks, recovery set, holdout set, and reactivation authorization, and no
+later episode should be able to inherit or silently reuse evidence or
+authorization from an earlier episode.
