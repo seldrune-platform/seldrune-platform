@@ -107,6 +107,15 @@ def _refresh_stale_contract_tools(
         return contract, False
 
     input_data = dict(task.input_data or {})
+    saved_profile = str(contract.get("profile") or "")
+    workstream = str(input_data.get("workstream") or "")
+    if saved_profile in {
+        "repository-engineering",
+        "deployment",
+        "external-resource",
+    } and not workstream:
+        return contract, False
+
     capabilities = input_data.get("required_capabilities")
     if not isinstance(capabilities, list):
         capabilities = []
@@ -118,7 +127,7 @@ def _refresh_stale_contract_tools(
             "id": stage_id,
             "title": task.title,
             "objective": task.objective,
-            "workstream": str(input_data.get("workstream") or ""),
+            "workstream": workstream,
             "capabilities": [
                 str(item)
                 for item in capabilities
@@ -131,6 +140,9 @@ def _refresh_stale_contract_tools(
             ),
         },
     )
+    if str(refreshed.get("profile") or "") != saved_profile:
+        return contract, False
+
     new_unavailable = _required_unavailable_step_ids(refreshed)
     if len(new_unavailable) >= len(old_unavailable):
         return contract, False
