@@ -342,3 +342,115 @@ def test_ingest_run_retrieves_receipt_before_ingestion(monkeypatch) -> None:
     assert captured["run_id"] == RUN_ID
     assert captured["receipt"] is receipt
     assert captured["signature"] == "sha256=signed"
+
+
+def test_find_exact_successful_receipt_binds_scope_and_sha(monkeypatch) -> None:
+    receipt = {
+        "version": "seldrune-ci-v1",
+        "status": "success",
+        "release_sha": SHA,
+    }
+    adapter = RailwayPortableCIProvider(token="railway-token")
+    observed = {}
+
+    def fake_query(*, query, variables):
+        observed["query"] = query
+        observed["variables"] = variables
+        return {
+            "deployments": {
+                "edges": [
+                    {
+                        "node": {
+                            "id": "other-run",
+                            "status": "SUCCESS",
+                            "createdAt": "2026-09-25T10:00:00Z",
+                            "meta": {"commitHash": "other-sha"},
+                        }
+                    },
+                    {
+                        "node": {
+                            "id": RUN_ID,
+                            "status": "SUCCESS",
+                            "createdAt": "2026-09-25T11:00:00Z",
+                            "meta": {"commitHash": SHA},
+                        }
+                    },
+                ]
+            }
+        }
+
+    monkeypatch.setattr(adapter, "_query", fake_query)
+    monkeypatch.setattr(
+        adapter,
+        "fetch_execution",
+        lambda *, run_id: {
+            "provider": "railway",
+            "run_id": run_id,
+            "status": "success",
+            "commit_sha": SHA,
+            "provider_status": "SUCCESS",
+        },
+    )
+    monkeypatch.setattr(
+        adapter,
+        "fetch_receipt_bundle",
+        lambda *, run_id: {
+            "receipt": receipt,
+            "signature": "sha256=signed",
+        },
+    )
+
+    result = adapter.find_exact_successful_receipt(
+        expected_sha=SHA,
+        project_id="project-1",
+        service_id="service-1",
+        environment_id="environment-1",
+    )
+
+    assert result["deployment_id"] == RUN_ID
+    assert result["head_sha"] == SHA
+    assert result["receipt"] is receipt
+    assert result["signature"] == "sha256=signed"
+    assert result["evidence"]["provider"] == "railway"
+    assert observed["variables"] == {
+        "input": {
+            "projectId": "project-1",
+            "serviceId": "service-1",
+            "environmentId": "environment-1",
+        },
+        "first": 50,
+    }
+
+
+def test_find_exact_successful_receipt_rejects_missing_sha_match(
+    monkeypatch,
+) -> None:
+    adapter = RailwayPortableCIProvider(token="railway-token")
+    monkeypatch.setattr(
+        adapter,
+        "_query",
+        lambda **_: {
+            "deployments": {
+                "edges": [
+                    {
+                        "node": {
+                            "id": RUN_ID,
+                            "status": "SUCCESS",
+                            "meta": {"commitHash": "different-sha"},
+                        }
+                    }
+                ]
+            }
+        },
+    )
+
+    with pytest.raises(
+        RailwayCIProviderError,
+        match="No successful Railway deployment matches expected_sha",
+    ):
+        adapter.find_exact_successful_receipt(
+            expected_sha=SHA,
+            project_id="project-1",
+            service_id="service-1",
+            environment_id="environment-1",
+        )
