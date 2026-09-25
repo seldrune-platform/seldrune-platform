@@ -275,6 +275,10 @@ def _repository_contract(
                 "receipt_required": True,
                 "output_path": "conclusion",
                 "equals": "success",
+                "external_resource_path": "failure_classification",
+                "external_resource_values": [
+                    "hosted_runner_unavailable",
+                ],
                 "pending_status_path": "status",
                 "pending_status_values": [
                     "queued",

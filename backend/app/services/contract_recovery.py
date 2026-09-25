@@ -35,6 +35,7 @@ _CONFIGURATION_PREFIXES = (
 )
 _RESOURCE_PREFIXES = (
     "execution_mode:external-resource",
+    "external_resource:",
 )
 _FAILURE_PREFIXES = (
     "model_step_failed:",

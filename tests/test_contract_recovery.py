@@ -3,12 +3,15 @@ from uuid import uuid4
 import httpx
 import pytest
 
-from backend.app.services import contract_recovery
+from backend.app.services import contract_recovery, contract_runner
 from backend.app.services.contract_recovery import (
     advance_contract_with_recovery,
     classify_contract_blocker,
 )
-from backend.app.services.external_actions import github_dispatch_workflow
+from backend.app.services.external_actions import (
+    github_dispatch_workflow,
+    github_workflow_run_status,
+)
 
 
 @pytest.mark.parametrize(
@@ -22,6 +25,7 @@ from backend.app.services.external_actions import github_dispatch_workflow
         ("blocked", "approval_required:merge-verified-pull-request", "approval"),
         ("blocked", "execution_mode:owner-gated", "approval"),
         ("blocked", "execution_mode:external-resource", "external-resource"),
+        ("blocked", "external_resource:verify-ci:runner", "external-resource"),
         ("blocked", "compiled_tools_unavailable:run-ci", "configuration"),
         ("blocked", "binding_unresolved:verify-ci:run_id", "configuration"),
         ("blocked", "acceptance_failed:verify-ci", "failed"),
@@ -36,6 +40,113 @@ def test_classify_contract_blocker(
         status=status,
         reason=reason,
     ) == classification
+
+
+def test_acceptance_maps_hosted_runner_failure_to_external_resource(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        contract_runner,
+        "_validated_tool_receipt",
+        lambda *args, **kwargs: (
+            True,
+            "verified_tool_receipt",
+            {
+                "tool_output": {
+                    "conclusion": "failure",
+                    "failure_classification": "hosted_runner_unavailable",
+                }
+            },
+        ),
+    )
+
+    state, reason, receipt = contract_runner._acceptance_state(
+        object(),
+        child=object(),
+        step={
+            "acceptance": {
+                "output_path": "conclusion",
+                "equals": "success",
+                "external_resource_path": "failure_classification",
+                "external_resource_values": ["hosted_runner_unavailable"],
+            }
+        },
+    )
+
+    assert state == "external-resource"
+    assert reason == "failure_classification:hosted_runner_unavailable"
+    assert receipt is not None
+
+
+def test_github_workflow_status_detects_pre_step_runner_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run_request = httpx.Request(
+        "GET",
+        "https://api.github.com/repos/seldrune-platform/seldrune-platform/"
+        "actions/runs/123",
+    )
+    jobs_request = httpx.Request(
+        "GET",
+        "https://api.github.com/repos/seldrune-platform/seldrune-platform/"
+        "actions/runs/123/jobs",
+    )
+    calls = 0
+
+    def fake_get(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(
+                200,
+                json={
+                    "id": 123,
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "head_sha": "abc123",
+                    "html_url": "https://github.com/actions/runs/123",
+                    "updated_at": "2099-01-01T00:00:00Z",
+                },
+                request=run_request,
+            )
+        return httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "id": 456,
+                        "status": "completed",
+                        "conclusion": "failure",
+                        "runner_id": 0,
+                        "runner_name": "",
+                        "steps": [],
+                    }
+                ]
+            },
+            request=jobs_request,
+        )
+
+    monkeypatch.setattr(
+        "backend.app.services.external_actions.httpx.get",
+        fake_get,
+    )
+
+    result = github_workflow_run_status(
+        {
+            "owner": "seldrune-platform",
+            "repo": "seldrune-platform",
+            "run_id": 123,
+        },
+        "token",
+    )
+
+    assert result["failure_classification"] == "hosted_runner_unavailable"
+    assert result["repository_steps_executed"] is False
+    assert result["conclusion"] == "failure"
+    assert result["evidence"]["receipt_id"].startswith(
+        "github-workflow-state:123:"
+    )
 
 
 def test_recovery_retries_pending_then_stops_on_verified(
