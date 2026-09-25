@@ -1697,13 +1697,59 @@ This remains bounded functional causal research. Fresh evidence-cycle
 governance does not establish subjective identity, sentience, phenomenal
 consciousness, qualia, or unrestricted real-world causation.
 
-## Next checkpoint: v0.32 repeated episode isolation
+## v0.32 repeated episode isolation checkpoint
 
-The next research step should prevent evidence leakage when the same failure
-signature recurs across multiple complete degradation/recovery episodes.
+UNARCHI v0.32 makes renewed-degradation recovery explicitly episode-aware when
+the same failure signature recurs after a previously recovered descendant is
+reactivated again.
 
-The measurable target is explicit episode identity and isolation: every new
-failure/recovery episode should carry its own immutable episode identifier,
-watermarks, recovery set, holdout set, and reactivation authorization, and no
-later episode should be able to inherit or silently reuse evidence or
-authorization from an earlier episode.
+Every post-reactivation drift watch now records an immutable episode identifier
+and the source of the holdout that authorized the active descendant. The first
+renewed episode is anchored to the original rollback holdout. After a renewed
+recovery and renewed holdout succeed, any later recurrence is anchored to that
+newest confirmed renewed holdout instead of silently falling back to the
+original authorization.
+
+Each rollback-review resolution carries the same episode identifier and
+holdout-source provenance. Renewed recovery and holdout records preserve that
+episode identity, the prior holdout source, the rollback decision-gate
+watermark, recovery outcome set, holdout watermark, holdout outcome set, and
+excluded prior outcome IDs.
+
+The isolation rule remains fail-closed:
+
+- recovery evidence must be created after the episode's rollback watermark;
+- holdout evidence must be created after that recovery's holdout watermark;
+- recovery and holdout sets must be disjoint;
+- every earlier rollback, holdout, drift, renewed recovery, and renewed holdout
+  outcome for the hypothesis is excluded from later renewed recovery;
+- reactivation authorization belongs only to the holdout produced by the same
+  episode; and
+- a later recurring failure binds to the newest confirmed renewed holdout.
+
+The deterministic v0.32 benchmark runs two complete renewed-degradation
+episodes for the same signature. Episode 1 recovers and reactivates the
+descendant. The same signature then degrades again. Episode 2 must identify
+itself as episode 2, use episode 1's renewed holdout as its baseline, reject all
+earlier evidence from its recovery and holdout batches, complete a second
+independent holdout, and only then allow another descendant advance.
+Export/restore must preserve the episode IDs, holdout-source provenance,
+evidence isolation, and active map.
+
+v0.32 accepts v0.31 and v0.30 exports for backward-compatible state restoration
+while new snapshots identify themselves as `unarchi-v0.32`.
+
+This remains bounded functional causal research. Episode-aware evidence
+governance does not establish subjective identity, sentience, phenomenal
+consciousness, qualia, or unrestricted real-world causation.
+
+## Next checkpoint: v0.33 multi-hypothesis arbitration
+
+The next research step should arbitrate multiple competing causal models with
+explicit evidence rather than allowing one active hypothesis to dominate only
+because it was evaluated first.
+
+The measurable target is evidence-grounded arbitration across competing
+hypotheses: candidate models should expose their support, contradictions,
+uncertainty, context validity, and predicted consequences before one model or a
+bounded combination is selected for downstream planning.
