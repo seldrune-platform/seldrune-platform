@@ -167,7 +167,7 @@ def _github_installation_token(
     private_key: str,
 ) -> str:
     cache_key = hashlib.sha256(
-        f"{app_id}:{installation_id}:{private_key}".encode("utf-8")
+        f"{app_id}:{installation_id}:{private_key}".encode()
     ).hexdigest()
     now = time.time()
     cached = _GITHUB_APP_TOKEN_CACHE.get(cache_key)
