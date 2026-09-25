@@ -168,14 +168,14 @@ def test_development_mission_calculates_evidence_weighted_progress() -> None:
     }
 
     assert mission["version"] == "cognitive-execution-v2"
-    assert mission["overall_percentage"] == 61.0
-    assert mission["remaining_percentage"] == 39.0
-    assert workstreams["unarchi"]["percentage"] == 75.0
+    assert mission["overall_percentage"] == 61.9
+    assert mission["remaining_percentage"] == 38.1
+    assert workstreams["unarchi"]["percentage"] == 79.0
     assert workstreams["console"]["percentage"] == 90.0
     assert workstreams["live_media"]["percentage"] == 25.0
     assert workstreams["live_media"]["paused"] is True
     assert set(mission["parallel_ready_stage_ids"]) == {
-        "unarchi_v31",
+        "unarchi_v32",
         "model_router_unified",
         "pdf_local_labels",
         "provider_connectors",
@@ -200,10 +200,10 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
     assert first.status_code == 200
     payload = first.json()
     assert payload["created"] is True
-    assert payload["overall_percentage"] == 61.0
+    assert payload["overall_percentage"] == 61.9
     assert payload["auto_queued_count"] == 4
     assert set(payload["auto_queued_stage_ids"]) == {
-        "unarchi_v31",
+        "unarchi_v32",
         "model_router_unified",
         "pdf_local_labels",
         "provider_connectors",
@@ -418,8 +418,8 @@ def test_one_go_blocks_compiled_work_before_model_without_tools(
     assert executed.status_code == 200
     report = executed.json()
     assert report["controller_version"] == "one-go-v1"
-    assert report["starting_percentage"] == 61.0
-    assert report["ending_percentage"] == 61.0
+    assert report["starting_percentage"] == 61.9
+    assert report["ending_percentage"] == 61.9
     assert report["waves_executed"] == 1
     assert report["tasks_executed"] == 0
     assert report["tasks_verified"] == 0
@@ -460,7 +460,7 @@ def test_one_go_blocks_compiled_work_before_model_without_tools(
         headers=headers,
     )
     assert mission.status_code == 200
-    assert mission.json()["overall_percentage"] == 61.0
+    assert mission.json()["overall_percentage"] == 61.9
     assert mission.json()["one_go_execution"]["tasks_verified"] == 0
 
     invocations = client.get(
