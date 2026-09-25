@@ -4,8 +4,8 @@ from backend.app.services.unarchi_benchmark import run_unarchi_ablation_benchmar
 def test_unarchi_ablation_benchmark_passes_all_scenarios() -> None:
     result = run_unarchi_ablation_benchmark()
 
-    assert result["scenario_count"] == 32
-    assert result["passed_scenarios"] == 32
+    assert result["scenario_count"] == 33
+    assert result["passed_scenarios"] == 33
     assert result["pass_rate"] == 1.0
     assert result["claims_phenomenal_consciousness"] is False
 
@@ -550,3 +550,24 @@ def test_unarchi_benchmark_covers_v031_renewed_recovery_cycle() -> None:
     assert cycle["recovery_holdout_overlap"] is False
     assert cycle["readvance_action"] == "advance"
     assert cycle["restart_preserved"] is True
+
+
+def test_unarchi_benchmark_covers_v032_repeated_episode_isolation() -> None:
+    result = run_unarchi_ablation_benchmark()
+    scenarios = {item["name"]: item for item in result["scenarios"]}
+
+    episode = scenarios["repeated_episode_isolation"]
+
+    assert episode["passed"] is True
+    assert episode["episode_one_id"] == 1
+    assert episode["episode_two_id"] == 2
+    assert episode["second_holdout_source"] == "renewed"
+    assert (
+        episode["second_holdout_validation_id"]
+        == episode["first_renewed_holdout_id"]
+    )
+    assert episode["cross_episode_overlap"] is False
+    assert episode["prior_episode_excluded"] is True
+    assert episode["recovery_holdout_overlap"] is False
+    assert episode["readvance_action"] == "advance"
+    assert episode["restart_preserved"] is True
