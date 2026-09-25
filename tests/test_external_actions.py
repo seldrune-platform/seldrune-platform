@@ -427,3 +427,78 @@ def test_portable_ci_catalog_uses_secret_backed_credential() -> None:
     assert entry["credential_env_locator"] == "SELDRUNE_CI_RECEIPT_HMAC_KEY"
     assert entry["input_schema"]["required"] == ["receipt", "signature"]
 
+
+
+
+def test_github_app_private_key_mints_installation_token(monkeypatch) -> None:
+    external_actions._GITHUB_APP_TOKEN_CACHE.clear()
+    monkeypatch.setenv("SELDRUNE_GITHUB_APP_ID", "12345")
+    monkeypatch.setenv("SELDRUNE_GITHUB_APP_INSTALLATION_ID", "777")
+    observed = {"jwt_payload": None, "requests": []}
+
+    def fake_encode(payload, private_key, algorithm):
+        observed["jwt_payload"] = payload
+        assert "BEGIN PRIVATE KEY" in private_key
+        assert algorithm == "RS256"
+        return "signed-app-jwt"
+
+    def fake_post(url, *, headers, json, timeout):
+        observed["requests"].append(
+            {"url": url, "headers": headers, "json": json}
+        )
+        if url.endswith("/app/installations/777/access_tokens"):
+            assert headers["Authorization"] == "Bearer signed-app-jwt"
+            return _response(
+                201,
+                json_data={
+                    "token": "installation-token",
+                    "expires_at": "2099-01-01T00:00:00Z",
+                },
+            )
+        assert url.endswith("/repos/acme/app/issues")
+        assert headers["Authorization"] == "Bearer installation-token"
+        return _response(
+            201,
+            json_data={
+                "id": 992,
+                "number": 8,
+                "html_url": "https://github.com/acme/app/issues/8",
+            },
+        )
+
+    monkeypatch.setattr(external_actions.jwt, "encode", fake_encode)
+    monkeypatch.setattr(external_actions.httpx, "post", fake_post)
+
+    output = external_actions.github_create_issue(
+        {
+            "owner": "acme",
+            "repo": "app",
+            "title": "App auth test",
+        },
+        "-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----",
+    )
+
+    assert output["evidence"]["receipt_id"] == "github-issue:992"
+    assert observed["jwt_payload"]["iss"] == "12345"
+    assert len(observed["requests"]) == 2
+
+
+def test_github_app_private_key_requires_installation_metadata(
+    monkeypatch,
+) -> None:
+    external_actions._GITHUB_APP_TOKEN_CACHE.clear()
+    monkeypatch.setenv("SELDRUNE_GITHUB_APP_ID", "12345")
+    monkeypatch.delenv("SELDRUNE_GITHUB_APP_INSTALLATION_ID", raising=False)
+
+    with pytest.raises(
+        ToolGatewayError,
+        match="App id and installation id are required",
+    ):
+        external_actions.github_create_issue(
+            {
+                "owner": "acme",
+                "repo": "app",
+                "title": "Missing installation",
+            },
+            "-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----",
+        )
