@@ -4,8 +4,8 @@ from backend.app.services.unarchi_benchmark import run_unarchi_ablation_benchmar
 def test_unarchi_ablation_benchmark_passes_all_scenarios() -> None:
     result = run_unarchi_ablation_benchmark()
 
-    assert result["scenario_count"] == 31
-    assert result["passed_scenarios"] == 31
+    assert result["scenario_count"] == 32
+    assert result["passed_scenarios"] == 32
     assert result["pass_rate"] == 1.0
     assert result["claims_phenomenal_consciousness"] is False
 
@@ -531,3 +531,22 @@ def test_unarchi_benchmark_covers_renewed_degradation_resolution() -> None:
     assert resolution["terminal_resolution_blocked"] is True
     assert resolution["descendant_preserved"] is True
     assert resolution["restart_preserved"] is True
+
+
+def test_unarchi_benchmark_covers_v031_renewed_recovery_cycle() -> None:
+    result = run_unarchi_ablation_benchmark()
+    scenarios = {item["name"]: item for item in result["scenarios"]}
+
+    cycle = scenarios["renewed_degradation_recovery_cycle"]
+
+    assert cycle["passed"] is True
+    assert cycle["initial_recovery_status"] == "rollback_recovery_passed"
+    assert cycle["initial_holdout_status"] == "holdout_confirmed"
+    assert cycle["renewed_recovery_status"] == "renewed_recovery_passed"
+    assert cycle["renewed_holdout_status"] == "renewed_holdout_confirmed"
+    assert cycle["stale_holdout_blocked"] is True
+    assert cycle["recovery_only_blocked"] is True
+    assert cycle["prior_evidence_reused"] is False
+    assert cycle["recovery_holdout_overlap"] is False
+    assert cycle["readvance_action"] == "advance"
+    assert cycle["restart_preserved"] is True
