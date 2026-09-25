@@ -56,8 +56,30 @@ def _render_service_id() -> str | None:
     )
 
 
+def _railway_ci_targets() -> dict[str, str | None]:
+    return {
+        "project_id": (
+            _non_empty(os.getenv("SELDRUNE_RAILWAY_CI_PROJECT_ID"))
+            or _non_empty(os.getenv("RAILWAY_PROJECT_ID"))
+        ),
+        "service_id": (
+            _non_empty(os.getenv("SELDRUNE_RAILWAY_CI_SERVICE_ID"))
+            or _non_empty(os.getenv("RAILWAY_SERVICE_ID"))
+        ),
+        "environment_id": (
+            _non_empty(os.getenv("SELDRUNE_RAILWAY_CI_ENVIRONMENT_ID"))
+            or _non_empty(os.getenv("RAILWAY_ENVIRONMENT_ID"))
+        ),
+        "token_kind": (
+            _non_empty(os.getenv("SELDRUNE_RAILWAY_TOKEN_KIND"))
+            or "account"
+        ),
+    }
+
+
 def production_runtime_targets() -> dict[str, str | None]:
     owner, repo, ref = _github_runtime_defaults()
+    railway = _railway_ci_targets()
     return {
         "github_owner": owner,
         "github_repo": repo,
@@ -66,6 +88,10 @@ def production_runtime_targets() -> dict[str, str | None]:
         "render_service_id": _render_service_id(),
         "render_external_url": _non_empty(os.getenv("RENDER_EXTERNAL_URL")),
         "render_service_name": _non_empty(os.getenv("RENDER_SERVICE_NAME")),
+        "railway_ci_project_id": railway["project_id"],
+        "railway_ci_service_id": railway["service_id"],
+        "railway_ci_environment_id": railway["environment_id"],
+        "railway_token_kind": railway["token_kind"],
     }
 
 
@@ -101,6 +127,12 @@ def external_action_input_defaults(
         service_id = _render_service_id()
         if service_id:
             defaults["service_id"] = service_id
+
+    if provider == "railway" and action == "find-portable-ci-evidence":
+        railway = _railway_ci_targets()
+        for field, value in railway.items():
+            if value:
+                defaults[field] = value
 
     return defaults
 
