@@ -10,6 +10,7 @@ _BOOTSTRAP_ENV_VARS = (
     "GITHUB_TOKEN",
     "SELDRUNE_RENDER_API_KEY",
     "RENDER_API_KEY",
+    "SELDRUNE_CI_RECEIPT_HMAC_KEY",
 )
 
 
@@ -37,7 +38,12 @@ def test_tool_bootstrap_status_reports_missing_provider_secrets(
     assert body["ready_actions"] == 0
     assert body["fully_ready"] is False
     providers = {item["provider"]: item for item in body["providers"]}
-    assert set(providers) == {"gmail", "github", "render"}
+    assert set(providers) == {
+        "gmail",
+        "github",
+        "portable-ci",
+        "render",
+    }
     assert providers["gmail"]["credential_env_locator"] == (
         "SELDRUNE_GMAIL_TOOL_CREDENTIAL"
     )
@@ -45,6 +51,9 @@ def test_tool_bootstrap_status_reports_missing_provider_secrets(
         "SELDRUNE_GITHUB_TOOL_TOKEN"
     )
     assert providers["render"]["credential_env_locator"] == "SELDRUNE_RENDER_API_KEY"
+    assert providers["portable-ci"]["credential_env_locator"] == (
+        "SELDRUNE_CI_RECEIPT_HMAC_KEY"
+    )
     assert all(item["secret_available"] is False for item in providers.values())
 
 
@@ -84,6 +93,7 @@ def test_tool_bootstrap_activates_configured_provider_idempotently(
     } <= created
     assert "SELDRUNE_GMAIL_TOOL_CREDENTIAL" in first_body["missing_env_locators"]
     assert "SELDRUNE_RENDER_API_KEY" in first_body["missing_env_locators"]
+    assert "SELDRUNE_CI_RECEIPT_HMAC_KEY" in first_body["missing_env_locators"]
     assert "github-test-token" not in str(first_body)
 
     second = client.post(url, headers=headers, json={})
