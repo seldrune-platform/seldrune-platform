@@ -9,7 +9,10 @@ from backend.app.models.agent import Agent
 from backend.app.models.life_worker_heartbeat import LifeWorkerHeartbeat
 from backend.app.models.security_event import SecurityEvent
 from backend.app.models.task import Task
-from backend.app.services.model_provider_registry import model_provider_statuses
+from backend.app.services.model_provider_registry import (
+    configured_model_provider_vaults,
+    model_provider_statuses,
+)
 
 
 _TERMINAL_TASK_STATUSES = {"completed", "succeeded", "failed", "cancelled", "canceled"}
@@ -142,5 +145,11 @@ def build_system_sense_snapshot(
             "by_severity": open_security,
         },
         "life_worker": worker,
-        "model_providers": model_provider_statuses(settings),
+        "model_providers": model_provider_statuses(
+            settings,
+            vault_configured=configured_model_provider_vaults(
+                session,
+                organization_id=organization_id,
+            ),
+        ),
     }
