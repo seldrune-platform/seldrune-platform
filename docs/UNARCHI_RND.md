@@ -1933,8 +1933,53 @@ This is bounded functional memory engineering. Persistent retrieval does not
 establish subjective identity, sentience, phenomenal consciousness, qualia, or
 unrestricted real-world autonomy.
 
-## Next checkpoint: v0.37 controlled environment interaction
+## v0.37 controlled environment interaction checkpoint
 
-The next research step should feed verified tool outcomes back into the
-cognitive state while preserving governance, budget, provenance, and
-reversibility boundaries.
+UNARCHI v0.37 adds a bounded feedback boundary between governed tool execution
+and the cognitive research kernel. Tool calls are still executed and approved
+by the existing tool gateway; this checkpoint only defines how a terminal,
+verified outcome may be learned after execution.
+
+The feedback path is fail-closed. A tool outcome cannot affect cognitive state
+unless it is explicitly marked verified and carries at least one provenance
+reference. Required context includes the tool identity, action, goal,
+controlled-environment signature, observation, terminal outcome, success
+status, and evidence references.
+
+A verified outcome produces three linked effects:
+
+- the existing learning rule updates prediction error and bounded internal
+  control state from the measured success/failure;
+- a provenance-backed persistent-memory record stores the verified outcome for
+  later retrieval; and
+- an immutable verified-tool-outcome record links the tool evidence to the
+  persistent-memory identifier and experience counter.
+
+Feedback retries are idempotent. Replaying the same evidence set for the same
+tool and action returns the existing integration record and does not increment
+experience count or learn the outcome twice. Unverified feedback and
+provenance-free feedback leave cognitive state unchanged.
+
+The deterministic v0.37 benchmark requires:
+
+unverified tool narrative -> rejected without state mutation -> verified
+successful tool receipt -> agency/prediction state updates and durable memory is
+created -> exact evidence replay in a different order -> no duplicate learning
+-> separate verified failure -> stress/prediction error update -> export/restore
+preserves both tool-outcome records and retrieves the same evidence-backed
+memory.
+
+v0.37 accepts v0.36, v0.35, v0.34, v0.33, v0.32, v0.31 and v0.30 exports for
+backward-compatible state restoration while new snapshots identify themselves
+as `unarchi-v0.37`.
+
+This is bounded functional interaction research. Verified tool feedback does
+not bypass approval, budget, credential, evidence, or execution governance and
+does not establish subjective identity, sentience, phenomenal consciousness,
+qualia, or unrestricted real-world autonomy.
+
+## Next checkpoint: v0.38 multimodal observations
+
+The next research step should normalize image, audio, video, documents, and
+structured data into provenance-preserving evidence before those observations
+can influence the cognitive state.

@@ -167,7 +167,7 @@ def test_snapshot_never_claims_phenomenal_consciousness() -> None:
     snapshot = engine.snapshot()
 
     assert snapshot["claims_phenomenal_consciousness"] is False
-    assert snapshot["version"] == "unarchi-v0.36"
+    assert snapshot["version"] == "unarchi-v0.37"
 
 
 def test_export_restore_preserves_identity_state_and_memory() -> None:
@@ -5692,7 +5692,7 @@ def test_v033_arbitration_survives_export_restore() -> None:
     )
     restored = UnarchiEngine.from_export(engine.export_state())
 
-    assert restored.snapshot()["version"] == "unarchi-v0.36"
+    assert restored.snapshot()["version"] == "unarchi-v0.37"
     assert restored.causal_hypothesis_arbitrations == engine.causal_hypothesis_arbitrations
     assert restored.causal_hypothesis_arbitrations[-1].id == arbitration.id
     assert restored.snapshot()["causal_hypothesis_arbitration_count"] == 1
@@ -5936,7 +5936,7 @@ def test_v034_hierarchical_planning_survives_export_restore() -> None:
 
     restored = UnarchiEngine.from_export(engine.export_state())
 
-    assert restored.snapshot()["version"] == "unarchi-v0.36"
+    assert restored.snapshot()["version"] == "unarchi-v0.37"
     assert restored.hierarchical_plans == engine.hierarchical_plans
     assert restored.hierarchical_plan_nodes == engine.hierarchical_plan_nodes
     assert restored.hierarchical_plan_checkpoints == engine.hierarchical_plan_checkpoints
@@ -6051,7 +6051,7 @@ def test_v035_budget_violations_fail_closed_and_persist() -> None:
         "money,compute,latency,risk,uncertainty"
     )
     assert "over-budget" not in decision.feasible_names
-    assert restored.snapshot()["version"] == "unarchi-v0.36"
+    assert restored.snapshot()["version"] == "unarchi-v0.37"
     assert restored.snapshot()["resource_aware_decision_count"] == 1
     assert restored.resource_aware_decisions == engine.resource_aware_decisions
 
@@ -6099,7 +6099,7 @@ def test_v036_persistent_memory_survives_working_memory_overflow_and_restart() -
         "schema rollback receipt 0052"
     )
 
-    assert restored.snapshot()["version"] == "unarchi-v0.36"
+    assert restored.snapshot()["version"] == "unarchi-v0.37"
     assert restored_hits
     assert restored_hits[0].record_id == durable.id
     assert restored.persistent_memory[0].source_refs == durable.source_refs
@@ -6203,3 +6203,124 @@ def test_v036_persistent_memory_requires_provenance_and_accepts_v035_exports() -
 
     assert restored.persistent_memory[0].id == record.id
     assert restored.persistent_memory[0].source_refs == ("evidence:v036",)
+
+
+
+def test_v037_verified_tool_feedback_is_fail_closed_idempotent_and_persistent() -> None:
+    engine = UnarchiEngine()
+    before = engine.state
+
+    try:
+        engine.ingest_verified_tool_outcome(
+            tool_name="release-checker",
+            action="verify",
+            goal="use verified evidence only",
+            environment_signature="staging:v037",
+            observation="candidate produced an unverified narrative",
+            outcome="claimed success",
+            success=True,
+            evidence_refs=("tool_run:unverified",),
+            verified=False,
+        )
+    except ValueError as exc:
+        assert "verified" in str(exc)
+    else:
+        raise AssertionError("unverified tool outcome changed cognitive state")
+
+    assert engine.state == before
+    assert engine.verified_tool_outcomes == []
+
+    integrated = engine.ingest_verified_tool_outcome(
+        tool_name="release-checker",
+        action="verify",
+        goal="use verified evidence only",
+        environment_signature="staging:v037",
+        observation="candidate passed controlled checks",
+        outcome="signed receipt confirms readiness",
+        success=True,
+        evidence_refs=("tool_run:v037:1", "audit:v037:1", "receipt:v037:1"),
+        verified=True,
+        reward=0.7,
+        predicted_success=0.3,
+    )
+    learned_experience_count = engine.state.experience_count
+
+    replay = engine.ingest_verified_tool_outcome(
+        tool_name="release-checker",
+        action="verify",
+        goal="use verified evidence only",
+        environment_signature="staging:v037",
+        observation="candidate passed controlled checks",
+        outcome="signed receipt confirms readiness",
+        success=True,
+        evidence_refs=("receipt:v037:1", "tool_run:v037:1", "audit:v037:1"),
+        verified=True,
+        reward=0.7,
+        predicted_success=0.3,
+    )
+
+    assert replay.id == integrated.id
+    assert engine.state.experience_count == learned_experience_count
+    assert len(engine.verified_tool_outcomes) == 1
+    assert engine.state.agency > before.agency
+    assert integrated.prediction_error > 0.0
+
+    memory = next(
+        item
+        for item in engine.persistent_memory
+        if item.id == integrated.persistent_memory_id
+    )
+    assert memory.kind == "verified_tool_outcome"
+    assert memory.source_refs == (
+        "tool_run:v037:1",
+        "audit:v037:1",
+        "receipt:v037:1",
+    )
+
+    restored = UnarchiEngine.from_export(engine.export_state())
+
+    assert restored.snapshot()["version"] == "unarchi-v0.37"
+    assert restored.snapshot()["verified_tool_outcome_count"] == 1
+    assert restored.verified_tool_outcomes == engine.verified_tool_outcomes
+    assert restored.state == engine.state
+
+
+def test_v037_verified_tool_failure_increases_prediction_error_and_requires_provenance() -> None:
+    engine = UnarchiEngine()
+
+    try:
+        engine.ingest_verified_tool_outcome(
+            tool_name="schema-checker",
+            action="validate",
+            goal="protect release readiness",
+            environment_signature="staging:schema",
+            observation="schema candidate checked",
+            outcome="validation failed",
+            success=False,
+            evidence_refs=(),
+            verified=True,
+            predicted_success=0.9,
+        )
+    except ValueError as exc:
+        assert "provenance" in str(exc)
+    else:
+        raise AssertionError("verified tool outcome accepted without provenance")
+
+    failure = engine.ingest_verified_tool_outcome(
+        tool_name="schema-checker",
+        action="validate",
+        goal="protect release readiness",
+        environment_signature="staging:schema",
+        observation="schema candidate checked",
+        outcome="verified schema check failed",
+        success=False,
+        evidence_refs=("tool_run:schema:1", "audit:schema:1"),
+        verified=True,
+        reward=-0.8,
+        predicted_success=0.9,
+    )
+
+    assert failure.success is False
+    assert failure.prediction_error == 0.9
+    assert engine.state.stress > 0.0
+    assert engine.state.experience_count == 1

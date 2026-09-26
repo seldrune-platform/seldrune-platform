@@ -6,7 +6,7 @@ from typing import Any
 from backend.app.services.unarchi_engine import UnarchiEngine
 
 
-BENCHMARK_VERSION = "unarchi-ablation-v0.36"
+BENCHMARK_VERSION = "unarchi-ablation-v0.37"
 
 
 def _failure_sensitization() -> dict[str, Any]:
@@ -5067,6 +5067,123 @@ def _persistent_memory_retrieval_consolidation() -> dict[str, Any]:
         ),
     }
 
+
+def _verified_tool_outcome_feedback() -> dict[str, Any]:
+    engine = UnarchiEngine()
+    before = engine.state
+
+    unverified_rejected = False
+    try:
+        engine.ingest_verified_tool_outcome(
+            tool_name="release-checker",
+            action="verify release",
+            goal="learn only from verified release evidence",
+            environment_signature="staging:release-beta",
+            observation="release beta candidate is ready for verification",
+            outcome="unverified narrative result",
+            success=True,
+            evidence_refs=("tool_run:unverified",),
+            verified=False,
+            reward=0.8,
+            predicted_success=0.4,
+        )
+    except ValueError:
+        unverified_rejected = True
+
+    success = engine.ingest_verified_tool_outcome(
+        tool_name="release-checker",
+        action="verify release",
+        goal="learn only from verified release evidence",
+        environment_signature="staging:release-beta",
+        observation="release beta candidate passed repository and readiness checks",
+        outcome="signed release beta receipt confirms readiness",
+        success=True,
+        evidence_refs=("tool_run:beta:1", "audit:beta:1", "receipt:beta:signed"),
+        verified=True,
+        reward=0.8,
+        predicted_success=0.35,
+    )
+    after_success = engine.state
+    experience_after_success = engine.state.experience_count
+
+    duplicate = engine.ingest_verified_tool_outcome(
+        tool_name="release-checker",
+        action="verify release",
+        goal="learn only from verified release evidence",
+        environment_signature="staging:release-beta",
+        observation="release beta candidate passed repository and readiness checks",
+        outcome="signed release beta receipt confirms readiness",
+        success=True,
+        evidence_refs=("audit:beta:1", "receipt:beta:signed", "tool_run:beta:1"),
+        verified=True,
+        reward=0.8,
+        predicted_success=0.35,
+    )
+    duplicate_idempotent = (
+        duplicate.id == success.id
+        and engine.state.experience_count == experience_after_success
+    )
+
+    failure = engine.ingest_verified_tool_outcome(
+        tool_name="release-checker",
+        action="verify release",
+        goal="learn only from verified release evidence",
+        environment_signature="staging:release-gamma",
+        observation="release gamma candidate entered controlled verification",
+        outcome="schema readiness check failed with a verified receipt",
+        success=False,
+        evidence_refs=("tool_run:gamma:1", "audit:gamma:1", "receipt:gamma:failed"),
+        verified=True,
+        reward=-0.8,
+        predicted_success=0.85,
+    )
+    after_failure = engine.state
+    hits = engine.retrieve_persistent_memory(
+        "release beta signed readiness receipt",
+        limit=5,
+    )
+    restored = UnarchiEngine.from_export(engine.export_state())
+    restored_hits = restored.retrieve_persistent_memory(
+        "release beta signed readiness receipt",
+        limit=5,
+    )
+
+    return {
+        "name": "verified_tool_outcome_feedback",
+        "expected_direction": (
+            "only verified provenance-backed tool outcomes alter state, retries "
+            "are idempotent, and learned outcomes persist across restart"
+        ),
+        "passed": (
+            unverified_rejected
+            and before.experience_count == 0
+            and after_success.agency > before.agency
+            and failure.id != success.id
+            and after_failure.stress > after_success.stress
+            and duplicate_idempotent
+            and len(engine.verified_tool_outcomes) == 2
+            and bool(hits)
+            and hits[0].kind == "verified_tool_outcome"
+            and success.persistent_memory_id
+            in {item.record_id for item in hits}
+            and restored.verified_tool_outcomes == engine.verified_tool_outcomes
+            and restored.snapshot()["verified_tool_outcome_count"] == 2
+            and bool(restored_hits)
+            and restored_hits[0].kind == "verified_tool_outcome"
+        ),
+        "unverified_rejected": unverified_rejected,
+        "duplicate_idempotent": duplicate_idempotent,
+        "verified_outcome_count": len(engine.verified_tool_outcomes),
+        "success_experience_count": success.experience_count,
+        "failure_experience_count": failure.experience_count,
+        "success_memory_id": success.persistent_memory_id,
+        "top_retrieval_memory_id": hits[0].record_id if hits else None,
+        "restart_preserved": (
+            restored.verified_tool_outcomes == engine.verified_tool_outcomes
+            and restored.snapshot()["verified_tool_outcome_count"] == 2
+        ),
+    }
+
 def run_unarchi_ablation_benchmark() -> dict[str, Any]:
     scenarios = [
         _failure_sensitization(),
@@ -5106,6 +5223,7 @@ def run_unarchi_ablation_benchmark() -> dict[str, Any]:
         _hierarchical_long_horizon_planning(),
         _resource_aware_cognition(),
         _persistent_memory_retrieval_consolidation(),
+        _verified_tool_outcome_feedback(),
     ]
     passed = sum(bool(item["passed"]) for item in scenarios)
     return {

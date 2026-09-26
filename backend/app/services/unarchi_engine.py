@@ -6,8 +6,9 @@ import re
 from typing import Any
 
 
-UNARCHI_VERSION = "unarchi-v0.36"
+UNARCHI_VERSION = "unarchi-v0.37"
 _LEGACY_UNARCHI_VERSIONS = {
+    "unarchi-v0.36",
     "unarchi-v0.35",
     "unarchi-v0.34",
     "unarchi-v0.33",
@@ -136,6 +137,28 @@ class PersistentMemoryHit:
     importance: float
     freshness: float
     source_refs: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class VerifiedToolOutcome:
+    id: int
+    tool_name: str
+    action: str
+    goal: str
+    environment_signature: str
+    observation: str
+    outcome: str
+    success: bool
+    reward: float
+    predicted_success: float
+    prediction_error: float
+    evidence_refs: tuple[str, ...]
+    persistent_memory_id: int
+    experience_count: int
+    status: str = "integrated"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -1134,7 +1157,7 @@ class UnarchiEngine:
     """
     CPU-only experimental cognitive kernel.
 
-    v0.36 includes causal internal dynamics, bounded endogenous goals, a
+    v0.37 includes causal internal dynamics, bounded endogenous goals, a
     calibrated predictive self-model, prospective memory, evidence-grounded
     metacognition, explicit value arbitration, competing causal hypotheses,
     controlled self-intervention trials, a bounded recurrent global workspace,
@@ -1164,7 +1187,10 @@ class UnarchiEngine:
     plus resource-aware plan selection that treats money, compute, latency, risk,
     uncertainty, information gain, and reliability as explicit bounded variables,
     plus provenance-preserving persistent memory with deterministic retrieval,
-    consolidation, freshness-aware ranking, and bounded forgetting.
+    consolidation, freshness-aware ranking, and bounded forgetting, plus a
+    fail-closed controlled-environment feedback loop that lets verified,
+    provenance-backed tool outcomes update cognitive state without bypassing
+    tool governance or learning the same evidence twice.
     """
 
     state: UnarchiState = field(default_factory=UnarchiState)
@@ -1173,6 +1199,9 @@ class UnarchiEngine:
     next_persistent_memory_id: int = 1
     max_persistent_memory: int = 1024
     max_active_persistent_memories: int = 256
+    verified_tool_outcomes: list[VerifiedToolOutcome] = field(default_factory=list)
+    next_verified_tool_outcome_id: int = 1
+    max_verified_tool_outcomes: int = 256
     observation_history: list[str] = field(default_factory=list)
     internal_goals: list[InternalGoal] = field(default_factory=list)
     next_internal_goal_id: int = 1
@@ -1580,6 +1609,124 @@ class UnarchiEngine:
         self.next_persistent_memory_id += 1
         self.persistent_memory.append(record)
         self.prune_persistent_memory()
+        return record
+
+    def ingest_verified_tool_outcome(
+        self,
+        *,
+        tool_name: str,
+        action: str,
+        goal: str,
+        environment_signature: str,
+        observation: str,
+        outcome: str,
+        success: bool,
+        evidence_refs: tuple[str, ...],
+        verified: bool,
+        reward: float = 0.0,
+        predicted_success: float = 0.5,
+        importance: float = 0.80,
+    ) -> VerifiedToolOutcome:
+        """
+        Feed a completed, verified tool outcome back into cognition.
+
+        This method is deliberately fail-closed: unverified outcomes or outcomes
+        without provenance never change state. Replaying the same evidence for
+        the same tool/action is idempotent so retries cannot double-train the
+        cognitive state.
+        """
+        if not verified:
+            raise ValueError("tool outcome must be verified before cognitive feedback")
+
+        clean_tool = tool_name.strip()
+        clean_action = action.strip()
+        clean_goal = goal.strip()
+        clean_environment = environment_signature.strip()
+        clean_observation = observation.strip()
+        clean_outcome = outcome.strip()
+        refs = tuple(
+            dict.fromkeys(
+                str(ref).strip()[:300]
+                for ref in evidence_refs
+                if str(ref).strip()
+            )
+        )
+        if not clean_tool:
+            raise ValueError("verified tool outcome requires tool_name")
+        if not clean_action:
+            raise ValueError("verified tool outcome requires action")
+        if not clean_goal:
+            raise ValueError("verified tool outcome requires goal")
+        if not clean_environment:
+            raise ValueError("verified tool outcome requires environment_signature")
+        if not clean_observation:
+            raise ValueError("verified tool outcome requires observation")
+        if not clean_outcome:
+            raise ValueError("verified tool outcome requires outcome")
+        if not refs:
+            raise ValueError("verified tool outcome requires provenance evidence_refs")
+
+        ref_set = frozenset(refs)
+        for item in self.verified_tool_outcomes:
+            if (
+                item.tool_name == clean_tool
+                and item.action == clean_action
+                and frozenset(item.evidence_refs) == ref_set
+            ):
+                return item
+
+        controlled_observation = (
+            f"tool={clean_tool}; environment={clean_environment}; "
+            f"observation={clean_observation}"
+        )
+        bounded_reward = max(-1.0, min(1.0, float(reward)))
+        bounded_prediction = _clamp(float(predicted_success))
+        self.learn(
+            observation=controlled_observation,
+            goal=clean_goal,
+            action=f"{clean_tool}:{clean_action}",
+            outcome=clean_outcome,
+            success=bool(success),
+            reward=bounded_reward,
+            predicted_success=bounded_prediction,
+        )
+        self.observation_history.append(controlled_observation)
+        if len(self.observation_history) > self.max_memory:
+            self.observation_history = self.observation_history[-self.max_memory:]
+
+        memory_record = self.remember_persistent_memory(
+            content=(
+                f"Verified tool outcome: {clean_tool} {clean_action} in "
+                f"{clean_environment}. Observation: {clean_observation}. "
+                f"Outcome: {clean_outcome}."
+            ),
+            source_refs=refs,
+            kind="verified_tool_outcome",
+            confidence=1.0,
+            importance=_clamp(float(importance)),
+        )
+        record = VerifiedToolOutcome(
+            id=self.next_verified_tool_outcome_id,
+            tool_name=clean_tool[:160],
+            action=clean_action[:300],
+            goal=clean_goal[:1000],
+            environment_signature=clean_environment[:500],
+            observation=clean_observation[:2000],
+            outcome=clean_outcome[:2000],
+            success=bool(success),
+            reward=bounded_reward,
+            predicted_success=bounded_prediction,
+            prediction_error=self.state.prediction_error,
+            evidence_refs=refs,
+            persistent_memory_id=memory_record.id,
+            experience_count=self.state.experience_count,
+        )
+        self.next_verified_tool_outcome_id += 1
+        self.verified_tool_outcomes.append(record)
+        if len(self.verified_tool_outcomes) > self.max_verified_tool_outcomes:
+            self.verified_tool_outcomes = self.verified_tool_outcomes[
+                -self.max_verified_tool_outcomes:
+            ]
         return record
 
     def _novelty(self, observation: str) -> float:
@@ -10922,6 +11069,11 @@ class UnarchiEngine:
             "next_persistent_memory_id": self.next_persistent_memory_id,
             "max_persistent_memory": self.max_persistent_memory,
             "max_active_persistent_memories": self.max_active_persistent_memories,
+            "verified_tool_outcomes": [
+                item.to_dict() for item in self.verified_tool_outcomes
+            ],
+            "next_verified_tool_outcome_id": self.next_verified_tool_outcome_id,
+            "max_verified_tool_outcomes": self.max_verified_tool_outcomes,
             "observation_history": list(self.observation_history),
             "internal_goals": [item.to_dict() for item in self.internal_goals],
             "next_internal_goal_id": self.next_internal_goal_id,
@@ -11172,6 +11324,7 @@ class UnarchiEngine:
         state_payload = payload.get("state")
         memory_payload = payload.get("memory")
         persistent_memory_payload = payload.get("persistent_memory", [])
+        verified_tool_outcomes_payload = payload.get("verified_tool_outcomes", [])
         history_payload = payload.get("observation_history")
         goals_payload = payload.get("internal_goals", [])
         predictions_payload = payload.get("predictions", [])
@@ -11442,6 +11595,18 @@ class UnarchiEngine:
             persistent_memory.append(
                 PersistentMemoryRecord(**restored_item)
             )
+
+        if not isinstance(verified_tool_outcomes_payload, list):
+            raise ValueError("invalid UNARCHI verified tool outcomes")
+        verified_tool_outcomes: list[VerifiedToolOutcome] = []
+        for item in verified_tool_outcomes_payload:
+            if not isinstance(item, dict):
+                raise ValueError("invalid UNARCHI verified tool outcome")
+            restored_item = dict(item)
+            restored_item["evidence_refs"] = tuple(
+                restored_item.get("evidence_refs", ())
+            )
+            verified_tool_outcomes.append(VerifiedToolOutcome(**restored_item))
 
         internal_goals: list[InternalGoal] = []
         for item in goals_payload:
@@ -12168,6 +12333,10 @@ class UnarchiEngine:
                 max_persistent_memory,
             ),
         )
+        max_verified_tool_outcomes = max(
+            8,
+            min(int(payload.get("max_verified_tool_outcomes") or 256), 4096),
+        )
         max_active = max(
             1,
             min(int(payload.get("max_active_internal_goals") or 3), 10),
@@ -12182,6 +12351,14 @@ class UnarchiEngine:
             ),
             max_persistent_memory=max_persistent_memory,
             max_active_persistent_memories=max_active_persistent_memories,
+            verified_tool_outcomes=verified_tool_outcomes[
+                -max_verified_tool_outcomes:
+            ],
+            next_verified_tool_outcome_id=max(
+                int(payload.get("next_verified_tool_outcome_id") or 1),
+                max((item.id for item in verified_tool_outcomes), default=0) + 1,
+            ),
+            max_verified_tool_outcomes=max_verified_tool_outcomes,
             observation_history=[str(item) for item in history_payload][-max_memory:],
             internal_goals=internal_goals[-max_memory:],
             next_internal_goal_id=max(
@@ -12710,6 +12887,7 @@ class UnarchiEngine:
                     if item.status == "forgotten"
                 ]
             ),
+            "verified_tool_outcome_count": len(self.verified_tool_outcomes),
             "observation_history_size": len(self.observation_history),
             "active_internal_goals": len(self.active_internal_goals()),
             "total_internal_goals": len(self.internal_goals),
