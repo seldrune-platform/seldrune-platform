@@ -7,6 +7,7 @@
     ["operations", "MISSIONS", "⌘"],
     ["media", "MEDIA", "◉"],
     ["intelligence", "SYSTEM", "⚙"],
+    ["sense", "SENSE", "◉"],
   ];
 
   const DESCRIPTIONS = {
@@ -17,6 +18,7 @@
     operations: "Track Seldrune self-development, agent work, and verified execution.",
     media: "Create and inspect Seldrune Face and LiveShift workspaces.",
     intelligence: "Connected tools, agents, owner decisions, budgets, evidence, and settings.",
+    sense: "Always-on internal health signals and owner-controlled continuity preferences.",
   };
 
   function initOwnerPortal() {
@@ -110,6 +112,12 @@
               data-open-portal="operator" data-depth="1.05">
         <span class="portal-quick-icon">✦</span>
         <span><strong>SELDRUNE AI</strong><small>Ask, create, and build</small></span>
+        <b>→</b>
+      </button>
+      <button class="portal-quick-card portal-quick-sense" type="button"
+              data-open-portal="sense" data-depth="1.2">
+        <span class="portal-quick-icon">◉</span>
+        <span><strong>SYSTEM SENSE</strong><small>Live health and owner continuity</small></span>
         <b>→</b>
       </button>
 
