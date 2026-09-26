@@ -15,6 +15,7 @@ from backend.app.api.routes.email_verification import router as email_verificati
 from backend.app.api.routes.executive_brief import router as executive_brief_router
 from backend.app.api.routes.knowledge import router as knowledge_router
 from backend.app.api.routes.life import router as life_router
+from backend.app.api.routes.mail import page_router as mail_page_router, router as mail_router
 from backend.app.api.routes.liveshift_face import router as liveshift_face_router
 from backend.app.api.routes.membership_admin import router as membership_admin_router
 from backend.app.api.routes.model_provider_connections import (
@@ -52,7 +53,9 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.enable_docs else None,
     )
     app.include_router(console_router)
+    app.include_router(mail_page_router)
     app.mount("/console-assets", StaticFiles(directory=WEB_ROOT), name="console-assets")
+    app.mount("/mail-assets", StaticFiles(directory=WEB_ROOT), name="mail-assets")
     for item in (
         status_router,
         aetherion_router,
@@ -76,6 +79,7 @@ def create_app() -> FastAPI:
         model_provider_connections_router,
         knowledge_router,
         life_router,
+        mail_router,
         liveshift_face_router,
         secret_references_router,
         security_events_router,
