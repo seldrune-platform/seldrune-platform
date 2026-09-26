@@ -72,6 +72,7 @@ async function establishSession() {
 async function loadWorkspace() {
   state.workspace = await request(orgPath("/workspace"));
   $("#provider-state").textContent = state.workspace.delivery.ready ? "Mail host connected" : "Host setup needed";
+  $("#compose-open").disabled = !state.workspace.mailboxes.some(item => item.access === "owner" || item.access === "write");
   renderMailboxSidebar();
   renderCurrentView();
 }
@@ -273,6 +274,7 @@ async function renderDrafts(root) {
   compose.type = "button";
   compose.className = "primary";
   compose.textContent = "New draft";
+  compose.disabled = !canWriteMailbox(state.mailboxId);
   compose.addEventListener("click", () => openCompose());
   intro.append(copy, compose);
   root.append(intro);
@@ -591,10 +593,17 @@ function splitEmails(value) {
   return value.split(/[;,]/).map(item => item.trim()).filter(Boolean);
 }
 
+function canWriteMailbox(mailboxId) {
+  const mailbox = state.workspace.mailboxes.find(item => item.id === mailboxId);
+  return Boolean(mailbox && (mailbox.access === "owner" || mailbox.access === "write"));
+}
+
 function openCompose(draft) {
+  const mailboxId = draft ? state.mailboxId : state.mailboxId;
+  const readOnly = !canWriteMailbox(mailboxId);
   const dialog = $("#compose-dialog");
-  state.editingDraftId = draft ? draft.id : "";
-  $("#compose-title").textContent = draft ? "Edit draft" : "New message";
+  state.editingDraftId = draft && !readOnly ? draft.id : "";
+  $("#compose-title").textContent = readOnly ? "View draft" : draft ? "Edit draft" : "New message";
   const mailboxSelect = $("#compose-mailbox");
   mailboxSelect.replaceChildren();
   state.workspace.mailboxes.filter(item => item.access === "owner" || item.access === "write").forEach(item => {
@@ -609,6 +618,10 @@ function openCompose(draft) {
   $("#compose-bcc").value = draft ? (draft.bcc || []).join(", ") : "";
   $("#compose-subject").value = draft ? draft.subject || "" : "";
   $("#compose-body").value = draft ? draft.body || "" : "";
+  ["#compose-mailbox","#compose-to","#compose-cc","#compose-bcc","#compose-subject","#compose-body"].forEach(selector => {
+    $(selector).disabled = readOnly;
+  });
+  $("#compose-form button[type=submit]").disabled = readOnly;
   if (typeof dialog.showModal === "function") dialog.showModal();
   else dialog.setAttribute("open", "");
 }
@@ -618,6 +631,10 @@ function closeCompose() {
   if (typeof dialog.close === "function") dialog.close();
   else dialog.removeAttribute("open");
   $("#compose-form").reset();
+  ["#compose-mailbox","#compose-to","#compose-cc","#compose-bcc","#compose-subject","#compose-body"].forEach(selector => {
+    $(selector).disabled = false;
+  });
+  $("#compose-form button[type=submit]").disabled = false;
   state.editingDraftId = "";
 }
 
