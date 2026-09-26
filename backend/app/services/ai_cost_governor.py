@@ -19,6 +19,9 @@ MODEL_PRICES: dict[str, ModelPrice] = {
     "gpt-5.6-terra": ModelPrice(2.00, 0.20, 2.50, 12.00),
     "gpt-5.6-sol": ModelPrice(4.00, 0.40, 5.00, 20.00),
     "gpt-5.6": ModelPrice(4.00, 0.40, 5.00, 20.00),
+    # Conservative estimates use Gemini 3.8 Flash announced 2027 rates.
+    "gemini-3.8-flash": ModelPrice(1.50, 0.15, 1.50, 7.50),
+    "claude-sonnet-4-6": ModelPrice(3.00, 0.30, 6.00, 15.00),
 }
 
 
