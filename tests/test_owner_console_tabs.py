@@ -15,6 +15,7 @@ def test_owner_console_uses_single_owner_portal_shell():
     assert "/console-assets/seldrune-gpt-studio.css" in html
     assert "/console-assets/console-nexus-arena.css" in html
     assert "/console-assets/console-nexus-arena.js" in html
+    assert "/console-assets/console-connections.js" in html
 
     # Engineering/version presentation layers stay out of the normal owner portal.
     assert "/console-assets/console-xenobiotic.css" not in html
@@ -68,6 +69,7 @@ def test_portal_controller_defines_owner_workspaces_and_fixed_home():
         "operations",
         "media",
         "intelligence",
+        "connections",
         "sense",
     ):
         assert f'["{workspace}",' in js
@@ -77,7 +79,7 @@ def test_portal_controller_defines_owner_workspaces_and_fixed_home():
     assert "Ask Seldrune" in js
     for label in (
         "NEXUS", "SELDRUNE AI", "OUTPUTS", "CODING LAB",
-        "MISSIONS", "MEDIA", "SYSTEM", "SENSE",
+        "MISSIONS", "MEDIA", "SYSTEM", "CONNECT", "SENSE",
     ):
         assert label in js
     assert 'move("#seldrune-gpt", "operator")' in js
@@ -87,6 +89,9 @@ def test_portal_controller_defines_owner_workspaces_and_fixed_home():
     assert 'move("#sti-runtime", "operations")' in js
     assert 'move("#face-v01-mission", "media")' in js
     assert 'move("#tool-control", "intelligence")' in js
+    assert 'move("#tool-provider-readiness", "connections")' in js
+    assert 'move("#tool-provider-preflight-results", "connections")' in js
+    assert 'move(".provider-vault-card", "connections")' in js
     assert 'grid("outputs")?.append(outputLibrary)' in js
     assert 'grid("coding")?.append(codingLab)' in js
     assert 'aria-labelledby", button.id' in js
@@ -232,3 +237,29 @@ def test_sense_console_is_owner_only_surface_and_provider_status_is_truthful():
     assert 'api("/sense/owner-continuity")' in script
     assert "checked on request" in script
     assert "To clear it, empty the field and save." in script
+
+
+def test_connections_workspace_unifies_verified_services_and_ai_keys():
+    html = (WEB / "index.html").read_text()
+    script = (WEB / "console-connections.js").read_text()
+    styles = (WEB / "console-cosmic-tabs.css").read_text()
+    portal = (WEB / "console-cosmic-tabs.js").read_text()
+
+    assert "/console-assets/console-connections.js" in html
+    assert "GitHub token/App credential" in html
+    assert "Google OAuth access token" in html
+    assert "Never enter an account password." in html
+    assert "SELDRUNE CONNECTION CENTER" in script
+    assert "OpenAI API" in script
+    assert "Google Gemini API" in script
+    assert "Anthropic API" in script
+    assert "read-only model-list request before saving" in script
+    assert "Never enter your account password." in script
+    assert 'type="password"' in script
+    assert "autocomplete" in script
+    assert "secret_value: secret" in script
+    assert "model-provider-connections" in script
+    assert "Keys are encrypted in the organization vault" in script
+    assert 'data-open-portal="connections"' in portal
+    assert "#portal-panel-connections .owner-portal-grid" in styles
+    assert ".model-provider-connection-list" in styles
