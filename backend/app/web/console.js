@@ -589,21 +589,6 @@ $('#policy-form').onsubmit = async event => {
   }
 };
 
-$('#command-form').onsubmit = async event => {
-  event.preventDefault();
-  try {
-    await api('/owner-commands', {
-      method: 'POST',
-      body: JSON.stringify({objective: $('#objective').value}),
-    });
-    $('#objective').value = '';
-    toast('Governed plan created');
-    load();
-  } catch (error) {
-    toast(error.message);
-  }
-};
-
 function metric(label, value) {
   const item = document.createElement('div');
   item.className = 'result-metric';
@@ -883,3 +868,4 @@ $('#command-list').onclick = async event => {
 
 $('#brief .close').onclick = () => $('#brief').close();
 initializeAuth();
+

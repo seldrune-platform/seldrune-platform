@@ -8,7 +8,7 @@
 .nexus-duel-scene {
   position: absolute;
   z-index: 0;
-  inset: 0;
+  inset: -1px;
   overflow: hidden;
   border-radius: inherit;
   pointer-events: none;
@@ -19,36 +19,36 @@
   inset: 0;
   content: "";
   background:
-    linear-gradient(90deg, rgba(2, 7, 18, .06), transparent 25%, transparent 75%, rgba(2, 7, 18, .06)),
-    linear-gradient(180deg, rgba(2, 7, 18, .36), transparent 34%, rgba(2, 7, 18, .12) 62%, rgba(2, 7, 18, .7));
-  box-shadow: inset 0 0 80px rgba(0, 0, 0, .48);
+    linear-gradient(90deg, rgba(2, 7, 18, .02), transparent 20%, transparent 80%, rgba(2, 7, 18, .02)),
+    linear-gradient(180deg, rgba(2, 7, 18, .18), transparent 28%, rgba(2, 7, 18, .04) 63%, rgba(2, 7, 18, .43));
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, .28);
 }
 .nexus-duel-scene img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 52%;
-  opacity: .94;
-  transform: translate3d(var(--nexus-drift-x, 0px), var(--nexus-drift-y, 0px), 0) scale(1.025);
+  object-position: center 49%;
+  opacity: 1;
+  transform: translate3d(var(--nexus-drift-x, 0px), var(--nexus-drift-y, 0px), 45px) scale(1.09);
   transform-origin: center;
-  transition: transform .25s ease-out, opacity .4s ease;
-  filter: saturate(1.08) contrast(1.04);
+  transition: transform .35s ease-out, opacity .4s ease;
+  filter: saturate(1.38) contrast(1.14) brightness(1.13) drop-shadow(0 8px 24px rgba(31, 194, 255, .28));
 }
 .nexus-duel-label {
   position: absolute;
   z-index: 2;
-  top: 47%;
+  top: 43%;
   display: grid;
   gap: 5px;
   max-width: 31%;
   padding: 10px 12px;
-  color: #eaffff;
-  border: 1px solid rgba(91, 228, 255, .37);
+  color: #f1fdff;
+  border: 1px solid rgba(91, 228, 255, .72);
   border-radius: 11px;
-  background: rgba(2, 8, 20, .74);
-  box-shadow: 0 0 25px rgba(55, 206, 255, .13), inset 0 0 15px rgba(75, 217, 255, .06);
-  backdrop-filter: blur(8px);
-  font: 700 9px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+  background: rgba(2, 8, 20, .88);
+  box-shadow: 0 0 28px rgba(55, 206, 255, .25), inset 0 0 15px rgba(75, 217, 255, .1);
+  backdrop-filter: blur(12px);
+  font: 800 10px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
   letter-spacing: .16em;
   text-transform: uppercase;
 }
@@ -83,7 +83,9 @@
   text-shadow: 0 2px 18px rgba(2, 6, 18, .9);
 }
 .portal-gateway-card.nexus-duel-host > .portal-gateway {
-  filter: drop-shadow(0 0 20px rgba(94, 228, 255, .2));
+  --portal-size: min(29vw, 292px);
+  opacity: .9;
+  filter: drop-shadow(0 0 22px rgba(94, 228, 255, .34));
 }
 .nexus-observatory {
   grid-column: span 12;
@@ -191,8 +193,9 @@
   }
 }
 @media (max-width: 560px) {
-  .nexus-duel-label { top: 53%; max-width: 36%; padding: 7px 8px; font-size: 7px; }
-  .nexus-duel-label small { font-size: 7px; }
+  .nexus-duel-label { top: 48%; max-width: 38%; padding: 8px 9px; font-size: 8px; }
+  .nexus-duel-label small { font-size: 8px; }
+  .portal-gateway-card.nexus-duel-host > .portal-gateway { --portal-size: min(50vw, 230px); }
   .nexus-observatory-header,
   .nexus-observatory-foot {
     display: grid;

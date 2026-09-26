@@ -397,3 +397,22 @@ body.cosmic-console::before {
   .cosmic-orb-stage::after,
   .cosmic-tab-panel { animation: none; }
 }
+
+
+
+/* Clear keyboard focus and comfortable horizontal navigation at every width. */
+.owner-portal-tab:focus-visible{
+  outline:3px solid #8cecff;
+  outline-offset:2px;
+  z-index:2;
+}
+.owner-portal-tab{scroll-snap-align:start}
+.owner-portal-tabs{scroll-snap-type:x proximity}
+.owner-portal-panel[hidden]{display:none!important}
+@media(max-width:760px){
+  .owner-portal-tabs{justify-content:flex-start;overscroll-behavior-inline:contain}
+  .owner-portal-tab{min-height:48px}
+}
+@media(prefers-reduced-motion:reduce){
+  .cosmic-tab-panel{animation:none!important}
+}

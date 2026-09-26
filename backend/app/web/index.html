@@ -1,7 +1,7 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Seldrune STI · Aethelion Command Nexus</title><link rel="stylesheet" href="/console-assets/console.css"><link rel="stylesheet" href="/console-assets/console-cinematic.css"><link rel="stylesheet" href="/console-assets/dragon-booster.css"><link rel="stylesheet" href="/console-assets/console-mobile-nav.css"><link rel="stylesheet" href="/console-assets/sti-runtime.css"><link rel="stylesheet" href="/console-assets/console-action-inbox.css"><link rel="stylesheet" href="/console-assets/console-cosmic-tabs.css"><link rel="stylesheet" href="/console-assets/console-agents.css"><link rel="stylesheet" href="/console-assets/console-tools.css"><link rel="stylesheet" href="/console-assets/console-portal.css"><link rel="stylesheet" href="/console-assets/seldrune-gpt-studio.css"><link rel="stylesheet" href="/console-assets/cognitive-mission.css"><link rel="stylesheet" href="/console-assets/console-nexus-arena.css"></head><body>
 <div id="bootstrap-view" class="login-shell hidden"><section class="login-card onboarding-card"><div class="brand dark"><span>SE</span><div>Seldrune<small>Owner Onboarding</small></div></div><p class="eyebrow">ONE-TIME SECURE SETUP</p><h1>Create the founding owner.</h1><p>This screen closes permanently after your organization is created.</p><form id="bootstrap-form"><div class="form-grid"><label>Your name<input id="bootstrap-name" type="text" autocomplete="name" required maxlength="200"></label><label>Owner email<input id="bootstrap-email" type="email" autocomplete="username" required></label><label>Organization name<input id="organization-name" type="text" required maxlength="200" value="Seldrune"></label><label>Organization slug<input id="organization-slug" type="text" required minlength="2" maxlength="100" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value="seldrune"></label><label>Password<input id="bootstrap-password" type="password" autocomplete="new-password" required minlength="12" maxlength="128"></label><label>Confirm password<input id="bootstrap-confirm" type="password" autocomplete="new-password" required minlength="12" maxlength="128"></label></div><button type="submit">Create owner account <span>→</span></button><p id="bootstrap-error" class="risk" role="alert"></p></form></section></div>
 <div id="login-view" class="login-shell hidden"><section class="login-card"><div class="brand dark"><span>SE</span><div>Seldrune STI<small>Aethelion Intelligence Foundry</small></div></div><p class="eyebrow">SECURE OWNER ACCESS</p><h1>Enter the Aethelion Intelligence Foundry.</h1><p>Sign in with your Seldrune owner account. Your access expires automatically.</p><form id="login-form"><label>Email<input id="email" type="email" autocomplete="username" required></label><label>Password<input id="password" type="password" autocomplete="current-password" required></label><button type="submit">Sign in securely <span>→</span></button><p id="login-error" class="risk" role="alert"></p></form></section></div>
-<div id="console-view" class="app-shell hidden"><aside><div class="brand"><span>SE</span><div>Seldrune STI<small>Aethelion Intelligence Foundry</small></div></div><nav><a class="active" data-console-tab="overview" href="#overview">Overview</a><a data-console-tab="mission" href="#cognitive-mission">Mission</a><a data-console-tab="gpt" href="#seldrune-gpt">Seldrune GPT</a><a data-console-tab="runtime" href="#sti-runtime">STI Runtime</a><a data-console-tab="face" href="#face-v01-mission">Face</a><a data-console-tab="liveshift" href="#liveshift-mission">LiveShift</a><a data-console-tab="actions" href="#action-inbox">Action inbox</a><a data-console-tab="tools" href="#tool-control">Tools</a><a data-console-tab="governance" href="#policy-form">Governance</a><a data-console-tab="commands" href="#command">Commands</a><a href="/console-assets/executive-brief.html">Executive Brief / Review Drift</a><a href="/console-assets/command-monitor.html">Command monitor</a><a href="/console-assets/organization-board.html">Organization board</a></nav><div class="secure">Signed in as<br><b id="owner-name"></b><button id="logout" class="link">Sign out</button></div></aside>
+<div id="console-view" class="app-shell hidden"><aside><div class="brand"><span>SE</span><div>Seldrune STI<small>Aethelion Intelligence Foundry</small></div></div><nav><a class="active" data-console-tab="overview" href="#overview">Overview</a><a data-console-tab="mission" href="#cognitive-mission">Mission</a><a data-console-tab="gpt" href="#seldrune-gpt">Seldrune AI</a><a data-console-tab="runtime" href="#sti-runtime">STI Runtime</a><a data-console-tab="face" href="#face-v01-mission">Face</a><a data-console-tab="liveshift" href="#liveshift-mission">LiveShift</a><a data-console-tab="actions" href="#action-inbox">Action inbox</a><a data-console-tab="tools" href="#tool-control">Tools</a><a href="/console-assets/organization-board.html">Organization board</a></nav><div class="secure">Signed in as<br><b id="owner-name"></b><button id="logout" class="link">Sign out</button></div></aside>
 <main><header><div><p class="eyebrow">SELDRUNE STI · AETHELION COMMAND NEXUS</p><h1>Build the future at machine speed.</h1></div><div class="runtime-controls"><div id="runtime-status" class="runtime-status runtime-checking"><span></span><div><strong>Checking runtime</strong><small id="runtime-version">Seldrune</small></div></div><button id="refresh">Refresh</button></div></header><section id="overview" class="metrics"><article><label>Strategic commands</label><strong id="total">—</strong><small>all owner objectives</small></article><article><label>Awaiting approval</label><strong id="pending">—</strong><small>needs your decision</small></article><article><label>Execution progress</label><strong id="progress">—</strong><small>steps completed</small></article><article><label>Estimated AI cost</label><strong id="cost">—</strong><small id="ai-spend-limit">USD across all metered AI work</small></article></section>
 <section id="cognitive-mission" class="panel cognitive-mission"
   aria-labelledby="cognitive-mission-title">
@@ -104,8 +104,8 @@
 <div class="gpt-studio-head">
   <div>
     <p class="eyebrow">SELD RUNE GPT · OWNER STUDIO</p>
-    <h2 id="seldrune-gpt-title">Think, inspect, execute.</h2>
-    <p>Use Seldrune GPT for chat, files, and cognitive execution. Choose Chat for discussion or Run with Seldrune to plan work, use active tools, and verify results. Routine reversible tasks can proceed under owner policy; sensitive actions ask once for confirmation. Attach one PDF and describe the change to edit it directly.</p>
+    <h2 id="seldrune-gpt-title">Ask, create, and build with Seldrune.</h2>
+    <p>One conversational workspace for questions, files, creative work, coding, and supported actions. Seldrune routes each request to chat or connected tools and reports what was saved or verified. Sensitive actions still ask for your confirmation. Attach one PDF and describe the change to edit it directly.</p>
   </div>
   <div class="gpt-studio-runtime">
     <span>MODEL</span>
@@ -123,8 +123,8 @@
     <button type="button" class="gpt-quick-prompt" data-gpt-prompt="Analyze the attached files and extract the most important findings, risks, and next actions.">Analyze attachments</button>
     <section class="gpt-creation-forge" aria-labelledby="gpt-creation-title">
       <p class="eyebrow">CREATION FORGE</p>
-      <h3 id="gpt-creation-title">Choose what to create</h3>
-      <p>Pick a deliverable, describe it below, then run a Seldrune mission.</p>
+      <h3 id="gpt-creation-title">Create anything</h3>
+      <p>Pick a type if useful, describe the result, and send it once. Text and rendered files appear in Outputs.</p>
       <div class="gpt-creation-modes" role="group" aria-label="Creation type">
         <button type="button" class="gpt-creation-mode active" data-creation-mode="any" aria-pressed="true">Anything</button>
         <button type="button" class="gpt-creation-mode" data-creation-mode="app" aria-pressed="false">App</button>
@@ -151,18 +151,18 @@
   </aside>
   <div class="gpt-studio-main">
     <div id="seldrune-gpt-thread" class="gpt-thread" aria-live="polite">
-      <div class="empty">Ask Seldrune anything. Attach one PDF and simply tell the AI what to change—the edited PDF will be returned here.</div>
+      <div class="empty">Ask Seldrune anything. One message can start a conversation, create a file, or route work through connected tools. Attach a PDF and describe the edit.</div>
     </div>
     <form id="seldrune-gpt-form" class="gpt-composer">
       <div id="seldrune-gpt-dropzone" class="gpt-dropzone">
         <div id="seldrune-gpt-attachments" class="gpt-attachments" aria-live="polite"></div>
-        <textarea id="seldrune-gpt-input" minlength="1" maxlength="20000" required placeholder="Message Seldrune GPT…"></textarea>
+        <textarea id="seldrune-gpt-input" minlength="1" maxlength="20000" required placeholder="Ask Seldrune anything: create, code, analyze, or take action…"></textarea>
         <div class="gpt-composer-bar">
           <div class="gpt-composer-tools">
             <input id="seldrune-gpt-files" type="file" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,text/csv,application/json,.docx,.xlsx,.pptx">
             <button id="seldrune-gpt-attach" type="button" class="ghost">＋ Attach</button>
             <span id="seldrune-gpt-attachment-summary">No attachments</span>
-            <span id="seldrune-gpt-mode" class="gpt-mode-pill">Chat</span>
+            <span id="seldrune-gpt-mode" class="gpt-mode-pill">Seldrune AI</span>
             <label id="seldrune-gpt-pdf-password-wrap" class="gpt-pdf-password hidden">
               <span>PDF password</span>
               <input id="seldrune-gpt-pdf-password" type="password" maxlength="256"
@@ -170,8 +170,8 @@
             </label>
           </div>
           <div class="gpt-composer-actions">
-            <button id="seldrune-gpt-chat" type="submit">Chat <span>→</span></button>
-            <button id="seldrune-gpt-execute" type="button">Run with Seldrune <span>⚡</span></button>
+            <button id="seldrune-gpt-chat" type="submit">Send to Seldrune <span>→</span></button>
+            
           </div>
         </div>
       </div>
@@ -184,6 +184,7 @@
 </div>
 </section>
 <section id="face-external-test" class="panel" aria-labelledby="face-external-test-title"><div class="section-head"><div><p class="eyebrow">LIVESHIFT EXTERNAL FACE TEST</p><h2 id="face-external-test-title">Consent-gated transformation proof</h2><p>Uses your signed-in owner session. Images stay in the request path and the Replicate token remains server-side.</p></div></div><form id="face-test-form"><div class="form-grid"><label>Reference/source face<input id="face-source-file" type="file" accept="image/jpeg,image/png,image/webp" required></label><label>Target image<input id="face-target-file" type="file" accept="image/jpeg,image/png,image/webp" required></label></div><label class="policy-toggle"><input id="face-consent" type="checkbox" required><span>I confirm both images are authorized for this transformation test.</span></label><button type="submit">Run external Face test</button></form><p id="face-test-status">Waiting for an authorized test.</p><div id="face-test-output"></div></section>
-<section id="command" class="command panel"><div><p class="eyebrow">OWNER COMMAND</p><h2>What should Seldrune STI create next?</h2><p>Describe the outcome. Seldrune STI will decompose it into parallel creation lanes, verify evidence, and preserve owner-controlled promotion.</p></div><form id="command-form"><textarea id="objective" minlength="5" required placeholder="Find a healthcare automation opportunity, validate the market, design the solution, and estimate delivery cost."></textarea><button type="submit">Create governed plan <span>→</span></button></form></section>
+
 <section id="commands"><div class="section-head"><div><p class="eyebrow">LIVE PORTFOLIO</p><h2>Strategic commands</h2><p>Complete governed command history, newest first.</p></div></div><div id="command-list" class="list"></div></section></main></div>
 <dialog id="brief"><button class="close" aria-label="Close">×</button><p class="eyebrow">DECISION BRIEF</p><div id="brief-body"></div></dialog><div id="toast"></div><script src="/console-assets/console.js" defer></script><script src="/console-assets/console-action-inbox.js" defer></script><script src="/console-assets/sti-runtime.js" defer></script><script src="/console-assets/owner-push-subscriptions.js" defer></script><script src="/console-assets/face-test.js" defer></script><script src="/console-assets/seldrune-gpt.js" defer></script><script src="/console-assets/console-tools.js" defer></script><script src="/console-assets/console-cosmic-tabs.js" defer></script><script src="/console-assets/console-agents.js" defer></script><script src="/console-assets/console-portal-settings.js" defer></script><script src="/console-assets/cognitive-mission.js" defer></script><script src="/console-assets/console-nexus-arena.js" defer></script></body></html>
+

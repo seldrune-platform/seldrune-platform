@@ -27,7 +27,9 @@ def test_owner_console_uses_single_owner_portal_shell():
 
 def test_gpt_operator_remains_truth_gated_and_multimodal():
     html = (WEB / "index.html").read_text()
-    assert 'id="seldrune-gpt-execute"' in html
+    assert 'id="seldrune-gpt-execute"' not in html
+    assert "Run with Seldrune" not in html
+    assert "Send to Seldrune" in html
     assert "confirmation-gated" in html
     assert 'id="seldrune-gpt-model"' in html
     assert 'id="seldrune-gpt-files"' in html
@@ -36,7 +38,7 @@ def test_gpt_operator_remains_truth_gated_and_multimodal():
     assert 'id="seldrune-gpt-mode"' in html
     assert 'id="seldrune-gpt-capabilities"' in html
     assert 'id="seldrune-gpt-open-tools"' in html
-    assert "Run with Seldrune" in html
+    assert "Ask, create, and build with Seldrune" in html
 
 
 def test_creation_forge_routes_typed_projects_through_the_cognitive_operator():
@@ -49,9 +51,10 @@ def test_creation_forge_routes_typed_projects_through_the_cognitive_operator():
         assert f"    {mode}: {{" in script
     assert 'id="seldrune-gpt-creation-status"' in html
     assert "buildCreativeOrder(request)" in script
-    assert "const order = buildCreativeOrder(request);" in script
-    assert "audio as not rendered" in script
-    assert "video as not rendered" in script
+    assert "order: buildCreativeOrder(request)" in script
+    assert "cannot render audio" in script
+    assert "cannot render video" in script
+    assert "no rendered media file was produced" in script
     assert ".gpt-creation-forge" in styles
 
 
@@ -60,25 +63,33 @@ def test_portal_controller_defines_owner_workspaces_and_fixed_home():
     for workspace in (
         "home",
         "operator",
+        "outputs",
+        "coding",
         "operations",
         "media",
         "intelligence",
-        "tools",
-        "settings",
     ):
         assert f'["{workspace}",' in js
     assert "AETHELION INTELLIGENCE FOUNDRY" in js
     assert "seldrune:workspace-change" in js
     assert "portal-quick-orders" not in js
-    assert "Open AI Core" in js
-    for label in ("NEXUS", "AI CORE", "MISSIONS", "WORLDS", "INTEL", "CREATIONS", "SYSTEM"):
+    assert "Ask Seldrune" in js
+    for label in ("NEXUS", "SELDRUNE AI", "OUTPUTS", "CODING LAB", "MISSIONS", "MEDIA", "SYSTEM"):
         assert label in js
     assert 'move("#seldrune-gpt", "operator")' in js
+    assert 'move("#command", "operator")' not in js
+    assert 'document.querySelector("#command")?.remove()' in js
     assert 'move("#cognitive-mission", "operations")' in js
     assert 'move("#sti-runtime", "operations")' in js
     assert 'move("#face-v01-mission", "media")' in js
-    assert 'move("#tool-control", "tools")' in js
+    assert 'move("#tool-control", "intelligence")' in js
+    assert 'grid("outputs")?.append(outputLibrary)' in js
+    assert 'grid("coding")?.append(codingLab)' in js
+    assert 'aria-labelledby", button.id' in js
+    assert 'panel.hidden = panelId !== id' in js
+    assert 'event.key === "Home"' in js
     assert 'portalSettings.id = "portal-settings"' in js
+    assert 'grid("intelligence")?.append(portalSettings)' in js
     assert 'workspace: "home", depth: 0' in js
     assert 'activate("home", {historyMode: "none", scroll: false})' in js
     assert "seldrune.portal.lastWorkspace" not in js
@@ -119,21 +130,36 @@ def test_every_owner_workspace_uses_portal_visual_system():
     css = (WEB / "console-portal.css").read_text()
     for selector in (
         '#portal-panel-operator #seldrune-gpt',
-        '#portal-panel-operator #command',
+        '#portal-panel-outputs #seldrune-output-library',
+        '#portal-panel-coding #seldrune-coding-lab',
         '#portal-panel-operations #cognitive-mission',
         '#portal-panel-operations #sti-runtime',
-        '#portal-panel-operations #action-inbox',
         '#portal-panel-media #face-v01-mission',
         '#portal-panel-media #liveshift-mission',
         '#portal-panel-intelligence .agent-observatory',
         '#portal-panel-intelligence .audit-center',
-        '#portal-panel-tools #tool-control',
-        '#portal-panel-settings #portal-settings',
-        '#portal-panel-settings .governance-policy',
+        '#portal-panel-intelligence #tool-control',
+        '#portal-panel-intelligence #portal-settings',
+        '#portal-panel-intelligence .governance-policy',
+        '#portal-panel-intelligence #action-inbox',
     ):
         assert selector in css
     assert "FULL WORKSPACE REDESIGN" in css
     assert ".owner-back-button" in css
+
+
+def test_outputs_library_persists_downloadable_files_and_lab_is_provider_truthful():
+    js = (WEB / "seldrune-gpt.js").read_text()
+    portal = (WEB / "console-cosmic-tabs.js").read_text()
+    assert "seldrune-output-library" in js
+    assert "window.indexedDB.open('seldrune-output-library', 1)" in js
+    assert "Download file" in js
+    assert "seldrune:outputs-changed" in js
+    assert "no rendered media file was produced" in js
+    assert "Seldrune RapidBuild Loop" in js
+    for provider in ("github", "circleci", "railway"):
+        assert f'data-provider="{provider}"' in portal
+    assert "Open verified run evidence" in js
 
 
 def test_gpt_pdf_editor_is_single_ai_prompt_flow():

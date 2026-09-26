@@ -1,22 +1,22 @@
 (() => {
   const WORKSPACES = [
     ["home", "NEXUS", "⌂"],
-    ["operator", "AI CORE", "✦"],
+    ["operator", "SELDRUNE AI", "✦"],
+    ["outputs", "OUTPUTS", "▣"],
+    ["coding", "CODING LAB", "⌘"],
     ["operations", "MISSIONS", "⌘"],
-    ["media", "WORLDS", "◉"],
-    ["intelligence", "INTEL", "⬡"],
-    ["tools", "CREATIONS", "⌁"],
-    ["settings", "SYSTEM", "⚙"],
+    ["media", "MEDIA", "◉"],
+    ["intelligence", "SYSTEM", "⚙"],
   ];
 
   const DESCRIPTIONS = {
-    home: "Seldrune command nexus for cognitive work, agent missions, media, and evidence.",
-    operator: "Chat with Seldrune, execute cognitive plans, and work with files.",
+    home: "Seldrune command nexus for AI, saved outputs, coding, missions, and system health.",
+    operator: "One conversational Seldrune AI for questions, creation, and supported actions.",
+    outputs: "Browse and download files Seldrune created in this browser.",
+    coding: "Build source with connected coding agents, CI, and preview tools.",
     operations: "Track Seldrune self-development, agent work, and verified execution.",
     media: "Create and inspect Seldrune Face and LiveShift workspaces.",
-    intelligence: "Inspect active agents, task runs, incidents, evidence, and audit signals.",
-    tools: "Configure connected providers, agent capabilities, and execution tools.",
-    settings: "Portal experience, cost limits, treasury, and owner controls.",
+    intelligence: "Connected tools, agents, owner decisions, budgets, evidence, and settings.",
   };
 
   function initOwnerPortal() {
@@ -31,19 +31,19 @@
     bar.className = "cosmic-command-bar owner-portal-bar";
     bar.innerHTML = `
       <div class="cosmic-brand owner-portal-brand">
-        <div class="cosmic-brand-mark" aria-hidden="true"><span>⌁</span></div>
+        <div class="cosmic-brand-mark" aria-hidden="true"><span>👽</span></div>
         <div>
           <strong>SELDRUNE</strong>
           <small>AETHELION INTELLIGENCE FOUNDRY</small>
         </div>
       </div>
       <nav class="cosmic-tabs owner-portal-tabs" role="tablist"
-           aria-label="Seldrune STI workspaces"></nav>
+           aria-label="Seldrune workspaces" aria-orientation="horizontal"></nav>
       <div class="owner-portal-actions">
         <button type="button" id="portal-back-button" class="owner-back-button ghost"
                 aria-label="Go to previous Seldrune page" hidden>← Back</button>
         <button type="button" class="owner-command-button"
-                data-open-portal="operator">Open AI Core</button>
+                data-open-portal="operator">Ask Seldrune</button>
         <div class="cosmic-runtime-pill" id="portal-runtime-pill">
           <strong id="portal-runtime-state">● CHECKING</strong>
           <small id="cosmic-runtime-model">Seldrune runtime</small>
@@ -64,6 +64,7 @@
       button.className = "cosmic-tab owner-portal-tab";
       button.dataset.portalTab = id;
       button.setAttribute("role", "tab");
+      button.id = `portal-tab-${id}`;
       button.setAttribute("aria-controls", `portal-panel-${id}`);
       button.innerHTML =
         `<span class="cosmic-tab-icon">${icon}</span>` +
@@ -75,6 +76,8 @@
       panel.className = "cosmic-tab-panel owner-portal-panel";
       panel.dataset.portalPanel = id;
       panel.setAttribute("role", "tabpanel");
+      panel.setAttribute("aria-labelledby", button.id);
+      panel.tabIndex = 0;
       panel.innerHTML = `
         <div class="cosmic-page-heading owner-portal-heading">
           <div>
@@ -106,18 +109,18 @@
       <button class="portal-quick-card portal-quick-gpt" type="button"
               data-open-portal="operator" data-depth="1.05">
         <span class="portal-quick-icon">✦</span>
-        <span><strong>AI CORE</strong><small>Think, plan, execute</small></span>
+        <span><strong>SELDRUNE AI</strong><small>Ask, create, and build</small></span>
         <b>→</b>
       </button>
 
       <article class="portal-gateway-card" data-depth="1.35">
         <div class="portal-gateway-copy">
           <span>SELDRUNE STI · AETHELION COMMAND NEXUS</span>
-          <h2>Enter the Cognitive Engine</h2>
-          <p>Plan work, coordinate Seldrune agents, use connected capabilities, and inspect verified results.</p>
+          <h2>Ask Seldrune anything</h2>
+          <p>One AI workspace routes questions, creation, coding, and supported actions through connected tools, then reports what it actually did.</p>
         </div>
         <button class="portal-gateway" type="button" data-open-portal="operator"
-                aria-label="Open Seldrune AI Core">
+                aria-label="Open Seldrune AI beneath the alien and hunter scene">
           <span class="portal-aura"></span>
           <span class="portal-ring portal-ring-outer"></span>
           <span class="portal-ring portal-ring-mid"></span>
@@ -138,17 +141,24 @@
       </article>
 
       <button class="portal-quick-card portal-quick-tools" type="button"
-              data-open-portal="tools" data-depth=".9">
+              data-open-portal="intelligence" data-depth=".9">
         <span class="portal-quick-icon">⌁</span>
         <span><strong>Tools</strong><small>Connect & manage</small></span>
         <b>→</b>
       </button>
 
       <button class="portal-quick-card portal-quick-files" type="button"
-              data-open-portal="operator" data-focus-target="#seldrune-gpt-dropzone"
+              data-open-portal="outputs"
               data-depth="1.1">
         <span class="portal-quick-icon">▣</span>
-        <span><strong>Files & PDF</strong><small>Upload, read, edit</small></span>
+        <span><strong>OUTPUTS</strong><small>Your created files</small></span>
+        <b>→</b>
+      </button>
+
+      <button class="portal-quick-card portal-quick-coding" type="button"
+              data-open-portal="coding" data-depth=".95">
+        <span class="portal-quick-icon">⌘</span>
+        <span><strong>CODING LAB</strong><small>Build · test · preview</small></span>
         <b>→</b>
       </button>
 
@@ -211,11 +221,13 @@
 
     move("#overview", "home");
     move("#seldrune-gpt", "operator");
-    move("#command", "operator");
+    // The universal AI is the single request composer; remove the older duplicate
+    // owner-command form after its legacy event handler has been registered.
+    document.querySelector("#command")?.remove();
 
     move("#cognitive-mission", "operations");
     move("#sti-runtime", "operations");
-    move("#action-inbox", "operations");
+    move("#action-inbox", "intelligence");
     move("#commands", "operations");
 
     move("#face-v01-mission", "media");
@@ -226,8 +238,7 @@
     move(".incident-center", "intelligence");
     move(".audit-center", "intelligence");
     move("#evidence-truth", "intelligence");
-
-    move("#tool-control", "tools");
+    move("#tool-control", "intelligence");
 
     const portalSettings = document.createElement("section");
     portalSettings.id = "portal-settings";
@@ -243,9 +254,87 @@
       <div id="portal-settings-content">
         <div class="empty">Loading portal preferences…</div>
       </div>`;
-    grid("settings")?.append(portalSettings);
-    move(".treasury", "settings");
-    move(".governance-policy", "settings");
+    grid("intelligence")?.append(portalSettings);
+    move(".treasury", "intelligence");
+    move(".governance-policy", "intelligence");
+
+    const outputLibrary = document.createElement("section");
+    outputLibrary.id = "seldrune-output-library";
+    outputLibrary.className = "panel output-library";
+    outputLibrary.setAttribute("aria-labelledby", "seldrune-output-title");
+    outputLibrary.innerHTML = `
+      <div class="output-library-head">
+        <div>
+          <p class="eyebrow">SELDRUNE OUTPUT VAULT</p>
+          <h2 id="seldrune-output-title">Your created files</h2>
+          <p>Generated text, edited documents, and verified build receipts appear here.</p>
+        </div>
+        <span class="output-storage-note">Saved in this browser</span>
+      </div>
+      <div class="output-library-controls">
+        <label class="output-search">Search outputs
+          <input id="seldrune-output-search" type="search" autocomplete="off"
+                 placeholder="Find a file or project…">
+        </label>
+        <div class="output-filters" role="group" aria-label="Filter output files">
+          <button type="button" data-output-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-output-filter="app">Apps</button>
+          <button type="button" data-output-filter="game">Games</button>
+          <button type="button" data-output-filter="song">Songs</button>
+          <button type="button" data-output-filter="video">Videos</button>
+          <button type="button" data-output-filter="visual">Images & 3D</button>
+          <button type="button" data-output-filter="document">Documents</button>
+          <button type="button" data-output-filter="build">Builds</button>
+        </div>
+      </div>
+      <p id="seldrune-output-status" class="output-library-status" role="status">
+        Loading saved outputs…
+      </p>
+      <div id="seldrune-output-list" class="output-list" role="list"
+           aria-live="polite" aria-relevant="additions removals text"></div>`;
+    grid("outputs")?.append(outputLibrary);
+
+    const codingLab = document.createElement("section");
+    codingLab.id = "seldrune-coding-lab";
+    codingLab.className = "panel coding-lab";
+    codingLab.setAttribute("aria-labelledby", "coding-lab-title");
+    codingLab.innerHTML = `
+      <div class="coding-lab-hero">
+        <div>
+          <p class="eyebrow">SELDRUNE RAPIDBUILD LOOP · CODING LAB</p>
+          <h2 id="coding-lab-title">From brief to verified build</h2>
+          <p>Give Seldrune a build goal. Connected coding tools can create a branch, write code,
+             run checks, and return a preview or deployment receipt.</p>
+        </div>
+        <button type="button" class="ghost" data-open-portal="operator">Ask Seldrune AI</button>
+      </div>
+      <ol class="coding-lab-stages" aria-label="RapidBuild workflow">
+        <li><span>01</span><strong>Plan</strong><small>Scope the change</small></li>
+        <li><span>02</span><strong>Build</strong><small>Use connected agents</small></li>
+        <li><span>03</span><strong>Verify</strong><small>Read actual CI results</small></li>
+        <li><span>04</span><strong>Preview</strong><small>Show provider receipts</small></li>
+      </ol>
+      <div id="coding-lab-provider-status" class="coding-provider-grid" aria-live="polite">
+        <div class="coding-provider-card" data-provider="github"><strong>GitHub</strong><span>Checking tools…</span></div>
+        <div class="coding-provider-card" data-provider="circleci"><strong>CircleCI</strong><span>Checking tools…</span></div>
+        <div class="coding-provider-card" data-provider="railway"><strong>Railway</strong><span>Checking tools…</span></div>
+      </div>
+      <form id="coding-lab-form" class="coding-lab-form">
+        <label>Repository or project <span>Optional</span>
+          <input id="coding-lab-repository" type="text" maxlength="240"
+                 autocomplete="off" placeholder="owner/repository or project name">
+        </label>
+        <label>What should Seldrune build?
+          <textarea id="coding-lab-brief" minlength="5" maxlength="6800" required
+                    placeholder="Describe the app, game, feature, or fix. Include the behavior you expect."></textarea>
+        </label>
+        <div class="coding-lab-actions">
+          <p id="coding-lab-status" role="status">Builds use configured tools and report the actual result.</p>
+          <button type="submit" id="coding-lab-submit">Start build <span>→</span></button>
+        </div>
+      </form>
+      <div id="coding-lab-run-list" class="coding-lab-run-list" aria-live="polite"></div>`;
+    grid("coding")?.append(codingLab);
 
     const footer = document.createElement("footer");
     footer.className = "cosmic-footer owner-portal-footer";
@@ -281,6 +370,7 @@
       });
       panels.forEach((panel, panelId) => {
         panel.classList.toggle("active", panelId === id);
+        panel.hidden = panelId !== id;
       });
 
       if (changed && historyMode === "push") {
@@ -323,13 +413,21 @@
     });
 
     tabList.addEventListener("keydown", event => {
-      if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
       const buttons = [...tabList.querySelectorAll(".owner-portal-tab")];
       const current = buttons.indexOf(document.activeElement);
+      if (event.key === "Home" || event.key === "End") {
+        const next = event.key === "Home" ? buttons[0] : buttons.at(-1);
+        next?.focus();
+        if (next) activate(next.dataset.portalTab, {historyMode: "push"});
+        event.preventDefault();
+        return;
+      }
       const delta = event.key === "ArrowRight" ? 1 : -1;
       const next = buttons[(current + delta + buttons.length) % buttons.length];
       next?.focus();
       if (next) activate(next.dataset.portalTab, {historyMode: "push"});
+      event.preventDefault();
     });
 
     document.addEventListener("click", event => {

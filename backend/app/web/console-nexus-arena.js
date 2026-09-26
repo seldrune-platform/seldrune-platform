@@ -42,7 +42,7 @@
       if (kicker) kicker.textContent = "XENOMORPH × HUNTER · 3D HOLOSCAPE";
       if (heading) heading.textContent = "We merge worlds.";
       if (description) {
-        description.textContent = "A cinematic alien-versus-predator encounter inside the Aethelion command nexus.";
+        description.textContent = "A bright 3D alien-versus-hunter scene anchors the Seldrune command nexus.";
       }
     }
 
@@ -158,8 +158,8 @@
         status.dataset.state = "checking";
         status.textContent = "CONFIGURATION NEEDED";
         signal.textContent = "STI runtime ready · no active agent is configured";
-        next.textContent = "Review agent setup";
-        next.dataset.openPortal = "tools";
+        next.textContent = "Review system tools";
+        next.dataset.openPortal = "intelligence";
       } else {
         status.dataset.state = "checking";
         status.textContent = "SIGNAL CHECKING";
