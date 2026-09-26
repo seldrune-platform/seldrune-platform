@@ -266,6 +266,19 @@ def _restore_provider_credential(
         }
 
     reference.status = "active"
+    provider_tools = list(
+        session.scalars(
+            select(ToolDefinition).where(
+                ToolDefinition.organization_id == organization_id,
+                ToolDefinition.provider == provider,
+            )
+        )
+    )
+    for tool in provider_tools:
+        tool.status = ToolStatus.ACTIVE.value
+        tool.credential_reference_id = reference.id
+    session.flush()
+
     status = ensure_configured_external_tools(
         session,
         organization_id=organization_id,
