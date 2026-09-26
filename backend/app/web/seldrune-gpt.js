@@ -19,6 +19,7 @@
   const capabilityStatus = document.querySelector('#seldrune-gpt-capabilities');
   const openToolsButton = document.querySelector('#seldrune-gpt-open-tools');
   const creationStatus = document.querySelector('#seldrune-gpt-creation-status');
+  const providerSelect = document.querySelector('#seldrune-gpt-provider');
 
   const MAX_FILES = 6;
   const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -613,6 +614,7 @@
         ? capabilities.registered_tools
         : [];
       providerReadiness = capabilities.provider_readiness || {};
+      updateModelProviderOptions(capabilities.model_providers || []);
       const providers = Object.entries(capabilities.provider_readiness || {});
       const readyProviders = providers.filter(([, ready]) => Boolean(ready)).length;
       const hints = Array.isArray(capabilities.configuration_hints)
@@ -639,6 +641,30 @@
       }
       openToolsButton?.classList.remove('hidden');
       renderCodingProviderStatus(error.message);
+    }
+  }
+
+  function updateModelProviderOptions(providers) {
+    if (!providerSelect) return;
+    const byName = new Map(
+      providers.map(provider => [provider.provider, provider]),
+    );
+    [...providerSelect.options].forEach(option => {
+      const provider = byName.get(option.value);
+      if (!provider) return;
+      option.disabled = !provider.configured;
+      option.textContent = provider.configured
+        ? provider.label + ' · configured'
+        : provider.label + ' · needs setup';
+      option.title = provider.configured
+        ? 'Credential is configured; Seldrune checks provider availability when selected.'
+        : 'Set ' + (provider.configuration_hint || 'provider credentials')
+          + ' on the Seldrune server.';
+    });
+    const selected = byName.get(providerSelect.value);
+    const auto = byName.get('auto');
+    if (selected && !selected.configured && auto?.configured) {
+      providerSelect.value = 'auto';
     }
   }
 
@@ -863,9 +889,10 @@
       body: JSON.stringify({
         message: `${notice}${buildChatRequest(request, kind)}`,
         attachments: [],
+        provider: providerSelect?.value || 'auto',
       }),
     });
-    model.textContent = result.model || 'Seldrune AI';
+    model.textContent = (result.provider ? result.provider + ' · ' : '') + (result.model || 'Seldrune AI');
     const draftText = result.response || '(No text returned)';
     const label = ['app', 'game'].includes(kind)
       ? 'Seldrune AI · source draft · not committed or tested'
@@ -1169,10 +1196,14 @@
         : request;
       const result = await api('/gpt', {
         method: 'POST',
-        body: JSON.stringify({message: chatMessage, attachments: outgoingAttachments}),
+        body: JSON.stringify({
+          message: chatMessage,
+          attachments: outgoingAttachments,
+          provider: providerSelect?.value || 'auto',
+        }),
       });
       clearAttachments();
-      model.textContent = result.model || 'Seldrune AI';
+      model.textContent = (result.provider ? result.provider + ' · ' : '') + (result.model || 'Seldrune AI');
       const responseText = result.response || '(No text returned)';
       const responseCard = addMessage('Seldrune AI', responseText);
       let savedOutput = null;
