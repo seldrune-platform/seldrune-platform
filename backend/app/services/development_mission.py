@@ -193,9 +193,15 @@ STAGES = (
         "Normalize image, audio, video, documents, and structured data as evidence.",
         "unarchi",
         1,
-        "pending",
+        "completed",
         ("unarchi_v37", "model_router_unified"),
         ("multimodal", "engineering"),
+        evidence_refs=(
+            "pr:332",
+            "git:main:0154c07dde7ec678ee3347eea42a15924a87fe24",
+            "railway:bb5da2a7-8a53-46f9-8ce5-7972b89bb162",
+            "benchmark:multimodal_observation_normalization",
+        ),
     ),
     StageDefinition(
         "unarchi_v39",
