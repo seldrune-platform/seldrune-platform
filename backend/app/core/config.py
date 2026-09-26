@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     model_default: str = "mock-v1"
     model_compatible_base_url: str | None = None
     model_compatible_api_key: str | None = None
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-3.8-flash"
+    anthropic_api_key: str | None = None
+    anthropic_model: str = "claude-sonnet-4-6"
     model_economy: str = "gpt-5.6-luna"
     model_balanced: str = "gpt-5.6-terra"
     model_premium: str = "gpt-5.6-sol"
