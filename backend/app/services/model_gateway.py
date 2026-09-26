@@ -30,7 +30,7 @@ RECENT_PERFORMANCE_WEIGHT = 0.80
 RECENT_DRIFT_THRESHOLD = 0.25
 
 
-def _performance_summary(
+def model_routemodel_route_performance_summary(
     candidate: ModelRouteCandidate,
     evidence: tuple[ModelRoutePerformanceEvidence, ...],
     *,
@@ -120,7 +120,7 @@ def _rank_model_candidates(
         (
             index,
             candidate,
-            _performance_summary(
+            model_route_performance_summary(
                 candidate,
                 evidence,
                 recent_window_seconds=recent_window_seconds,
