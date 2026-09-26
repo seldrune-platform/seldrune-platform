@@ -71,6 +71,9 @@ async function establishSession() {
 
 async function loadWorkspace() {
   state.workspace = await request(orgPath("/workspace"));
+  if (state.workspace.setup_required && state.workspace.can_manage) {
+    state.workspace = await request(orgPath("/setup"), {method:"POST", body:"{}"});
+  }
   $("#provider-state").textContent = state.workspace.delivery.ready ? "Mail host connected" : "Host setup needed";
   $("#compose-open").disabled = !state.workspace.mailboxes.some(item => item.access === "owner" || item.access === "write");
   renderMailboxSidebar();
@@ -599,7 +602,7 @@ function canWriteMailbox(mailboxId) {
 }
 
 function openCompose(draft) {
-  const mailboxId = draft ? state.mailboxId : state.mailboxId;
+  const mailboxId = state.mailboxId;
   const readOnly = !canWriteMailbox(mailboxId);
   const dialog = $("#compose-dialog");
   state.editingDraftId = draft && !readOnly ? draft.id : "";
