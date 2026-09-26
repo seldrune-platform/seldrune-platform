@@ -1883,9 +1883,64 @@ This remains bounded functional planning research. Resource-aware selection
 does not establish subjective identity, sentience, phenomenal consciousness,
 qualia, or unrestricted real-world autonomy.
 
-## Next checkpoint: v0.36 scalable persistent memory
+## v0.36 scalable persistent memory checkpoint
 
-The next research step should add long-term retrieval, consolidation,
-provenance, and bounded forgetting so evidence can survive beyond the in-memory
-working set without allowing stale or weakly sourced records to dominate later
-decisions.
+UNARCHI v0.36 separates bounded working memory from a larger restart-safe
+persistent-memory tier. The persistent tier remains deterministic and CPU-only;
+it is not an unbounded database or a claim of human episodic memory.
+
+When the short-term autobiographical window overflows, evicted experiences are
+converted into provenance-bearing long-term records instead of being silently
+discarded. Archived success and failure records remain eligible to influence
+later memory bias after the original experience has left the working set.
+
+Every persistent record carries:
+
+- a stable record identifier and memory kind;
+- bounded content;
+- one or more provenance references;
+- provenance strength;
+- confidence and importance;
+- creation and last-access experience counters;
+- retrieval access count; and
+- a source count showing deterministic consolidation lineage.
+
+Retrieval combines lexical relevance with confidence, importance, provenance
+strength, and freshness. Explicit score, provenance, age, and top-k limits keep
+retrieval bounded. Records that are too weakly sourced, too stale, or below the
+retrieval floor are excluded rather than promoted by age or repetition alone.
+
+Same-kind records with sufficiently similar content can consolidate in place.
+Consolidation preserves the union of provenance references, increments the
+source count, averages confidence across sources, and retains the strongest
+importance and provenance-strength measurements.
+
+Bounded forgetting is explicit. Stale records with weak retention scores are
+removed, and the persistent tier has an independent hard capacity ceiling.
+Retention combines confidence, importance, provenance strength, and freshness,
+so weak transient notes can be forgotten while strongly sourced evidence can
+survive beyond the short-term window.
+
+The deterministic v0.36 benchmark requires:
+
+relevant experience -> short-term eviction -> persistent retrieval still finds
+it -> archived outcome still influences memory bias -> duplicate verified
+records consolidate while retaining both provenance references -> stale weak
+record is forgotten while strong evidence remains -> export/restore preserves
+the bounded persistent tier and monotonic identifiers.
+
+v0.36 accepts v0.35, v0.34, v0.33, v0.32, v0.31 and v0.30 exports for
+backward-compatible restoration. Legacy exports simply restore with an empty
+persistent tier when they contain no v0.36 memory records.
+
+This remains bounded functional memory research. It does not establish
+subjective identity, sentience, phenomenal consciousness, qualia, or
+unrestricted real-world autonomy.
+
+## Next checkpoint: v0.37 controlled environment interaction
+
+The next research step should feed verified tool outcomes back into the
+cognitive state through the existing governed tool gateway, preserving audit,
+approval, budget, and evidence boundaries. Tool results should be observations,
+not automatic proof: only verified outcomes may update durable cognitive state,
+and failed or ambiguous executions must remain explicitly distinguishable.
