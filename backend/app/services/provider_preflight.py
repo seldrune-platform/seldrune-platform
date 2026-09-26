@@ -349,10 +349,92 @@ def _render_preflight(credential: str) -> dict[str, Any]:
     )
 
 
+def _model_list_preflight(
+    provider: str,
+    *,
+    url: str,
+    headers: dict[str, str],
+    models_key: str,
+) -> dict[str, Any]:
+    response = httpx.get(
+        url,
+        headers=headers,
+        timeout=_TIMEOUT_SECONDS,
+    )
+    data = _response_json(response)
+    if response.status_code == 200 and isinstance(data, dict):
+        models = data.get(models_key)
+        model_count = len(models) if isinstance(models, list) else 0
+        return _result(
+            provider,
+            status="verified",
+            verified=True,
+            detail=f"{provider.title()} API key can list available models.",
+            identity={"models_available": model_count},
+            http_status=200,
+        )
+    if response.status_code == 401:
+        return _result(
+            provider,
+            status="credential_invalid",
+            verified=False,
+            detail=f"{provider.title()} rejected the API key.",
+            http_status=401,
+        )
+    if response.status_code == 403:
+        return _result(
+            provider,
+            status="scope_limited",
+            verified=False,
+            detail=f"{provider.title()} accepted the request but denied model-list access.",
+            http_status=403,
+        )
+    return _result(
+        provider,
+        status="provider_error",
+        verified=False,
+        detail=f"{provider.title()} model-list check returned HTTP {response.status_code}.",
+        http_status=response.status_code,
+    )
+
+
+def _openai_preflight(credential: str) -> dict[str, Any]:
+    return _model_list_preflight(
+        "openai",
+        url="https://api.openai.com/v1/models",
+        headers={"Authorization": f"Bearer {credential}"},
+        models_key="data",
+    )
+
+
+def _gemini_preflight(credential: str) -> dict[str, Any]:
+    return _model_list_preflight(
+        "gemini",
+        url="https://generativelanguage.googleapis.com/v1beta/models",
+        headers={"x-goog-api-key": credential},
+        models_key="models",
+    )
+
+
+def _anthropic_preflight(credential: str) -> dict[str, Any]:
+    return _model_list_preflight(
+        "anthropic",
+        url="https://api.anthropic.com/v1/models?limit=1",
+        headers={
+            "x-api-key": credential,
+            "anthropic-version": "2023-06-01",
+        },
+        models_key="data",
+    )
+
+
 _PREFLIGHT_HANDLERS = {
     "gmail": _gmail_preflight,
     "github": _github_preflight,
     "render": _render_preflight,
+    "openai": _openai_preflight,
+    "gemini": _gemini_preflight,
+    "anthropic": _anthropic_preflight,
 }
 
 
