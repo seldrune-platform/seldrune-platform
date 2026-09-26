@@ -72,6 +72,10 @@ services:
         value: true
       - key: OPENAI_API_KEY
         sync: false
+      - key: SELDRUNE_GEMINI_API_KEY
+        sync: false
+      - key: SELDRUNE_ANTHROPIC_API_KEY
+        sync: false
       - key: SELDRUNE_GMAIL_TOOL_CREDENTIAL
         sync: false
       - key: SELDRUNE_GITHUB_TOOL_TOKEN
