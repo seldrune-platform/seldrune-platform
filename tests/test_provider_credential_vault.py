@@ -255,7 +255,7 @@ def test_verified_connect_and_disconnect_wipes_vault_credential(
     assert all(item["credential_reference_id"] is None for item in github_tools)
 
 
-def test_cleanup_invalid_provider_credentials_only_disconnects_rejected(
+def test_cleanup_invalid_provider_credentials_quarantines_and_restores(
     client,
     monkeypatch,
 ) -> None:
@@ -299,16 +299,21 @@ def test_cleanup_invalid_provider_credentials_only_disconnects_rejected(
             },
         ],
     )
+    cleanup_url = (
+        f"/api/v1/organizations/{organization_id}"
+        "/tool-bootstrap/credentials/cleanup-invalid"
+    )
     cleanup = client.post(
-        (
-            f"/api/v1/organizations/{organization_id}"
-            "/tool-bootstrap/credentials/cleanup-invalid"
-        ),
+        cleanup_url,
         headers=headers,
         json={},
     )
     assert cleanup.status_code == 200
-    assert cleanup.json()["invalid"] == ["github"]
+    body = cleanup.json()
+    assert body["invalid"] == ["github"]
+    assert body["removed"] == []
+    assert body["quarantined"][0]["provider"] == "github"
+    assert body["quarantined"][0]["secret_preserved"] is True
 
     references = client.get(
         f"/api/v1/organizations/{organization_id}/secret-references",
@@ -317,3 +322,62 @@ def test_cleanup_invalid_provider_credentials_only_disconnects_rejected(
     status_by_slug = {item["slug"]: item["status"] for item in references}
     assert status_by_slug["github-tool-token"] == "disabled"
     assert status_by_slug["render-api-key"] == "active"
+
+    tools = client.get(
+        f"/api/v1/organizations/{organization_id}/tools",
+        headers=headers,
+    ).json()
+    github_tools = [item for item in tools if item["provider"] == "github"]
+    assert github_tools
+    assert all(item["status"] == "disabled" for item in github_tools)
+
+    monkeypatch.setattr(
+        tools_routes,
+        "preflight_configured_providers",
+        lambda session, organization_id: [
+            {
+                "provider": "github",
+                "status": "verified",
+                "verified": True,
+                "detail": "Recovered",
+                "identity": {},
+                "http_status": 200,
+            },
+            {
+                "provider": "render",
+                "status": "verified",
+                "verified": True,
+                "detail": "Verified",
+                "identity": {},
+                "http_status": 200,
+            },
+        ],
+    )
+    recovered = client.post(
+        cleanup_url,
+        headers=headers,
+        json={},
+    )
+    assert recovered.status_code == 200
+    recovered_body = recovered.json()
+    github_restore = next(
+        item
+        for item in recovered_body["restored"]
+        if item["provider"] == "github"
+    )
+    assert github_restore["restored"] is True
+
+    references = client.get(
+        f"/api/v1/organizations/{organization_id}/secret-references",
+        headers=headers,
+    ).json()
+    status_by_slug = {item["slug"]: item["status"] for item in references}
+    assert status_by_slug["github-tool-token"] == "active"
+
+    tools = client.get(
+        f"/api/v1/organizations/{organization_id}/tools",
+        headers=headers,
+    ).json()
+    github_tools = [item for item in tools if item["provider"] == "github"]
+    assert github_tools
+    assert all(item["status"] == "active" for item in github_tools)
