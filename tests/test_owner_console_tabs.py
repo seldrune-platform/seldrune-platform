@@ -254,7 +254,7 @@ def test_connections_workspace_unifies_verified_services_and_ai_keys():
     assert "Google Gemini API" in script
     assert "Anthropic API" in script
     assert "read-only model-list request before saving" in script
-    assert "Never enter your account password." in script
+    assert "Do not enter your account password." in script
     assert 'type="password"' in script
     assert "autocomplete" in script
     assert "secret_value: secret" in script
