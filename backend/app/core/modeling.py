@@ -7,6 +7,8 @@ class ModelProvider(StrEnum):
     MOCK = "mock"
     OPENAI = "openai"
     OPENAI_COMPATIBLE = "openai_compatible"
+    GEMINI = "gemini"
+    ANTHROPIC = "anthropic"
 
 
 @dataclass(frozen=True)
