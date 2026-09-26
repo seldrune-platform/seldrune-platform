@@ -5,6 +5,7 @@ from contextlib import suppress
 from time import perf_counter
 from typing import Any
 
+import httpx
 from openai import OpenAI
 
 from backend.app.core.config import Settings
@@ -179,6 +180,8 @@ _PROVIDER_CAPABILITIES: dict[ModelProvider, ModelProviderCapabilities] = {
         text=True,
         structured_output=True,
     ),
+    ModelProvider.GEMINI: ModelProviderCapabilities(text=True),
+    ModelProvider.ANTHROPIC: ModelProviderCapabilities(text=True),
 }
 
 
@@ -242,6 +245,8 @@ class ModelGateway:
             ModelProvider.MOCK: self._generate_mock,
             ModelProvider.OPENAI: self._generate_openai,
             ModelProvider.OPENAI_COMPATIBLE: self._generate_openai_compatible,
+            ModelProvider.GEMINI: self._generate_gemini,
+            ModelProvider.ANTHROPIC: self._generate_anthropic,
         }
         adapter = adapters.get(request.provider)
         if adapter is None:
@@ -302,6 +307,194 @@ class ModelGateway:
                 f"estimated maximum USD {worst_case:.4f} exceeds "
                 f"USD {budget:.4f} request budget"
             )
+
+    def _generate_gemini(self, request: ModelRequest) -> ModelResult:
+        api_key = (self.settings.gemini_api_key or "").strip()
+        if not api_key:
+            raise ModelGatewayError("SELDRUNE_GEMINI_API_KEY must be configured")
+        unsupported = []
+        if request.input_images:
+            unsupported.append("images")
+        if request.input_files:
+            unsupported.append("files")
+        if request.response_schema is not None:
+            unsupported.append("structured output")
+        if unsupported:
+            raise ModelGatewayError(
+                "Gemini text adapter does not support requested capabilities: "
+                + ", ".join(unsupported)
+            )
+
+        self._guard_request_cost(
+            request,
+            input_tokens=self._rough_input_token_estimate(request, 0),
+        )
+        payload: dict[str, Any] = {
+            "model": request.model,
+            "input": request.input_text,
+            "store": False,
+        }
+        if request.instructions:
+            payload["system_instruction"] = request.instructions
+        if request.max_output_tokens is not None:
+            payload["generation_config"] = {
+                "max_output_tokens": request.max_output_tokens
+            }
+
+        try:
+            with httpx.Client(timeout=self.settings.model_timeout_seconds) as client:
+                response = client.post(
+                    "https://generativelanguage.googleapis.com/v1beta/interactions",
+                    headers={
+                        "x-goog-api-key": api_key,
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+                response.raise_for_status()
+                body = response.json()
+        except httpx.TimeoutException as exc:
+            raise ModelGatewayError("Gemini request timed out") from exc
+        except httpx.HTTPStatusError as exc:
+            raise ModelGatewayError(
+                f"Gemini request failed (HTTP {exc.response.status_code})"
+            ) from exc
+        except (httpx.RequestError, ValueError) as exc:
+            raise ModelGatewayError(
+                f"Gemini request failed ({type(exc).__name__})"
+            ) from exc
+
+        steps = body.get("steps") or []
+        output_parts = [
+            block.get("text", "")
+            for step in steps
+            if step.get("type") == "model_output"
+            for block in step.get("content", [])
+            if block.get("type") == "text" and isinstance(block.get("text"), str)
+        ]
+        output_text = body.get("output_text") or "".join(output_parts)
+        if not output_text.strip():
+            raise ModelGatewayError("Gemini returned no text output")
+
+        usage = body.get("usage") or {}
+        input_tokens = int(usage.get("total_input_tokens") or 0)
+        output_tokens = int(usage.get("total_output_tokens") or 0)
+        total_tokens = int(
+            usage.get("total_tokens") or input_tokens + output_tokens
+        )
+        cached_tokens = int(usage.get("total_cached_tokens") or 0)
+        estimated_cost = estimate_model_cost(
+            request.model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cached_input_tokens=cached_tokens,
+        )
+        return ModelResult(
+            provider=ModelProvider.GEMINI,
+            model=request.model,
+            output_text=output_text,
+            response_id=body.get("id"),
+            usage=ModelUsage(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=total_tokens,
+                cached_input_tokens=cached_tokens,
+                estimated_cost_usd=estimated_cost,
+            ),
+        )
+
+    def _generate_anthropic(self, request: ModelRequest) -> ModelResult:
+        api_key = (self.settings.anthropic_api_key or "").strip()
+        if not api_key:
+            raise ModelGatewayError("SELDRUNE_ANTHROPIC_API_KEY must be configured")
+        unsupported = []
+        if request.input_images:
+            unsupported.append("images")
+        if request.input_files:
+            unsupported.append("files")
+        if request.response_schema is not None:
+            unsupported.append("structured output")
+        if unsupported:
+            raise ModelGatewayError(
+                "Anthropic text adapter does not support requested capabilities: "
+                + ", ".join(unsupported)
+            )
+
+        self._guard_request_cost(
+            request,
+            input_tokens=self._rough_input_token_estimate(request, 0),
+        )
+        payload: dict[str, Any] = {
+            "model": request.model,
+            "max_tokens": int(request.max_output_tokens or self.settings.model_max_output_tokens),
+            "messages": [{"role": "user", "content": request.input_text}],
+        }
+        if request.instructions:
+            payload["system"] = request.instructions
+
+        try:
+            with httpx.Client(timeout=self.settings.model_timeout_seconds) as client:
+                response = client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+                response.raise_for_status()
+                body = response.json()
+        except httpx.TimeoutException as exc:
+            raise ModelGatewayError("Anthropic request timed out") from exc
+        except httpx.HTTPStatusError as exc:
+            raise ModelGatewayError(
+                f"Anthropic request failed (HTTP {exc.response.status_code})"
+            ) from exc
+        except (httpx.RequestError, ValueError) as exc:
+            raise ModelGatewayError(
+                f"Anthropic request failed ({type(exc).__name__})"
+            ) from exc
+
+        output_text = "".join(
+            block.get("text", "")
+            for block in body.get("content", [])
+            if block.get("type") == "text" and isinstance(block.get("text"), str)
+        )
+        if not output_text.strip():
+            raise ModelGatewayError("Anthropic returned no text output")
+
+        usage = body.get("usage") or {}
+        input_tokens = int(usage.get("input_tokens") or 0)
+        output_tokens = int(usage.get("output_tokens") or 0)
+        cached_input_tokens = int(
+            usage.get("cache_read_input_tokens") or 0
+        )
+        cache_write_tokens = int(
+            usage.get("cache_creation_input_tokens") or 0
+        )
+        total_tokens = input_tokens + output_tokens
+        estimated_cost = estimate_model_cost(
+            request.model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cached_input_tokens=cached_input_tokens,
+            cache_write_tokens=cache_write_tokens,
+        )
+        return ModelResult(
+            provider=ModelProvider.ANTHROPIC,
+            model=request.model,
+            output_text=output_text,
+            response_id=body.get("id"),
+            usage=ModelUsage(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=total_tokens,
+                cached_input_tokens=cached_input_tokens,
+                cache_write_tokens=cache_write_tokens,
+                estimated_cost_usd=estimated_cost,
+            ),
+        )
 
     def _generate_openai_compatible(self, request: ModelRequest) -> ModelResult:
         if not request.model or request.model.startswith("mock-"):
