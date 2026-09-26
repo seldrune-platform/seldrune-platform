@@ -167,7 +167,7 @@ def test_snapshot_never_claims_phenomenal_consciousness() -> None:
     snapshot = engine.snapshot()
 
     assert snapshot["claims_phenomenal_consciousness"] is False
-    assert snapshot["version"] == "unarchi-v0.35"
+    assert snapshot["version"] == "unarchi-v0.36"
 
 
 def test_export_restore_preserves_identity_state_and_memory() -> None:
@@ -5692,7 +5692,7 @@ def test_v033_arbitration_survives_export_restore() -> None:
     )
     restored = UnarchiEngine.from_export(engine.export_state())
 
-    assert restored.snapshot()["version"] == "unarchi-v0.35"
+    assert restored.snapshot()["version"] == "unarchi-v0.36"
     assert restored.causal_hypothesis_arbitrations == engine.causal_hypothesis_arbitrations
     assert restored.causal_hypothesis_arbitrations[-1].id == arbitration.id
     assert restored.snapshot()["causal_hypothesis_arbitration_count"] == 1
@@ -5936,7 +5936,7 @@ def test_v034_hierarchical_planning_survives_export_restore() -> None:
 
     restored = UnarchiEngine.from_export(engine.export_state())
 
-    assert restored.snapshot()["version"] == "unarchi-v0.35"
+    assert restored.snapshot()["version"] == "unarchi-v0.36"
     assert restored.hierarchical_plans == engine.hierarchical_plans
     assert restored.hierarchical_plan_nodes == engine.hierarchical_plan_nodes
     assert restored.hierarchical_plan_checkpoints == engine.hierarchical_plan_checkpoints
@@ -6051,7 +6051,7 @@ def test_v035_budget_violations_fail_closed_and_persist() -> None:
         "money,compute,latency,risk,uncertainty"
     )
     assert "over-budget" not in decision.feasible_names
-    assert restored.snapshot()["version"] == "unarchi-v0.35"
+    assert restored.snapshot()["version"] == "unarchi-v0.36"
     assert restored.snapshot()["resource_aware_decision_count"] == 1
     assert restored.resource_aware_decisions == engine.resource_aware_decisions
 
@@ -6059,3 +6059,143 @@ def test_v035_budget_violations_fail_closed_and_persist() -> None:
     legacy_payload["version"] = "unarchi-v0.34"
     legacy_restored = UnarchiEngine.from_export(legacy_payload)
     assert legacy_restored.resource_aware_decisions == engine.resource_aware_decisions
+
+
+def test_v036_evicted_experience_survives_working_memory_trim() -> None:
+    engine = UnarchiEngine(max_memory=16, max_persistent_memory=64)
+    engine.learn(
+        observation="rare zircon safety interlock evidence",
+        goal="preserve zircon safety evidence",
+        action="verify zircon interlock",
+        outcome="zircon interlock passed independent verification",
+        success=True,
+        reward=0.9,
+        predicted_success=0.6,
+    )
+    for index in range(16):
+        engine.learn(
+            observation=f"routine unrelated observation {index}",
+            goal="process routine observation",
+            action="record routine result",
+            outcome=f"routine result {index}",
+            success=True,
+            reward=0.1,
+            predicted_success=0.8,
+        )
+
+    assert len(engine.memory) == 16
+    assert all("zircon" not in item.observation for item in engine.memory)
+
+    hits = engine.retrieve_persistent_memory(
+        "zircon safety interlock",
+        top_k=3,
+    )
+
+    assert hits
+    assert "zircon" in hits[0].content
+    assert hits[0].provenance_refs == ("experience:1",)
+    assert engine.snapshot()["persistent_memory_size"] >= 1
+    assert engine.snapshot()["persistent_memory_access_count"] >= 1
+
+
+def test_v036_persistent_memory_consolidates_and_preserves_provenance() -> None:
+    engine = UnarchiEngine(max_persistent_memory=64)
+
+    first = engine.store_persistent_memory(
+        kind="verification",
+        content="deployment receipt release sha verified production readiness",
+        provenance_refs=("ci:receipt-one",),
+        provenance_strength=0.90,
+        confidence=0.85,
+        importance=0.80,
+    )
+    second = engine.store_persistent_memory(
+        kind="verification",
+        content=(
+            "deployment receipt release sha verified production readiness evidence"
+        ),
+        provenance_refs=("ci:receipt-two",),
+        provenance_strength=0.95,
+        confidence=0.95,
+        importance=0.90,
+    )
+
+    assert second.id == first.id
+    assert second.source_count == 2
+    assert second.provenance_refs == ("ci:receipt-one", "ci:receipt-two")
+    assert second.provenance_strength == 0.95
+    assert second.importance == 0.90
+    assert len(engine.persistent_memory) == 1
+
+
+def test_v036_bounded_forgetting_removes_stale_weak_evidence() -> None:
+    engine = UnarchiEngine(max_memory=256, max_persistent_memory=64)
+    strong = engine.store_persistent_memory(
+        kind="evidence",
+        content="stable signed verification evidence for durable release",
+        provenance_refs=("ci:signed-release",),
+        provenance_strength=0.95,
+        confidence=0.95,
+        importance=0.95,
+        consolidate=False,
+    )
+    weak = engine.store_persistent_memory(
+        kind="note",
+        content="unverified transient guess about unrelated state",
+        provenance_refs=("note:single-weak-source",),
+        provenance_strength=0.10,
+        confidence=0.10,
+        importance=0.10,
+        consolidate=False,
+    )
+    for index in range(20):
+        engine.learn(
+            observation=f"aging observation {index}",
+            goal="advance bounded memory age",
+            action="observe",
+            outcome="recorded",
+            success=None,
+            reward=0.0,
+            predicted_success=0.5,
+        )
+
+    removed = engine.prune_persistent_memory(
+        stale_after_experiences=10,
+        min_retention_score=0.55,
+    )
+
+    retained_ids = {item.id for item in engine.persistent_memory}
+    assert weak.id in removed
+    assert weak.id not in retained_ids
+    assert strong.id in retained_ids
+
+
+def test_v036_persistent_memory_export_restore_and_v035_compatibility() -> None:
+    engine = UnarchiEngine(max_persistent_memory=64)
+    stored = engine.store_persistent_memory(
+        kind="evidence",
+        content="persistent provenance survives process restart",
+        provenance_refs=("artifact:verified-memory",),
+        provenance_strength=0.90,
+        confidence=0.90,
+        importance=0.85,
+        consolidate=False,
+    )
+    hits = engine.retrieve_persistent_memory("provenance process restart")
+    assert hits and hits[0].record_id == stored.id
+
+    restored = UnarchiEngine.from_export(engine.export_state())
+
+    assert restored.snapshot()["version"] == "unarchi-v0.36"
+    assert restored.persistent_memory == engine.persistent_memory
+    assert restored.next_persistent_memory_id == engine.next_persistent_memory_id
+    assert restored.max_persistent_memory == engine.max_persistent_memory
+
+    legacy_payload = engine.export_state()
+    legacy_payload["version"] = "unarchi-v0.35"
+    legacy_payload.pop("persistent_memory")
+    legacy_payload.pop("next_persistent_memory_id")
+    legacy_payload.pop("max_persistent_memory")
+    legacy_restored = UnarchiEngine.from_export(legacy_payload)
+    assert legacy_restored.snapshot()["version"] == "unarchi-v0.36"
+    assert legacy_restored.persistent_memory == []
