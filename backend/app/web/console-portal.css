@@ -1200,7 +1200,7 @@ html[data-portal-motion="reduced"] *::after{animation:none!important;scroll-beha
 }
 
 /* SYSTEM, CONNECTED TOOLS, AND OWNER CONTROLS */
-#portal-panel-intelligence #tool-control{
+#portal-panel-connections #tool-control{
   grid-column:span 12;
   padding:22px!important;
 }
@@ -1330,7 +1330,7 @@ html[data-portal-motion="reduced"] *::after{animation:none!important;scroll-beha
   .owner-portal-panel:not([data-portal-panel="home"]) .owner-portal-grid{
     gap:10px;
   }
-  #portal-panel-intelligence #tool-control,
+  #portal-panel-connections #tool-control,
   #portal-panel-intelligence #action-inbox,
   #portal-panel-operations #sti-runtime,
   #portal-panel-operations #commands,
