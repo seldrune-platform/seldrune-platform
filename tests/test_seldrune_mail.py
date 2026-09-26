@@ -76,6 +76,11 @@ def test_owners_share_all_mailboxes_and_members_need_explicit_access(client) -> 
     )
     assert shared.status_code == 201
     assert shared.json()["permission"] == "write"
+    owner_workspace = client.get(base + "/workspace", headers=owner_headers)
+    hello_owner_view = next(
+        item for item in owner_workspace.json()["mailboxes"] if item["id"] == hello["id"]
+    )
+    assert hello_owner_view["shared_with"][0]["email"] == "mail-member@example.test"
 
     member_workspace = client.get(base + "/workspace", headers=member_headers)
     assert [item["email_address"] for item in member_workspace.json()["mailboxes"]] == [
@@ -93,13 +98,24 @@ def test_owners_share_all_mailboxes_and_members_need_explicit_access(client) -> 
     )
     assert saved.status_code == 201
     assert saved.json()["body"] == "A private draft"
+    updated = client.put(
+        f"{base}/mailboxes/{hello['id']}/drafts/{saved.json()['id']}",
+        headers=member_headers,
+        json={
+            "to": ["recipient@example.test"],
+            "subject": "Welcome updated",
+            "body": "Revised private draft",
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["body"] == "Revised private draft"
 
     owner_drafts = client.get(
         f"{base}/mailboxes/{hello['id']}/drafts",
         headers=owner_headers,
     )
     assert owner_drafts.status_code == 200
-    assert owner_drafts.json()[0]["subject"] == "Welcome"
+    assert owner_drafts.json()[0]["subject"] == "Welcome updated"
 
     outsider = _invite_member(
         client,
