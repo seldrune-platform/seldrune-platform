@@ -8,6 +8,7 @@
   let providerPreflight = null;
   let toolDefaults = [];
   let invalidCredentialCleanupAttempted = false;
+  let toolRefreshPromise = null;
 
   const BUILTIN_PROVIDER_BY_SECRET_SLUG = {
     'gmail-tool-credential': 'gmail',
@@ -379,138 +380,84 @@
 
   async function loadToolControl() {
     if (!document.getElementById('tool-control') || !state?.org) return;
-    setStatus('Synchronizing universal tool fabric…');
-    try {
+    if (toolRefreshPromise) return toolRefreshPromise;
+
+    toolRefreshPromise = (async () => {
+      setStatus('Synchronizing supported integrations…');
       try {
-        bootstrapStatus = await api('/tool-bootstrap', {
-          method: 'POST',
-          body: '{}',
-        });
-      } catch (bootstrapError) {
-        console.warn('Automatic tool bootstrap was unavailable', bootstrapError);
-      }
-      [adapters, secrets, tools, runs, bootstrapStatus, toolDefaults] =
-        await Promise.all([
-          api('/tool-adapters'),
-          api('/secret-references'),
-          api('/tools'),
-          api('/tool-runs'),
-          api('/tool-bootstrap/status'),
-          api('/tool-defaults'),
-        ]);
-      renderBootstrapStatus();
-      renderProviderPreflight();
-      renderAdapters();
-      renderSecrets();
-      renderTools();
-      renderRuns();
-      refreshSummary();
-      refreshAdapterForm();
-      setStatus(
-        `Universal action fabric synchronized · ${tools.length} tools available.`
-      );
-      if (!invalidCredentialCleanupAttempted) {
-        invalidCredentialCleanupAttempted = true;
         try {
-          const cleanup = await cleanupInvalidCredentials({silent: true});
-          if ((cleanup.removed?.length || 0) > 0) {
-            await loadToolControl();
-          }
-        } catch (cleanupError) {
-          console.warn('Automatic invalid credential cleanup was unavailable', cleanupError);
+          bootstrapStatus = await api('/tool-bootstrap', {
+            method: 'POST',
+            body: '{}',
+          });
+        } catch (bootstrapError) {
+          console.warn('Automatic tool bootstrap was unavailable', bootstrapError);
         }
-      }
-    } catch (error) {
-      setStatus(error.message);
-    }
-  }
-
-  byId('provider-vault-toggle')?.addEventListener('click', event => {
-    const input = byId('provider-vault-secret');
-    if (!input) return;
-    const reveal = input.type === 'password';
-    input.type = reveal ? 'text' : 'password';
-    event.currentTarget.textContent = reveal ? 'Hide' : 'Show';
-  });
-
-  async function saveProviderCredential({verified}) {
-    const provider = byId('provider-vault-provider')?.value || '';
-    const secretInput = byId('provider-vault-secret');
-    const secretValue = secretInput?.value || '';
-    const vaultStatus = byId('provider-vault-status');
-    if (!provider || !secretValue) return;
-
-    const verifiedButton = byId('provider-vault-verified');
-    const manualButton = byId('provider-vault-manual');
-    if (verifiedButton) verifiedButton.disabled = true;
-    if (manualButton) manualButton.disabled = true;
-    if (vaultStatus) {
-      vaultStatus.textContent = verified
-        ? `Authenticating ${provider} before saving…`
-        : `Saving ${provider} credential manually…`;
-    }
-    try {
-      const result = await api(
-        verified
-          ? '/tool-bootstrap/credentials/verified'
-          : '/tool-bootstrap/credentials',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            provider,
-            secret_value: secretValue,
-          }),
-        }
-      );
-      if (secretInput) {
-        secretInput.value = '';
-        secretInput.type = 'password';
-      }
-      const toggle = byId('provider-vault-toggle');
-      if (toggle) toggle.textContent = 'Show';
-      const identity = result.verification?.identity || {};
-      const identityText = Object.values(identity).filter(Boolean).join(' · ');
-      if (vaultStatus) {
-        vaultStatus.textContent =
-          `${provider.toUpperCase()} connected · ${result.tool_count} active tools`
-          + (identityText ? ` · ${identityText}` : '.');
-      }
-      toast(
-        verified
-          ? `${provider.toUpperCase()} verified and connected`
-          : `${provider.toUpperCase()} credential saved manually`
-      );
-      await loadToolControl();
-      try {
-        providerPreflight = await api('/tool-bootstrap/preflight', {
-          method: 'POST',
-          body: '{}',
-        });
+        [adapters, secrets, tools, runs, bootstrapStatus, toolDefaults] =
+          await Promise.all([
+            api('/tool-adapters'),
+            api('/secret-references'),
+            api('/tools'),
+            api('/tool-runs'),
+            api('/tool-bootstrap/status'),
+            api('/tool-defaults'),
+          ]);
+        renderBootstrapStatus();
         renderProviderPreflight();
-      } catch (preflightError) {
-        console.warn('Provider preflight after credential save failed', preflightError);
+        renderAdapters();
+        renderSecrets();
+        renderTools();
+        renderRuns();
+        refreshSummary();
+        refreshAdapterForm();
+        setStatus(
+          `Integrations synchronized · ${tools.length} available actions.`
+        );
+        if (!invalidCredentialCleanupAttempted) {
+          invalidCredentialCleanupAttempted = true;
+          try {
+            const cleanup = await cleanupInvalidCredentials({silent: true});
+            if ((cleanup.removed?.length || 0) > 0) {
+              [adapters, secrets, tools, runs, bootstrapStatus, toolDefaults] =
+                await Promise.all([
+                  api('/tool-adapters'),
+                  api('/secret-references'),
+                  api('/tools'),
+                  api('/tool-runs'),
+                  api('/tool-bootstrap/status'),
+                  api('/tool-defaults'),
+                ]);
+              renderBootstrapStatus();
+              renderProviderPreflight();
+              renderAdapters();
+              renderSecrets();
+              renderTools();
+              renderRuns();
+              refreshSummary();
+              refreshAdapterForm();
+            }
+          } catch (cleanupError) {
+            console.warn('Automatic invalid credential cleanup was unavailable', cleanupError);
+          }
+        }
+        document.dispatchEvent(new CustomEvent('seldrune:tool-status-updated'));
+      } catch (error) {
+        setStatus(error.message);
+        document.dispatchEvent(new CustomEvent('seldrune:tool-status-updated'));
       }
-    } catch (error) {
-      if (vaultStatus) {
-        vaultStatus.textContent =
-          `${verified ? 'Authentication' : 'Credential save'} failed: ${error.message}`;
-      }
-      toast(error.message);
+    })();
+
+    try {
+      await toolRefreshPromise;
     } finally {
-      if (verifiedButton) verifiedButton.disabled = false;
-      if (manualButton) manualButton.disabled = false;
+      toolRefreshPromise = null;
     }
   }
 
-  byId('provider-vault-form')?.addEventListener('submit', async event => {
-    event.preventDefault();
-    await saveProviderCredential({verified: true});
-  });
-
-  byId('provider-vault-manual')?.addEventListener('click', async () => {
-    await saveProviderCredential({verified: false});
-  });
-
+  window.seldruneTools = {
+    refresh: loadToolControl,
+    getStatus: () => bootstrapStatus,
+  };
   async function disconnectProvider(provider) {
     if (!provider) return;
     if (!window.confirm(
@@ -737,5 +684,7 @@
     }
   });
 
-  document.addEventListener('seldrune:console-ready', loadToolControl);
+  document.addEventListener('seldrune:workspace-change', event => {
+    if (event.detail?.workspace === 'connections') void loadToolControl();
+  });
 })();
