@@ -1,9 +1,0 @@
-/* Owner Console V7: explicit tab workspace layered over the Xenobiotic shell. */
-#console-view main>[data-console-pane]{display:none}
-#console-view main>[data-console-pane].console-tab-active{display:block}
-#console-view aside nav a[data-console-tab]{position:relative;border:1px solid transparent;border-radius:12px;padding:10px 12px}
-#console-view aside nav a[data-console-tab].active{border-color:rgba(116,249,255,.42);background:linear-gradient(90deg,rgba(68,238,255,.14),rgba(180,72,255,.08));box-shadow:inset 0 0 18px rgba(76,232,255,.08),0 0 22px rgba(80,100,255,.08)}
-#console-view aside nav a[data-console-tab].active:after{content:"";position:absolute;right:8px;top:50%;width:6px;height:6px;border-radius:50%;transform:translateY(-50%);background:#8ffcff;box-shadow:0 0 12px #8ffcff}
-#seldrune-gpt.console-tab-active{min-height:70vh}
-#seldrune-gpt-thread{max-height:48vh;overflow:auto}
-@media(max-width:900px){#console-view aside nav{display:flex;gap:8px;overflow-x:auto;scrollbar-width:thin}#console-view aside nav a[data-console-tab]{flex:0 0 auto}}
