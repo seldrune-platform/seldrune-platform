@@ -18,7 +18,7 @@ def test_cosmic_console_assets_define_unified_owner_portal():
     assert "portal-gateway" in script
     assert "neural-grid-layer" in script
     assert "portal-particles" in script
-    assert "data-focus-target" in script
+    assert "trigger.dataset.focusTarget" in script
     assert ".portal-quick-card" in portal_styles
     assert ".portal-fractal" in portal_styles
     assert "@keyframes neural-drift" in portal_styles
