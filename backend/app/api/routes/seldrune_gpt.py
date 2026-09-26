@@ -506,11 +506,16 @@ def seldrune_gpt(
     }.get(selected_provider.value, {})
     if not provider_config.get("configured"):
         hint = provider_config.get("configuration_hint") or "provider credentials"
+        connection_hint = (
+            "Connect it in Seldrune Connections or configure its key on the Seldrune server."
+            if selected_provider.value in {"openai", "gemini", "anthropic"}
+            else f"Set {hint} on the Seldrune server."
+        )
         raise HTTPException(
             status_code=503,
             detail=(
                 f"{provider_config.get('label', selected_provider.value)} is not configured. "
-                f"Set {hint} on the Seldrune server."
+                f"{connection_hint}"
             ),
         )
 
