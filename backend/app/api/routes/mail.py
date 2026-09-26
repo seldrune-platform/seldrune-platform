@@ -35,7 +35,7 @@ _DOMAIN_PATTERN = re.compile(
     r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$",
     re.IGNORECASE,
 )
-_LOCAL_PART_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._+-]{0,62}[a-z0-9]$|^[a-z0-9]$|^[a-z0-9][a-z0-9._+-]{1,62}$")
+_LOCAL_PART_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9._+-]{0,62}[a-z0-9])?$")
 _DEFAULT_MAILBOXES = (
     ("you", "Seldrune Owner"),
     ("hello", "Seldrune Hello"),
@@ -199,6 +199,23 @@ def _workspace(
     mailbox_rows = []
     for item in visible_mailboxes:
         domain = next((entry for entry in domains if entry.id == item.domain_id), None)
+        shared_with = []
+        if is_manager:
+            access_rows = session.execute(
+                select(MailboxAccess, User)
+                .join(User, User.id == MailboxAccess.user_id)
+                .where(MailboxAccess.mailbox_id == item.id)
+                .order_by(User.display_name)
+            ).all()
+            shared_with = [
+                {
+                    "user_id": str(access.user_id),
+                    "email": shared_user.email,
+                    "display_name": shared_user.display_name,
+                    "permission": access.permission,
+                }
+                for access, shared_user in access_rows
+            ]
         mailbox_rows.append(
             {
                 "id": str(item.id),
@@ -213,6 +230,7 @@ def _workspace(
                     if is_manager
                     else shared_access.get(item.id, "read")
                 ),
+                "shared_with": shared_with,
             }
         )
     domain_rows = [
@@ -254,6 +272,7 @@ def _workspace(
         "domains": domain_rows,
         "mailboxes": mailbox_rows,
         "members": members,
+        "can_manage": is_manager,
         "delivery": {
             "ready": False,
             "status": "mail_host_required",
@@ -570,6 +589,39 @@ def save_draft(
         encrypted_payload=encrypt_secret_value(json.dumps(content, ensure_ascii=False)),
     )
     session.add(draft)
+    session.commit()
+    session.refresh(draft)
+    return _draft_response(draft)
+
+
+@router.put("/mailboxes/{mailbox_id}/drafts/{draft_id}")
+def update_draft(
+    organization_id: UUID,
+    mailbox_id: UUID,
+    draft_id: UUID,
+    payload: DraftCreate,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> dict[str, object]:
+    _mailbox(session, organization_id, mailbox_id, current_user, write=True)
+    draft = session.scalar(
+        select(MailDraft).where(
+            MailDraft.id == draft_id,
+            MailDraft.mailbox_id == mailbox_id,
+        )
+    )
+    if draft is None:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    content = {
+        "to": [str(item) for item in payload.to],
+        "cc": [str(item) for item in payload.cc],
+        "bcc": [str(item) for item in payload.bcc],
+        "subject": payload.subject,
+        "body": payload.body,
+    }
+    draft.encrypted_payload = encrypt_secret_value(
+        json.dumps(content, ensure_ascii=False)
+    )
     session.commit()
     session.refresh(draft)
     return _draft_response(draft)
