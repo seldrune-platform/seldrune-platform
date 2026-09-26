@@ -618,7 +618,8 @@ function openCompose(draft) {
   $("#compose-bcc").value = draft ? (draft.bcc || []).join(", ") : "";
   $("#compose-subject").value = draft ? draft.subject || "" : "";
   $("#compose-body").value = draft ? draft.body || "" : "";
-  ["#compose-mailbox","#compose-to","#compose-cc","#compose-bcc","#compose-subject","#compose-body"].forEach(selector => {
+  $("#ai-instruction").value = "";
+  ["#compose-mailbox","#compose-to","#compose-cc","#compose-bcc","#compose-subject","#compose-body","#ai-instruction","#ai-draft"].forEach(selector => {
     $(selector).disabled = readOnly;
   });
   $("#compose-form button[type=submit]").disabled = readOnly;
@@ -631,11 +632,44 @@ function closeCompose() {
   if (typeof dialog.close === "function") dialog.close();
   else dialog.removeAttribute("open");
   $("#compose-form").reset();
-  ["#compose-mailbox","#compose-to","#compose-cc","#compose-bcc","#compose-subject","#compose-body"].forEach(selector => {
+  ["#compose-mailbox","#compose-to","#compose-cc","#compose-bcc","#compose-subject","#compose-body","#ai-instruction","#ai-draft"].forEach(selector => {
     $(selector).disabled = false;
   });
   $("#compose-form button[type=submit]").disabled = false;
   state.editingDraftId = "";
+}
+
+async function generateDraftBody() {
+  const instruction = $("#ai-instruction").value.trim();
+  if (!instruction) {
+    flash("Describe the email you want Seldrune AI to draft.");
+    return;
+  }
+  const button = $("#ai-draft");
+  button.disabled = true;
+  button.textContent = "Drafting…";
+  const prompt = [
+    "Write only the body of a clear, professional email. Do not send it.",
+    "To: " + $("#compose-to").value,
+    "Cc: " + $("#compose-cc").value,
+    "Subject: " + $("#compose-subject").value,
+    "Instructions: " + instruction,
+    "Return only the email body, with no subject label or explanation."
+  ].join("\n");
+  try {
+    const result = await request("/organizations/" + encodeURIComponent(state.organizationId) + "/gpt", {
+      method:"POST",
+      body:JSON.stringify({message:prompt, provider:"auto"})
+    });
+    $("#compose-body").value = result.response || "";
+    if (!result.response) throw new Error("Seldrune AI returned an empty draft.");
+    flash("AI draft ready. Review it before saving.");
+  } catch (error) {
+    flash(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = "✦ Draft with Seldrune AI";
+  }
 }
 
 async function saveDraft(event) {
@@ -687,6 +721,7 @@ $("#compose-open").addEventListener("click", () => openCompose());
 $("#compose-close").addEventListener("click", closeCompose);
 $("#compose-cancel").addEventListener("click", closeCompose);
 $("#compose-form").addEventListener("submit", saveDraft);
+$("#ai-draft").addEventListener("click", generateDraftBody);
 document.querySelectorAll(".mail-nav button").forEach(button => {
   button.addEventListener("click", () => {
     state.view = button.dataset.view;
