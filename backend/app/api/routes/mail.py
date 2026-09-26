@@ -269,10 +269,10 @@ def _workspace(
     return {
         "organization_id": str(organization_id),
         "setup_required": not domains,
+        "can_manage": is_manager,
         "domains": domain_rows,
         "mailboxes": mailbox_rows,
         "members": members,
-        "can_manage": is_manager,
         "delivery": {
             "ready": False,
             "status": "mail_host_required",
