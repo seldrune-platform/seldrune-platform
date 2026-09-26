@@ -17,6 +17,9 @@ from backend.app.api.routes.knowledge import router as knowledge_router
 from backend.app.api.routes.life import router as life_router
 from backend.app.api.routes.liveshift_face import router as liveshift_face_router
 from backend.app.api.routes.membership_admin import router as membership_admin_router
+from backend.app.api.routes.model_provider_connections import (
+    router as model_provider_connections_router,
+)
 from backend.app.api.routes.mfa import router as mfa_router
 from backend.app.api.routes.orchestrations import router as orchestrations_router
 from backend.app.api.routes.organization_kernel import router as organization_kernel_router
@@ -70,6 +73,7 @@ def create_app() -> FastAPI:
         owner_commands_router,
         runtime_router,
         tools_router,
+        model_provider_connections_router,
         knowledge_router,
         life_router,
         liveshift_face_router,
