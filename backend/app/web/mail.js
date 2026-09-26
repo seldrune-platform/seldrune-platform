@@ -482,6 +482,34 @@ function renderSettings(root) {
 }
 
 function appendShareForm(parent, mailbox) {
+  const shareList = document.createElement("div");
+  shareList.className = "share-list";
+  (mailbox.shared_with || []).forEach(person => {
+    const row = document.createElement("div");
+    row.className = "member-row";
+    const info = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = person.display_name;
+    const email = document.createElement("small");
+    email.textContent = person.email + " · " + person.permission;
+    info.append(name, email);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "small-button";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", async () => {
+      try {
+        await request(orgPath("/mailboxes/" + encodeURIComponent(mailbox.id) + "/access/" + encodeURIComponent(person.user_id)), {method:"DELETE"});
+        await loadWorkspace();
+        state.view = "settings";
+        renderCurrentView();
+        flash("Mailbox access removed");
+      } catch (error) { flash(error.message); }
+    });
+    row.append(info, remove);
+    shareList.append(row);
+  });
+  parent.append(shareList);
   const form = document.createElement("form");
   form.className = "share-form";
   const email = document.createElement("input");
