@@ -29,6 +29,7 @@ def test_standalone_mail_page_is_publicly_reachable(client) -> None:
     assert response.status_code == 200
     assert "Seldrune Mail" in response.text
     assert "/mail-assets/mail.js" in response.text
+    assert "Draft with Seldrune AI" in response.text
 
 
 def test_owners_share_all_mailboxes_and_members_need_explicit_access(client) -> None:
