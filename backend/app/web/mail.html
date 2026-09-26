@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101721">
+  <title>Seldrune Mail</title>
+  <link rel="stylesheet" href="/mail-assets/mail.css">
+  <script src="/mail-assets/mail.js" defer></script>
+</head>
+<body>
+  <section id="login-view" class="login-view">
+    <div class="login-card">
+      <a class="mail-brand" href="/mail"><span class="brand-mark">S</span><span>Seldrune<small>MAIL</small></span></a>
+      <p class="eyebrow">PRIVATE TEAM MESSAGING</p>
+      <h1>Your Seldrune inbox.</h1>
+      <p class="muted">Sign in with your Seldrune account. Owners share every organization mailbox automatically.</p>
+      <form id="login-form">
+        <label>Email address<input id="login-email" type="email" autocomplete="username" required></label>
+        <label>Password<input id="login-password" type="password" autocomplete="current-password" required></label>
+        <button type="submit" class="primary">Sign in to Mail</button>
+        <p id="login-error" class="error" role="alert"></p>
+      </form>
+      <a class="back-link" href="/console">Back to Seldrune</a>
+    </div>
+  </section>
+
+  <div id="mail-app" class="mail-app hidden">
+    <aside class="mail-sidebar">
+      <a class="mail-brand" href="/mail"><span class="brand-mark">S</span><span>Seldrune<small>MAIL</small></span></a>
+      <button id="compose-open" class="compose-button" type="button">＋ <span>Compose</span></button>
+      <nav class="mail-nav" aria-label="Mail folders">
+        <button type="button" data-view="inbox" class="active"><span>Inbox</span><span class="nav-count">↗</span></button>
+        <button type="button" data-view="drafts"><span>Drafts</span><span id="draft-count" class="nav-count">0</span></button>
+        <button type="button" data-view="sent"><span>Sent</span></button>
+        <button type="button" data-view="shared"><span>Shared mailboxes</span></button>
+        <button type="button" data-view="settings"><span>Domains & access</span></button>
+      </nav>
+      <div class="sidebar-mailboxes">
+        <div class="sidebar-heading">YOUR MAILBOXES</div>
+        <div id="mailbox-list" class="mailbox-list"></div>
+      </div>
+      <div class="profile">
+        <span id="profile-avatar" class="avatar">S</span>
+        <span class="profile-info"><strong id="profile-name">Seldrune owner</strong><small id="profile-org">Organization</small></span>
+        <button id="logout" type="button" class="logout" aria-label="Sign out">↪</button>
+      </div>
+    </aside>
+    <main class="mail-main">
+      <header class="mail-topbar">
+        <div>
+          <p class="eyebrow">SELDRUNE WORKSPACE</p>
+          <h1 id="view-title">Inbox</h1>
+        </div>
+        <div class="mail-top-actions">
+          <span id="provider-state" class="provider-pill"><i></i> Host setup needed</span>
+          <a href="/console" class="console-link">Open Seldrune ↗</a>
+        </div>
+      </header>
+      <div id="toast" role="status" aria-live="polite"></div>
+      <section id="mail-content" aria-live="polite"></section>
+    </main>
+  </div>
+
+  <dialog id="compose-dialog" class="compose-dialog">
+    <form id="compose-form" method="dialog">
+      <header class="compose-head">
+        <div><p class="eyebrow">SELDRUNE MAIL</p><h2 id="compose-title">New message</h2></div>
+        <button id="compose-close" type="button" class="icon-button" aria-label="Close">×</button>
+      </header>
+      <label>From mailbox<select id="compose-mailbox" required></select></label>
+      <label>To<input id="compose-to" type="text" placeholder="name@example.com" required></label>
+      <label>Cc<input id="compose-cc" type="text" placeholder="Optional"></label>
+      <label>Bcc<input id="compose-bcc" type="text" placeholder="Optional"></label>
+      <label>Subject<input id="compose-subject" type="text" maxlength="998"></label>
+      <label>Message<textarea id="compose-body" rows="9" maxlength="100000"></textarea></label>
+      <p class="draft-note">Drafts are encrypted before they are saved. Sending is enabled after a mail host is connected.</p>
+      <div class="compose-actions"><button type="button" id="compose-cancel" class="secondary">Cancel</button><button type="submit" class="primary">Save draft</button></div>
+    </form>
+  </dialog>
+</body>
+</html>
