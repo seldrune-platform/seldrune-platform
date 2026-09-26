@@ -152,6 +152,16 @@ function renderCurrentView() {
   const root = $("#mail-content");
   root.replaceChildren();
 
+  if (state.workspace.setup_required && !state.workspace.can_manage) {
+    root.append(makeEmpty(
+      "⌑",
+      "Mail setup needs an owner",
+      "An organization owner or administrator must open Seldrune Mail once to create the shared addresses.",
+      null
+    ));
+    return;
+  }
+
   if (state.workspace.setup_required) {
     const card = document.createElement("section");
     card.className = "hero-card onboarding";
