@@ -7,6 +7,7 @@
     ["operations", "MISSIONS", "⌘"],
     ["media", "MEDIA", "◉"],
     ["intelligence", "SYSTEM", "⚙"],
+    ["connections", "CONNECT", "↗"],
     ["sense", "SENSE", "◉"],
   ];
 
@@ -17,7 +18,8 @@
     coding: "Build source with connected coding agents, CI, and preview tools.",
     operations: "Track Seldrune self-development, agent work, and verified execution.",
     media: "Create and inspect Seldrune Face and LiveShift workspaces.",
-    intelligence: "Connected tools, agents, owner decisions, budgets, evidence, and settings.",
+    intelligence: "Agents, owner decisions, budgets, evidence, and advanced tool controls.",
+    connections: "Connect model providers, code, email, and deployment tools in one secure vault.",
     sense: "Always-on internal health signals and owner-controlled continuity preferences.",
   };
 
@@ -155,6 +157,13 @@
         <b>→</b>
       </button>
 
+      <button class="portal-quick-card portal-quick-connect" type="button"
+              data-open-portal="connections" data-depth="1.0">
+        <span class="portal-quick-icon">↗</span>
+        <span><strong>CONNECTIONS</strong><small>Connect & secure keys</small></span>
+        <b>→</b>
+      </button>
+
       <button class="portal-quick-card portal-quick-files" type="button"
               data-open-portal="outputs"
               data-depth="1.1">
@@ -247,6 +256,9 @@
     move(".audit-center", "intelligence");
     move("#evidence-truth", "intelligence");
     move("#tool-control", "intelligence");
+    move("#tool-provider-readiness", "connections");
+    move("#tool-provider-preflight-results", "connections");
+    move(".provider-vault-card", "connections");
 
     const portalSettings = document.createElement("section");
     portalSettings.id = "portal-settings";
