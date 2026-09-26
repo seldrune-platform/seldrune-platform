@@ -75,7 +75,10 @@ def test_portal_controller_defines_owner_workspaces_and_fixed_home():
     assert "seldrune:workspace-change" in js
     assert "portal-quick-orders" not in js
     assert "Ask Seldrune" in js
-    for label in ("NEXUS", "SELDRUNE AI", "OUTPUTS", "CODING LAB", "MISSIONS", "MEDIA", "SYSTEM", "SENSE"):
+    for label in (
+        "NEXUS", "SELDRUNE AI", "OUTPUTS", "CODING LAB",
+        "MISSIONS", "MEDIA", "SYSTEM", "SENSE",
+    ):
         assert label in js
     assert 'move("#seldrune-gpt", "operator")' in js
     assert 'move("#command", "operator")' not in js
