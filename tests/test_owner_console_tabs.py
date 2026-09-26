@@ -88,10 +88,7 @@ def test_portal_controller_defines_owner_workspaces_and_fixed_home():
     assert 'move("#cognitive-mission", "operations")' in js
     assert 'move("#sti-runtime", "operations")' in js
     assert 'move("#face-v01-mission", "media")' in js
-    assert 'move("#tool-control", "intelligence")' in js
-    assert 'move("#tool-provider-readiness", "connections")' in js
-    assert 'move("#tool-provider-preflight-results", "connections")' in js
-    assert 'move(".provider-vault-card", "connections")' in js
+    assert 'move("#tool-control", "connections")' in js
     assert 'grid("outputs")?.append(outputLibrary)' in js
     assert 'grid("coding")?.append(codingLab)' in js
     assert 'aria-labelledby", button.id' in js
@@ -149,7 +146,7 @@ def test_every_owner_workspace_uses_portal_visual_system():
         '#portal-panel-media #liveshift-mission',
         '#portal-panel-intelligence .agent-observatory',
         '#portal-panel-intelligence .audit-center',
-        '#portal-panel-intelligence #tool-control',
+        '#portal-panel-connections #tool-control',
         '#portal-panel-intelligence #portal-settings',
         '#portal-panel-intelligence .governance-policy',
         '#portal-panel-intelligence #action-inbox',
@@ -246,20 +243,46 @@ def test_connections_workspace_unifies_verified_services_and_ai_keys():
     portal = (WEB / "console-cosmic-tabs.js").read_text()
 
     assert "/console-assets/console-connections.js" in html
-    assert "GitHub token/App credential" in html
-    assert "Google OAuth access token" in html
-    assert "Never enter an account password." in html
+    assert "GitHub token or GitHub App credential" in script
+    assert "Google OAuth access token" in script
+    assert "Do not enter your account password." in script
     assert "SELDRUNE CONNECTION CENTER" in script
     assert "OpenAI API" in script
     assert "Google Gemini API" in script
     assert "Anthropic API" in script
     assert "read-only model-list request before saving" in script
-    assert "Do not enter your account password." in script
     assert 'type="password"' in script
     assert "autocomplete" in script
     assert "secret_value: secret" in script
     assert "model-provider-connections" in script
-    assert "Keys are encrypted in the organization vault" in script
+    assert "Credentials are encrypted in the organization vault" in script
     assert 'data-open-portal="connections"' in portal
     assert "#portal-panel-connections .owner-portal-grid" in styles
-    assert ".model-provider-connection-list" in styles
+    assert ".integration-list" in styles
+
+
+
+def test_connections_is_one_lazy_workspace_with_creation_shortcuts():
+    html = (WEB / "index.html").read_text()
+    portal = (WEB / "console-cosmic-tabs.js").read_text()
+    connections = (WEB / "console-connections.js").read_text()
+    tools = (WEB / "console-tools.js").read_text()
+
+    assert 'move("#tool-control", "connections")' in portal
+    assert 'move("#tool-control", "intelligence")' not in portal
+    assert "portal-quick-card portal-quick-tools" not in portal
+    assert "provider-vault-card" not in html
+    assert "integration-credential-form" in connections
+    assert "/model-provider-connections/" in connections
+    assert "/tool-bootstrap/credentials/verified" in connections
+    for workspace in (
+        'data-open-portal="operator"',
+        'data-open-portal="coding"',
+        'data-open-portal="media"',
+        'data-open-portal="outputs"',
+    ):
+        assert workspace in connections
+    assert "seldrune:workspace-change" in tools
+    assert "seldrune:console-ready', loadToolControl" not in tools
+    assert "setInterval" not in connections
+    assert "visibilitychange" not in connections
