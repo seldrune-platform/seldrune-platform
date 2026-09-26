@@ -175,6 +175,140 @@ def _save_provider_credential(
     )
 
 
+def _quarantine_provider_credential(
+    *,
+    organization_id: UUID,
+    provider: str,
+    actor_user_id: UUID,
+    session: SessionDep,
+    reason: str,
+) -> dict[str, Any]:
+    item = _provider_catalog_item(provider)
+    credential_slug = str(item["credential_slug"])
+    reference = session.scalar(
+        select(SecretReference).where(
+            SecretReference.organization_id == organization_id,
+            SecretReference.slug == credential_slug,
+        )
+    )
+    if reference is None:
+        return {
+            "provider": provider,
+            "quarantined": False,
+            "disabled_tools": [],
+            "secret_preserved": False,
+            "detail": "No Seldrune credential is configured for this provider.",
+        }
+
+    disabled_tools = list(
+        session.scalars(
+            select(ToolDefinition).where(
+                ToolDefinition.organization_id == organization_id,
+                ToolDefinition.provider == provider,
+            )
+        )
+    )
+    for tool in disabled_tools:
+        tool.status = ToolStatus.DISABLED.value
+
+    reference.status = "disabled"
+    secret_preserved = bool(
+        reference.encrypted_value is not None or reference.provider != "vault"
+    )
+    record_audit(
+        session,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
+        action="tool_bootstrap.provider_credential_quarantined",
+        resource_type="secret_reference",
+        resource_id=str(reference.id),
+        details={
+            "provider": provider,
+            "credential_slug": credential_slug,
+            "reason": reason,
+            "disabled_tools": sorted(tool.slug for tool in disabled_tools),
+            "secret_preserved": secret_preserved,
+        },
+    )
+    session.commit()
+    return {
+        "provider": provider,
+        "quarantined": True,
+        "disabled_tools": sorted(tool.slug for tool in disabled_tools),
+        "secret_preserved": secret_preserved,
+        "detail": (
+            "Credential quarantined and provider tools disabled; stored secret preserved "
+            "for later verified recovery."
+        ),
+    }
+
+
+def _restore_provider_credential(
+    *,
+    organization_id: UUID,
+    provider: str,
+    actor_user_id: UUID,
+    session: SessionDep,
+) -> dict[str, Any]:
+    item = _provider_catalog_item(provider)
+    credential_slug = str(item["credential_slug"])
+    reference = session.scalar(
+        select(SecretReference).where(
+            SecretReference.organization_id == organization_id,
+            SecretReference.slug == credential_slug,
+        )
+    )
+    if reference is None or reference.status == "active":
+        return {
+            "provider": provider,
+            "restored": False,
+            "active_tools": [],
+        }
+
+    reference.status = "active"
+    status = ensure_configured_external_tools(
+        session,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
+    )
+    active_tools = list(
+        session.scalars(
+            select(ToolDefinition).where(
+                ToolDefinition.organization_id == organization_id,
+                ToolDefinition.provider == provider,
+                ToolDefinition.status == ToolStatus.ACTIVE.value,
+            )
+        )
+    )
+    restored = bool(active_tools)
+    if not restored:
+        reference.status = "disabled"
+    record_audit(
+        session,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
+        action=(
+            "tool_bootstrap.provider_credential_restored"
+            if restored
+            else "tool_bootstrap.provider_credential_restore_failed"
+        ),
+        resource_type="secret_reference",
+        resource_id=str(reference.id),
+        details={
+            "provider": provider,
+            "credential_slug": credential_slug,
+            "active_tools": sorted(tool.slug for tool in active_tools),
+            "fully_ready": bool(status.get("fully_ready")),
+        },
+    )
+    session.commit()
+    return {
+        "provider": provider,
+        "restored": restored,
+        "active_tools": sorted(tool.slug for tool in active_tools),
+    }
+
+
 def _disconnect_provider_credential(
     *,
     organization_id: UUID,
@@ -360,10 +494,16 @@ def cleanup_invalid_provider_credentials(
         for item in results
         if item["status"] == "credential_invalid"
     )
-    removed: list[dict[str, Any]] = []
+    verified_providers = sorted(
+        item["provider"]
+        for item in results
+        if bool(item.get("verified"))
+    )
+
+    quarantined: list[dict[str, Any]] = []
     for provider in invalid_providers:
-        removed.append(
-            _disconnect_provider_credential(
+        quarantined.append(
+            _quarantine_provider_credential(
                 organization_id=organization_id,
                 provider=provider,
                 actor_user_id=current_user.id,
@@ -371,10 +511,24 @@ def cleanup_invalid_provider_credentials(
                 reason="remote_provider_rejected_credential",
             )
         )
+
+    restored: list[dict[str, Any]] = []
+    for provider in verified_providers:
+        restored.append(
+            _restore_provider_credential(
+                organization_id=organization_id,
+                provider=provider,
+                actor_user_id=current_user.id,
+                session=session,
+            )
+        )
+
     return {
         "checked": len(results),
         "invalid": invalid_providers,
-        "removed": removed,
+        "removed": [],
+        "quarantined": quarantined,
+        "restored": restored,
     }
 
 
