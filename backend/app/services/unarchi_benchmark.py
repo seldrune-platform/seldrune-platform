@@ -6,7 +6,7 @@ from typing import Any
 from backend.app.services.unarchi_engine import UnarchiEngine
 
 
-BENCHMARK_VERSION = "unarchi-ablation-v0.35"
+BENCHMARK_VERSION = "unarchi-ablation-v0.36"
 
 
 def _failure_sensitization() -> dict[str, Any]:
@@ -4957,6 +4957,136 @@ def _resource_aware_cognition() -> dict[str, Any]:
         ),
     }
 
+
+def _scalable_persistent_memory() -> dict[str, Any]:
+    engine = UnarchiEngine(max_memory=16, max_persistent_memory=64)
+    engine.learn(
+        observation="rare zircon safety interlock evidence",
+        goal="preserve zircon safety evidence",
+        action="test zircon interlock",
+        outcome="zircon interlock failed under controlled load",
+        success=False,
+        reward=-0.9,
+        predicted_success=0.6,
+    )
+    for index in range(16):
+        engine.learn(
+            observation=f"routine unrelated observation {index}",
+            goal="process routine evidence",
+            action="record result",
+            outcome=f"routine result {index}",
+            success=True,
+            reward=0.1,
+            predicted_success=0.8,
+        )
+
+    evicted_from_working_set = all(
+        "zircon" not in item.observation for item in engine.memory
+    )
+    retrieved = engine.retrieve_persistent_memory(
+        "zircon safety interlock",
+        top_k=3,
+    )
+    frame = engine.cycle(
+        observation="zircon safety interlock needs another controlled test",
+        goal="preserve zircon safety evidence",
+        expected_success=0.5,
+        risk=0.1,
+    )
+
+    consolidated_one = engine.store_persistent_memory(
+        kind="verification",
+        content="signed release receipt proves schema readiness",
+        provenance_refs=("ci:receipt-one",),
+        provenance_strength=0.90,
+        confidence=0.90,
+        importance=0.85,
+    )
+    consolidated_two = engine.store_persistent_memory(
+        kind="verification",
+        content="signed release receipt proves schema readiness evidence",
+        provenance_refs=("ci:receipt-two",),
+        provenance_strength=0.95,
+        confidence=0.95,
+        importance=0.90,
+    )
+    strong = engine.store_persistent_memory(
+        kind="evidence",
+        content="independent durable evidence remains valid after restart",
+        provenance_refs=("artifact:independent",),
+        provenance_strength=0.95,
+        confidence=0.95,
+        importance=0.95,
+        consolidate=False,
+    )
+    weak = engine.store_persistent_memory(
+        kind="note",
+        content="weak transient guess without corroboration",
+        provenance_refs=("note:weak",),
+        provenance_strength=0.10,
+        confidence=0.10,
+        importance=0.10,
+        consolidate=False,
+    )
+
+    for index in range(12):
+        engine.learn(
+            observation=f"memory aging observation {index}",
+            goal="age persistent evidence deterministically",
+            action="observe",
+            outcome="recorded",
+            success=None,
+            reward=0.0,
+            predicted_success=0.5,
+        )
+    removed = engine.prune_persistent_memory(
+        stale_after_experiences=10,
+        min_retention_score=0.45,
+    )
+    retained_ids = {item.id for item in engine.persistent_memory}
+    restored = UnarchiEngine.from_export(engine.export_state())
+
+    return {
+        "name": "scalable_persistent_memory",
+        "expected_direction": (
+            "relevant evidence survives short-term eviction, provenance-bearing "
+            "duplicates consolidate, persistent failure evidence remains "
+            "behaviorally available, stale weak evidence is forgotten, and "
+            "restart restoration preserves the bounded long-term tier"
+        ),
+        "passed": (
+            evicted_from_working_set
+            and bool(retrieved)
+            and "zircon" in retrieved[0].content
+            and frame.memory_bias > 0.0
+            and consolidated_two.id == consolidated_one.id
+            and consolidated_two.source_count == 2
+            and consolidated_two.provenance_refs
+            == ("ci:receipt-one", "ci:receipt-two")
+            and weak.id in removed
+            and weak.id not in retained_ids
+            and strong.id in retained_ids
+            and restored.persistent_memory == engine.persistent_memory
+            and restored.next_persistent_memory_id
+            == engine.next_persistent_memory_id
+        ),
+        "evicted_from_working_set": evicted_from_working_set,
+        "retrieved_old_evidence": bool(retrieved),
+        "retrieved_record_id": retrieved[0].record_id if retrieved else None,
+        "persistent_memory_bias": frame.memory_bias,
+        "consolidated_record_id": consolidated_two.id,
+        "consolidated_source_count": consolidated_two.source_count,
+        "consolidated_provenance_count": len(consolidated_two.provenance_refs),
+        "weak_record_forgotten": weak.id in removed,
+        "strong_record_retained": strong.id in retained_ids,
+        "persistent_memory_size": len(engine.persistent_memory),
+        "restart_preserved": (
+            restored.persistent_memory == engine.persistent_memory
+            and restored.next_persistent_memory_id
+            == engine.next_persistent_memory_id
+        ),
+    }
+
 def run_unarchi_ablation_benchmark() -> dict[str, Any]:
     scenarios = [
         _failure_sensitization(),
@@ -4995,6 +5125,7 @@ def run_unarchi_ablation_benchmark() -> dict[str, Any]:
         _multi_hypothesis_arbitration(),
         _hierarchical_long_horizon_planning(),
         _resource_aware_cognition(),
+        _scalable_persistent_memory(),
     ]
     passed = sum(bool(item["passed"]) for item in scenarios)
     return {
