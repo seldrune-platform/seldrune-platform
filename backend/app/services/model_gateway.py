@@ -195,8 +195,14 @@ def model_provider_capabilities(
 
 
 class ModelGateway:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        api_key_overrides: dict[ModelProvider, str] | None = None,
+    ) -> None:
         self.settings = settings
+        self.api_key_overrides = api_key_overrides or {}
 
     def route(
         self,
@@ -309,7 +315,10 @@ class ModelGateway:
             )
 
     def _generate_gemini(self, request: ModelRequest) -> ModelResult:
-        api_key = (self.settings.gemini_api_key or "").strip()
+        api_key = (
+            self.api_key_overrides.get(ModelProvider.GEMINI)
+            or (self.settings.gemini_api_key or "").strip()
+        )
         if not api_key:
             raise ModelGatewayError("SELDRUNE_GEMINI_API_KEY must be configured")
         unsupported = []
@@ -404,7 +413,10 @@ class ModelGateway:
         )
 
     def _generate_anthropic(self, request: ModelRequest) -> ModelResult:
-        api_key = (self.settings.anthropic_api_key or "").strip()
+        api_key = (
+            self.api_key_overrides.get(ModelProvider.ANTHROPIC)
+            or (self.settings.anthropic_api_key or "").strip()
+        )
         if not api_key:
             raise ModelGatewayError("SELDRUNE_ANTHROPIC_API_KEY must be configured")
         unsupported = []
@@ -585,7 +597,11 @@ class ModelGateway:
         if not request.model or request.model.startswith("mock-"):
             raise ModelGatewayError("An OpenAI model must be configured")
 
-        client = OpenAI(timeout=self.settings.model_timeout_seconds)
+        openai_api_key = self.api_key_overrides.get(ModelProvider.OPENAI)
+        client = OpenAI(
+            **({"api_key": openai_api_key} if openai_api_key else {}),
+            timeout=self.settings.model_timeout_seconds,
+        )
         uploaded_file_ids: list[str] = []
         decoded_file_bytes = 0
         try:
