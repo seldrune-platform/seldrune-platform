@@ -9,7 +9,7 @@ def test_owner_console_is_served() -> None:
         assert response.status_code == 200
         assert "Seldrune STI · Aethelion Command Nexus" in response.text
         assert "/console-assets/console.css" in response.text
-        assert "Command monitor" in response.text
+        assert 'id="seldrune-gpt"' in response.text
         assert "Organization board" in response.text
         assert "ORGANIZATION TREASURY" in response.text
         assert "treasury-allocated" in response.text
