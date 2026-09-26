@@ -11,8 +11,10 @@ from backend.app.core.config import settings
 from backend.app.db.session import SessionLocal
 from backend.app.models.governance_policy import GovernancePolicy
 from backend.app.models.membership import Membership
+from backend.app.models.organization import Organization
 from backend.app.services.life_cycle import run_life_tick
 from backend.app.services.life_heartbeat import record_worker_heartbeat
+from backend.app.services.system_sense import build_system_sense_snapshot
 
 logger = logging.getLogger("seldrune.life_worker")
 stop_event = Event()
@@ -26,6 +28,29 @@ def run_worker_cycle() -> dict[str, int]:
     organizations = 0
     advanced = 0
     with SessionLocal() as session:
+        for organization_id in session.scalars(select(Organization.id)):
+            try:
+                snapshot = build_system_sense_snapshot(
+                    session,
+                    organization_id=organization_id,
+                    settings=settings,
+                )
+                logger.info(
+                    "system sense sample organization=%s health=%s agents=%s "
+                    "open_tasks=%s open_security_events=%s worker_alive=%s",
+                    organization_id,
+                    snapshot["system"]["health"],
+                    snapshot["agents"]["total"],
+                    snapshot["tasks"]["open"],
+                    snapshot["security_events"]["open"],
+                    snapshot["life_worker"]["alive"],
+                )
+            except Exception as exc:
+                logger.warning(
+                    "system sense sampling failed for organization=%s (%s)",
+                    organization_id,
+                    type(exc).__name__,
+                )
         policies = list(
             session.scalars(
                 select(GovernancePolicy).where(
