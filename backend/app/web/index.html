@@ -162,6 +162,16 @@
             <input id="seldrune-gpt-files" type="file" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,text/csv,application/json,.docx,.xlsx,.pptx">
             <button id="seldrune-gpt-attach" type="button" class="ghost">＋ Attach</button>
             <span id="seldrune-gpt-attachment-summary">No attachments</span>
+            <label class="gpt-provider-control">
+              <span>Text model</span>
+              <select id="seldrune-gpt-provider" aria-label="Choose Seldrune text model">
+                <option value="auto">Seldrune Auto</option>
+                <option value="openai">OpenAI</option>
+                <option value="openai_compatible">OpenAI-compatible</option>
+                <option value="gemini">Gemini</option>
+                <option value="anthropic">Anthropic</option>
+              </select>
+            </label>
             <span id="seldrune-gpt-mode" class="gpt-mode-pill">Seldrune AI</span>
             <label id="seldrune-gpt-pdf-password-wrap" class="gpt-pdf-password hidden">
               <span>PDF password</span>
@@ -186,5 +196,5 @@
 <section id="face-external-test" class="panel" aria-labelledby="face-external-test-title"><div class="section-head"><div><p class="eyebrow">LIVESHIFT EXTERNAL FACE TEST</p><h2 id="face-external-test-title">Consent-gated transformation proof</h2><p>Uses your signed-in owner session. Images stay in the request path and the Replicate token remains server-side.</p></div></div><form id="face-test-form"><div class="form-grid"><label>Reference/source face<input id="face-source-file" type="file" accept="image/jpeg,image/png,image/webp" required></label><label>Target image<input id="face-target-file" type="file" accept="image/jpeg,image/png,image/webp" required></label></div><label class="policy-toggle"><input id="face-consent" type="checkbox" required><span>I confirm both images are authorized for this transformation test.</span></label><button type="submit">Run external Face test</button></form><p id="face-test-status">Waiting for an authorized test.</p><div id="face-test-output"></div></section>
 
 <section id="commands"><div class="section-head"><div><p class="eyebrow">LIVE PORTFOLIO</p><h2>Strategic commands</h2><p>Complete governed command history, newest first.</p></div></div><div id="command-list" class="list"></div></section></main></div>
-<dialog id="brief"><button class="close" aria-label="Close">×</button><p class="eyebrow">DECISION BRIEF</p><div id="brief-body"></div></dialog><div id="toast"></div><script src="/console-assets/console.js" defer></script><script src="/console-assets/console-action-inbox.js" defer></script><script src="/console-assets/sti-runtime.js" defer></script><script src="/console-assets/owner-push-subscriptions.js" defer></script><script src="/console-assets/face-test.js" defer></script><script src="/console-assets/seldrune-gpt.js" defer></script><script src="/console-assets/console-tools.js" defer></script><script src="/console-assets/console-cosmic-tabs.js" defer></script><script src="/console-assets/console-agents.js" defer></script><script src="/console-assets/console-portal-settings.js" defer></script><script src="/console-assets/cognitive-mission.js" defer></script><script src="/console-assets/console-nexus-arena.js" defer></script></body></html>
+<dialog id="brief"><button class="close" aria-label="Close">×</button><p class="eyebrow">DECISION BRIEF</p><div id="brief-body"></div></dialog><div id="toast"></div><script src="/console-assets/console.js" defer></script><script src="/console-assets/console-action-inbox.js" defer></script><script src="/console-assets/sti-runtime.js" defer></script><script src="/console-assets/owner-push-subscriptions.js" defer></script><script src="/console-assets/face-test.js" defer></script><script src="/console-assets/seldrune-gpt.js" defer></script><script src="/console-assets/console-tools.js" defer></script><script src="/console-assets/console-cosmic-tabs.js" defer></script><script src="/console-assets/console-system-sense.js" defer></script><script src="/console-assets/console-agents.js" defer></script><script src="/console-assets/console-portal-settings.js" defer></script><script src="/console-assets/cognitive-mission.js" defer></script><script src="/console-assets/console-nexus-arena.js" defer></script></body></html>
 
