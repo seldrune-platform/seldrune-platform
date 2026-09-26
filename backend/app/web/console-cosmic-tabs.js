@@ -18,8 +18,8 @@
     coding: "Build source with connected coding agents, CI, and preview tools.",
     operations: "Track Seldrune self-development, agent work, and verified execution.",
     media: "Create and inspect Seldrune Face and LiveShift workspaces.",
-    intelligence: "Agents, owner decisions, budgets, evidence, and advanced tool controls.",
-    connections: "Connect model providers, code, email, and deployment tools in one secure vault.",
+    intelligence: "Agents, owner decisions, budgets, execution evidence, and system policies.",
+    connections: "Connect verified AI, code, email, and deployment services; manage creation tools in one place.",
     sense: "Always-on internal health signals and owner-controlled continuity preferences.",
   };
 
@@ -150,13 +150,6 @@
         </div>
       </article>
 
-      <button class="portal-quick-card portal-quick-tools" type="button"
-              data-open-portal="intelligence" data-depth=".9">
-        <span class="portal-quick-icon">⌁</span>
-        <span><strong>Tools</strong><small>Connect & manage</small></span>
-        <b>→</b>
-      </button>
-
       <button class="portal-quick-card portal-quick-connect" type="button"
               data-open-portal="connections" data-depth="1.0">
         <span class="portal-quick-icon">↗</span>
@@ -189,7 +182,8 @@
 
     const particleRoot = home.querySelector(".portal-particles");
     if (particleRoot) {
-      for (let index = 0; index < 22; index += 1) {
+      const particleCount = matchMedia("(max-width: 760px), (prefers-reduced-motion: reduce)").matches ? 0 : 22;
+      for (let index = 0; index < particleCount; index += 1) {
         const particle = document.createElement("i");
         particle.style.setProperty("--particle-index", String(index));
         particle.style.setProperty("--particle-angle", `${(index * 16.36).toFixed(2)}deg`);
@@ -203,7 +197,8 @@
     const scene = home;
     const gateway = home.querySelector(".portal-gateway");
     const motionReduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!motionReduced) {
+    const finePointer = matchMedia("(hover: hover) and (pointer: fine)").matches;
+    if (!motionReduced && finePointer) {
       scene.addEventListener("pointermove", event => {
         const bounds = scene.getBoundingClientRect();
         const x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
@@ -255,10 +250,7 @@
     move(".incident-center", "intelligence");
     move(".audit-center", "intelligence");
     move("#evidence-truth", "intelligence");
-    move("#tool-control", "intelligence");
-    move("#tool-provider-readiness", "connections");
-    move("#tool-provider-preflight-results", "connections");
-    move(".provider-vault-card", "connections");
+    move("#tool-control", "connections");
 
     const portalSettings = document.createElement("section");
     portalSettings.id = "portal-settings";
