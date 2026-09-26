@@ -68,13 +68,14 @@ def test_portal_controller_defines_owner_workspaces_and_fixed_home():
         "operations",
         "media",
         "intelligence",
+        "sense",
     ):
         assert f'["{workspace}",' in js
     assert "AETHELION INTELLIGENCE FOUNDRY" in js
     assert "seldrune:workspace-change" in js
     assert "portal-quick-orders" not in js
     assert "Ask Seldrune" in js
-    for label in ("NEXUS", "SELDRUNE AI", "OUTPUTS", "CODING LAB", "MISSIONS", "MEDIA", "SYSTEM"):
+    for label in ("NEXUS", "SELDRUNE AI", "OUTPUTS", "CODING LAB", "MISSIONS", "MEDIA", "SYSTEM", "SENSE"):
         assert label in js
     assert 'move("#seldrune-gpt", "operator")' in js
     assert 'move("#command", "operator")' not in js
@@ -90,6 +91,8 @@ def test_portal_controller_defines_owner_workspaces_and_fixed_home():
     assert 'event.key === "Home"' in js
     assert 'portalSettings.id = "portal-settings"' in js
     assert 'grid("intelligence")?.append(portalSettings)' in js
+    assert 'data-open-portal="sense"' in js
+    assert "SYSTEM SENSE" in js
     assert 'workspace: "home", depth: 0' in js
     assert 'activate("home", {historyMode: "none", scroll: false})' in js
     assert "seldrune.portal.lastWorkspace" not in js
@@ -212,3 +215,17 @@ def test_nexus_duel_and_observatory_use_measured_system_data():
     assert "No system state was inferred from missing data." in script
     assert "@media (max-width: 560px)" in styles
     assert "@media (prefers-reduced-motion: reduce)" in styles
+
+
+def test_sense_console_is_owner_only_surface_and_provider_status_is_truthful():
+    html = (WEB / "index.html").read_text()
+    script = (WEB / "console-system-sense.js").read_text()
+    styles = (WEB / "console-cosmic-tabs.css").read_text()
+
+    assert "/console-assets/console-system-sense.js" in html
+    assert 'id="seldrune-gpt-provider"' in html
+    assert "#portal-panel-sense" in styles
+    assert 'api("/sense/system")' in script
+    assert 'api("/sense/owner-continuity")' in script
+    assert "checked on request" in script
+    assert "To clear it, empty the field and save." in script
