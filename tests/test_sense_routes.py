@@ -162,3 +162,51 @@ def test_sense_uses_successful_similar_outcome_and_reflection_memory(client, mon
     assert reflection_memory["reason"] == "reflection_lessons_positive"
     assert reflection_memory["lessons"]
     assert signals["learning_adjustment"] > 0
+
+
+def test_system_sense_reports_owner_scoped_runtime_signals(client) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.get(
+        f"/api/v1/organizations/{organization_id}/sense/system",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    snapshot = response.json()
+    assert snapshot["organization_id"] == str(organization_id)
+    assert snapshot["owner"]["id"]
+    assert "task_status" in snapshot["system"]["monitored_signals"]
+    assert snapshot["agents"]["total"] >= 0
+    assert snapshot["tasks"]["open"] >= 0
+    assert snapshot["security_events"]["open"] >= 0
+    assert {item["provider"] for item in snapshot["model_providers"]} >= {
+        "auto",
+        "gemini",
+        "anthropic",
+    }
+    assert all("api_key" not in item for item in snapshot["model_providers"])
+
+
+def test_owner_continuity_can_be_saved_loaded_and_cleared(client) -> None:
+    token, organization_id = register_owner(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    endpoint = f"/api/v1/organizations/{organization_id}/sense/owner-continuity"
+
+    saved = client.put(
+        endpoint,
+        headers=headers,
+        json={"content": "Keep plans concise and show test results."},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["saved"] is True
+
+    loaded = client.get(endpoint, headers=headers)
+    assert loaded.status_code == 200
+    assert loaded.json()["content"] == "Keep plans concise and show test results."
+
+    cleared = client.put(endpoint, headers=headers, json={"content": ""})
+    assert cleared.status_code == 200
+    assert cleared.json()["saved"] is False
+    assert client.get(endpoint, headers=headers).json()["content"] == ""
