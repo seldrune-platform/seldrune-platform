@@ -8,6 +8,7 @@ def test_cosmic_console_assets_define_unified_owner_portal():
     portal_styles = (web / "console-portal.css").read_text()
 
     assert "data-portal-tab" in script
+    assert '["sense", "SENSE", "◉"]' in script
     assert '["operator", "SELDRUNE AI", "✦"]' in script
     assert 'move("#seldrune-gpt", "operator")' in script
     assert 'move("#tool-control", "intelligence")' in script
@@ -28,5 +29,6 @@ def test_owner_console_loads_unified_portal_assets():
     html = Path("backend/app/web/index.html").read_text()
     assert "/console-assets/console-cosmic-tabs.css" in html
     assert "/console-assets/console-cosmic-tabs.js" in html
+    assert "/console-assets/console-system-sense.js" in html
     assert "/console-assets/console-portal.css" in html
     assert "/console-assets/console-portal-settings.js" in html
