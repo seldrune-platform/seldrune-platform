@@ -56,7 +56,7 @@ def test_owners_share_all_mailboxes_and_members_need_explicit_access(client) -> 
         client,
         organization_id,
         owner_headers,
-        "mail-member@example.test",
+        "mail-member@example.com",
     )
     assert accepted.status_code == 201
     member_headers = _headers(accepted.json()["access_token"])
@@ -73,7 +73,7 @@ def test_owners_share_all_mailboxes_and_members_need_explicit_access(client) -> 
     shared = client.post(
         f"{base}/mailboxes/{hello['id']}/access",
         headers=owner_headers,
-        json={"email": "mail-member@example.test", "permission": "write"},
+        json={"email": "mail-member@example.com", "permission": "write"},
     )
     assert shared.status_code == 201
     assert shared.json()["permission"] == "write"
@@ -81,7 +81,7 @@ def test_owners_share_all_mailboxes_and_members_need_explicit_access(client) -> 
     hello_owner_view = next(
         item for item in owner_workspace.json()["mailboxes"] if item["id"] == hello["id"]
     )
-    assert hello_owner_view["shared_with"][0]["email"] == "mail-member@example.test"
+    assert hello_owner_view["shared_with"][0]["email"] == "mail-member@example.com"
 
     member_workspace = client.get(base + "/workspace", headers=member_headers)
     assert [item["email_address"] for item in member_workspace.json()["mailboxes"]] == [
@@ -92,7 +92,7 @@ def test_owners_share_all_mailboxes_and_members_need_explicit_access(client) -> 
         f"{base}/mailboxes/{hello['id']}/drafts",
         headers=member_headers,
         json={
-            "to": ["recipient@example.test"],
+            "to": ["recipient@example.com"],
             "subject": "Welcome",
             "body": "A private draft",
         },
@@ -103,7 +103,7 @@ def test_owners_share_all_mailboxes_and_members_need_explicit_access(client) -> 
         f"{base}/mailboxes/{hello['id']}/drafts/{saved.json()['id']}",
         headers=member_headers,
         json={
-            "to": ["recipient@example.test"],
+            "to": ["recipient@example.com"],
             "subject": "Welcome updated",
             "body": "Revised private draft",
         },
@@ -122,19 +122,19 @@ def test_owners_share_all_mailboxes_and_members_need_explicit_access(client) -> 
         client,
         organization_id,
         owner_headers,
-        "mail-reader@example.test",
+        "mail-reader@example.com",
     )
     outsider_headers = _headers(outsider.json()["access_token"])
     read_share = client.post(
         f"{base}/mailboxes/{hello['id']}/access",
         headers=owner_headers,
-        json={"email": "mail-reader@example.test", "permission": "read"},
+        json={"email": "mail-reader@example.com", "permission": "read"},
     )
     assert read_share.status_code == 201
     read_only = client.post(
         f"{base}/mailboxes/{hello['id']}/drafts",
         headers=outsider_headers,
-        json={"to": ["recipient@example.test"], "subject": "Denied"},
+        json={"to": ["recipient@example.com"], "subject": "Denied"},
     )
     assert read_only.status_code == 403
 
