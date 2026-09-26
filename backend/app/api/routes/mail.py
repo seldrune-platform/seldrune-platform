@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import secrets
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 from uuid import UUID
@@ -193,14 +194,11 @@ def _workspace(
     visible_mailboxes = [
         item
         for item in all_mailboxes
-        if is_owner or item.id in shared_access
+        if is_manager or item.id in shared_access
     ]
     mailbox_rows = []
     for item in visible_mailboxes:
         domain = next((entry for entry in domains if entry.id == item.domain_id), None)
-        draft_count = session.scalar(
-            select(MailDraft.id).where(MailDraft.mailbox_id == item.id).count()
-        ) if False else None
         mailbox_rows.append(
             {
                 "id": str(item.id),
@@ -404,8 +402,6 @@ def verify_mail_domain(
         if isinstance(item, dict)
     ):
         raise HTTPException(status_code=409, detail="Verification TXT record was not found")
-
-    from datetime import UTC, datetime
 
     domain.verified_at = datetime.now(UTC)
     session.commit()
