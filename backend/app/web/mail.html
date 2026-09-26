@@ -73,7 +73,12 @@
       <label>Cc<input id="compose-cc" type="text" placeholder="Optional"></label>
       <label>Bcc<input id="compose-bcc" type="text" placeholder="Optional"></label>
       <label>Subject<input id="compose-subject" type="text" maxlength="998"></label>
+      <div class="ai-compose-tools">
+        <label>Tell Seldrune AI what this email should say<input id="ai-instruction" type="text" maxlength="2000" placeholder="e.g. confirm tomorrow’s meeting and ask for the latest figures"></label>
+        <button type="button" id="ai-draft" class="secondary">✦ Draft with Seldrune AI</button>
+      </div>
       <label>Message<textarea id="compose-body" rows="9" maxlength="100000"></textarea></label>
+      <p class="ai-note">AI uses your organization’s configured model and budget. Review every draft yourself.</p>
       <p class="draft-note">Drafts are encrypted before they are saved. Sending is enabled after a mail host is connected.</p>
       <div class="compose-actions"><button type="button" id="compose-cancel" class="secondary">Cancel</button><button type="submit" class="primary">Save draft</button></div>
     </form>
