@@ -192,3 +192,37 @@
 .provider-vault-form .tool-row-actions{display:flex;gap:8px;align-items:center}
 .provider-vault-form input[type="password"],.provider-vault-form input[type="text"]{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 @media(max-width:820px){.provider-vault-form{grid-template-columns:1fr}.provider-vault-form .tool-row-actions{justify-content:flex-start}}
+
+.tool-head-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+.tool-advanced-actions,
+.tool-diagnostics,
+.tool-administration {
+  border: 1px solid rgba(130, 174, 208, .2);
+  border-radius: 12px;
+  background: rgba(2, 10, 25, .52);
+}
+.tool-advanced-actions > summary,
+.tool-diagnostics > summary,
+.tool-administration > summary {
+  padding: 10px 13px;
+  color: var(--cosmic-text);
+  cursor: pointer;
+  font-weight: 650;
+}
+.tool-advanced-actions > div {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+.tool-diagnostics,
+.tool-administration { grid-column: 1 / -1; }
+.tool-diagnostics > .tool-readiness { margin: 0 12px 12px; }
+.tool-administration > .tool-control-summary,
+.tool-administration > .tool-control-grid { margin: 12px; }
+.tool-administration .tool-console-card { min-width: 0; }
+@media (max-width: 640px) {
+  .tool-head-actions { align-items: stretch; }
+  .tool-head-actions > button,
+  .tool-advanced-actions { width: 100%; }
+  .tool-advanced-actions > summary { text-align: center; }
+}
