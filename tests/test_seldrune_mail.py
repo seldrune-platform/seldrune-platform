@@ -45,7 +45,11 @@ def test_owners_share_all_mailboxes_and_members_need_explicit_access(client) -> 
         "business@seldrune.in",
         "careers@seldrune.in",
     }
-    hello = next(item for item in setup.json()["mailboxes"] if item["email_address"] == "hello@seldrune.in")
+    hello = next(
+        item
+        for item in setup.json()["mailboxes"]
+        if item["email_address"] == "hello@seldrune.in"
+    )
 
     accepted = _invite_member(
         client,
