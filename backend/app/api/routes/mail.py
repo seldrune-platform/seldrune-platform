@@ -36,12 +36,7 @@ _DOMAIN_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _LOCAL_PART_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9._+-]{0,62}[a-z0-9])?$")
-_DEFAULT_MAILBOXES = (
-    ("you", "Seldrune Owner"),
-    ("hello", "Seldrune Hello"),
-    ("business", "Seldrune Business"),
-    ("careers", "Seldrune Careers"),
-)
+_DEFAULT_MAILBOXES = (("founder", "Seldrune Founder"),)
 
 
 @page_router.get("/mail", include_in_schema=False)
