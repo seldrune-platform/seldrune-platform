@@ -39,6 +39,12 @@ MAX_VIDEO_PAYLOAD_BYTES = 8 * 1024 * 1024
 MAX_AUDIO_PAYLOAD_BYTES = 512 * 1024
 MAX_TICKET_TTL_SECONDS = 900
 AUDIENCE = "seldrune-live-media"
+SUPPORTED_ACCELERATOR_PROFILES = frozenset({
+    "rtx-4090",
+    "rtx-pro-4500-se",
+    "rtx-5090",
+    "rtx-pro-6000-blackwell",
+})
 
 Transform = Callable[
     [bytes, str],
@@ -325,6 +331,7 @@ class RunPodLiveWorkerServer:
         max_inflight_per_connection: int = 2,
         realism_policy: RealismQualityPolicy | None = None,
         require_realism_evidence: bool = False,
+        actual_accelerator_profile: str | None = None,
     ) -> None:
         _secret_bytes(service_token)
         _secret_bytes(ticket_secret)
@@ -348,6 +355,12 @@ class RunPodLiveWorkerServer:
         self.max_inflight_per_connection = max_inflight_per_connection
         self.realism_policy = realism_policy
         self.require_realism_evidence = require_realism_evidence
+        if (
+            actual_accelerator_profile is not None
+            and actual_accelerator_profile not in SUPPORTED_ACCELERATOR_PROFILES
+        ):
+            raise ValueError("unsupported actual accelerator profile")
+        self.actual_accelerator_profile = actual_accelerator_profile
         self._used_tickets: dict[str, int] = {}
         self._active_sessions: set[str] = set()
 
@@ -405,17 +418,19 @@ class RunPodLiveWorkerServer:
             self._used_tickets[claims.ticket_id] = claims.expires_at
             self._active_sessions.add(claims.session_id)
             registered_session = claims.session_id
-            await write_message(
-                writer,
-                {
-                    "type": "ready",
-                    "session_id": claims.session_id,
-                    "video_profile": "hd-720p30-minimum",
-                    "audio_sample_rate_hz": 48000,
-                    "synthetic_video_label_required": True,
-                    "realism_evidence_required": self.require_realism_evidence,
-                },
-            )
+            ready_header: dict[str, Any] = {
+                "type": "ready",
+                "session_id": claims.session_id,
+                "video_profile": "hd-720p30-minimum",
+                "audio_sample_rate_hz": 48000,
+                "synthetic_video_label_required": True,
+                "realism_evidence_required": self.require_realism_evidence,
+            }
+            if self.actual_accelerator_profile is not None:
+                ready_header["actual_accelerator_profile"] = (
+                    self.actual_accelerator_profile
+                )
+            await write_message(writer, ready_header)
 
             last_sequence: dict[str, int] = {}
             inflight_ids: set[str] = set()
@@ -608,11 +623,13 @@ class RunPodLiveWorkerClient:
         session_id: str,
         max_inflight: int = 2,
         require_realism_evidence: bool = False,
+        actual_accelerator_profile: str | None = None,
     ) -> None:
         self.reader = reader
         self.writer = writer
         self.session_id = session_id
         self.require_realism_evidence = require_realism_evidence
+        self.actual_accelerator_profile = actual_accelerator_profile
         self._write_lock = asyncio.Lock()
         if max_inflight < 1:
             raise ValueError("at least one in-flight media request is required")
@@ -668,6 +685,14 @@ class RunPodLiveWorkerClient:
             writer.close()
             await writer.wait_closed()
             raise StreamProtocolError("RunPod worker did not admit the live session")
+        actual_accelerator_profile = ready.header.get("actual_accelerator_profile")
+        if actual_accelerator_profile is not None and (
+            not isinstance(actual_accelerator_profile, str)
+            or actual_accelerator_profile not in SUPPORTED_ACCELERATOR_PROFILES
+        ):
+            writer.close()
+            await writer.wait_closed()
+            raise StreamProtocolError("RunPod worker reported an unsupported accelerator")
         return cls(
             reader,
             writer,
@@ -676,6 +701,7 @@ class RunPodLiveWorkerClient:
             require_realism_evidence=(
                 ready.header.get("realism_evidence_required") is True
             ),
+            actual_accelerator_profile=actual_accelerator_profile,
         )
 
     async def _read_results(self) -> None:
