@@ -413,7 +413,7 @@ def test_one_go_blocks_compiled_work_before_model_without_tools(
     assert report["tasks_executed"] == 0
     assert report["tasks_verified"] == 0
     assert report["tasks_unverified"] == 0
-    assert report["tasks_blocked"] == 6
+    assert report["tasks_blocked"] == 8
     assert report["tasks_failed"] == 0
     assert report["recovery_rounds"] == 3
     assert report["recovery_attempts"] == 5
@@ -429,6 +429,8 @@ def test_one_go_blocks_compiled_work_before_model_without_tools(
         "pdf_local_labels",
         "provider_connectors",
         "factory_build_test",
+        "live_face_runtime",
+        "live_voice_runtime",
     }
     assert all(
         item["disposition"] == "blocked"
@@ -559,7 +561,7 @@ def test_one_go_verified_tool_receipt_respects_next_dependency_gate(
     executed = client.post(
         f"{base}/development-mission/execute",
         headers=headers,
-        json={"max_waves": 1, "max_tasks": 6},
+        json={"max_waves": 1, "max_tasks": 8},
     )
     assert executed.status_code == 200
     report = executed.json()
@@ -688,4 +690,3 @@ def test_one_go_auto_bootstraps_available_tools_before_execution(
         item["provider"] == "github"
         for item in tools.json()
     )
-
