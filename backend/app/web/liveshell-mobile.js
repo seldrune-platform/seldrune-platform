@@ -106,7 +106,7 @@
   async function startLive(event) {
     event.preventDefault();
     if (!state.gatewayConfigured) {
-      showStatus('The GPU session gateway is not configured on this Seldrune deployment yet.', 'error');
+      showStatus('The GPU session gateway is not configured on this deployment yet.', 'error');
       return;
     }
     if (!q('#face-profile').value.trim() || !q('#voice-profile').value.trim()) {
@@ -178,7 +178,7 @@
       }
       setConnection('NEGOTIATED');
     } catch (error) {
-      showStatus('LiveShell could not start: ' + error.message, 'error');
+      showStatus('The live session could not start: ' + error.message, 'error');
       await stopLive(true);
     } finally {
       q('#connect-button').disabled = !state.gatewayConfigured;
@@ -270,7 +270,7 @@
 
   async function initialize() {
     if (!token) {
-      showStatus('Sign in through the Seldrune console, then open LiveShell in the same tab.', 'error');
+      showStatus('Sign in first, then open this page in the same tab.', 'error');
       q('#gateway-state').textContent = 'Sign-in required';
       q('#gateway-state').classList.add('error');
       q('#preview-button').disabled = true;
@@ -279,7 +279,7 @@
     try {
       const me = await api('/auth/me');
       const membership = me.memberships.find(item => item.role === 'owner') || me.memberships[0];
-      if (!membership) throw new Error('No Seldrune organization is available for this account.');
+      if (!membership) throw new Error('No organization is available for this account.');
       state.organizationId = membership.organization.id;
       const readiness = await api('/organizations/' + state.organizationId + '/liveshift/live/readiness');
       state.gatewayConfigured = Boolean(readiness.gateway_configured);
@@ -294,7 +294,7 @@
         showStatus('Camera preview is available. Live transformation will unlock after the private GPU gateway and authorized models are configured.', '');
       }
     } catch (error) {
-      q('#gateway-state').textContent = 'Seldrune sign-in or readiness check failed';
+      q('#gateway-state').textContent = 'Sign-in or readiness check failed';
       q('#gateway-state').classList.add('error');
       showStatus(error.message, 'error');
       q('#preview-button').disabled = true;
