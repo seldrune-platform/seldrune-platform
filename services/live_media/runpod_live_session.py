@@ -18,6 +18,23 @@ from .worker_pool import WorkerPool
 ClientFactory = Callable[..., Awaitable[RunPodLiveWorkerClient]]
 
 
+def _validate_session_fields(
+    session_id: str,
+    face_profile_id: str,
+    voice_profile_id: str,
+    region: str,
+    max_inflight: int,
+) -> None:
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", session_id):
+        raise ValueError("invalid live session id")
+    if not face_profile_id or not voice_profile_id:
+        raise ValueError("both authorized media profiles are required")
+    if not region:
+        raise ValueError("RunPod worker region is required")
+    if not 1 <= max_inflight <= 2:
+        raise ValueError("live sessions support one or two in-flight media requests")
+
+
 @dataclass
 class RunPodLiveSession:
     """Bind one authorized media session to one long-lived GPU worker connection.
@@ -62,14 +79,13 @@ class RunPodLiveSession:
         )
 
     def _validate_bindings(self) -> None:
-        if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", self.session_id):
-            raise ValueError("invalid live session id")
-        if not self.face_profile_id or not self.voice_profile_id:
-            raise ValueError("both authorized media profiles are required")
-        if not self.region:
-            raise ValueError("RunPod worker region is required")
-        if not 1 <= self.max_inflight <= 2:
-            raise ValueError("live sessions support one or two in-flight media requests")
+        _validate_session_fields(
+            self.session_id,
+            self.face_profile_id,
+            self.voice_profile_id,
+            self.region,
+            self.max_inflight,
+        )
 
     @classmethod
     async def connect(
@@ -94,8 +110,13 @@ class RunPodLiveSession:
             raise ValueError("authenticated worker connection details are required")
         if ssl_context is None or ssl_context.verify_mode == ssl.CERT_NONE:
             raise ValueError("RunPod live media requires verified TLS")
-        if not 1 <= max_inflight <= 2:
-            raise ValueError("live sessions support one or two in-flight media requests")
+        _validate_session_fields(
+            session_id,
+            face_profile_id,
+            voice_profile_id,
+            region,
+            max_inflight,
+        )
         connector = client_factory or RunPodLiveWorkerClient.connect
         client = await connector(
             host,
