@@ -2,7 +2,7 @@
 
 ## Product target
 
-LiveShell provides one consent-gated live studio for face and voice transformation. A phone, tablet, or ordinary computer captures and plays media; a cloud GPU performs the face and voice transforms. The target is 720p at 30 fps with 48 kHz audio, with 1080p as an optional measured profile. Seldrune must report actual resolution, frame rate, audio sample rate, inference latency, end-to-end latency, and audio/video drift for each test session.
+LiveShell provides one consent-gated live studio for face and voice transformation. A phone, tablet, or ordinary computer captures and plays media; a cloud GPU performs the face and voice transforms. The target is 720p at 30 fps with 48 kHz audio, with 1080p as an optional measured profile. Seldrune must report actual resolution, frame rate, audio sample rate, inference latency, end-to-end latency, and audio/video drift for each test session. GPU request profiles include RTX 4090, RTX 5090, and RTX PRO 6000 Blackwell for cloud runs. Selecting a profile is only a scheduling request; the gateway must report the accelerator it actually used, and quality claims still require a measured GPU session receipt.
 
 The existing mobile LiveShell page is a browser Live Room. A browser page cannot install a system camera or microphone into native Android Teams or Zoom. Desktop Teams/Zoom support needs the Seldrune desktop companion to expose normal virtual camera and microphone devices. The user selects those devices in the meeting app's own settings. The companion must keep the existing selected-window sharing rule and reject UI spoofing or capture bypass.
 
