@@ -33,7 +33,7 @@ Configure these gateway environment variables:
 | `SELDRUNE_LIVE_ICE_SERVERS_JSON` | Optional JSON array of STUN entries and gateway-only static ICE entries. Do not put static TURN entries here when dynamic TURN is enabled. |
 | `SELDRUNE_LIVE_TURN_URLS_JSON` | Optional JSON array of `turn:` or `turns:` relay URLs for Coturn REST authentication. |
 | `SELDRUNE_LIVE_TURN_SHARED_SECRET` | Coturn `static-auth-secret`; at least 32 random bytes. It stays inside the gateway. |
-| `SELDRUNE_LIVE_TURN_CREDENTIAL_TTL_SECONDS` | Lifetime of generated browser and gateway credentials (default 3600); must cover the configured session lifetime and may be at most 86400. |
+| `SELDRUNE_LIVE_TURN_CREDENTIAL_TTL_SECONDS` | Lifetime of generated browser and gateway credentials (default 3900); must exceed the configured session lifetime by at least 300 seconds and may be at most 86700. |
 | `SELDRUNE_LIVE_MAX_SESSIONS` | Local session capacity (default 1). |
 | `SELDRUNE_LIVE_MAX_INFLIGHT` | Shared audio/video worker requests (1 or 2; default 2). |
 | `SELDRUNE_LIVE_SESSION_TTL_SECONDS` | Session cleanup lifetime (default 3600). |
@@ -48,8 +48,8 @@ synthetic-media disclosure checks remain separate. Do not set an allow-all autho
 
 The authenticated Seldrune API proxies `/v1/ice-servers` to the gateway and returns
 only derived, expiring browser credentials with `Cache-Control: no-store`. Configure
-TURN URLs and the shared secret together; the generated credential lifetime must be
-at least the gateway session lifetime. Set Coturn's `static-auth-secret` to the same
+TURN URLs and the shared secret together; the generated credential lifetime must exceed
+the gateway session lifetime by five minutes. Set Coturn's `static-auth-secret` to the same
 server-side value. A real Coturn relay still needs to be provisioned and tested from
 the target mobile networks before claiming universal connectivity. Keep this service
 to one instance while session state is in memory.
