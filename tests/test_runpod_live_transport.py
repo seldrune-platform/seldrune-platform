@@ -467,3 +467,125 @@ def test_strict_worker_requires_and_returns_realism_evidence():
         await server.wait_closed()
 
     asyncio.run(scenario())
+
+
+def test_strict_worker_rejects_audio_video_drift_before_face_inference():
+    quality_policy = RealismQualityPolicy(
+        face_min_identity_similarity=0.8,
+        face_min_temporal_consistency=0.8,
+        face_min_blend_quality=0.8,
+        voice_min_speaker_similarity=0.8,
+        voice_min_content_preservation=0.9,
+        voice_min_naturalness=0.75,
+        voice_max_clipped_fraction=0.001,
+        voice_max_dropout_fraction=0.001,
+        max_processing_p95_ms=150.0,
+        max_av_drift_ms=80.0,
+    )
+    face_called = False
+
+    async def transform_face(payload, _profile):
+        nonlocal face_called
+        face_called = True
+        return FaceTransformOutput(
+            payload=payload,
+            evidence=FaceRealismEvidence(
+                evaluator_id="face-eval",
+                evaluator_version="test-1",
+                window_frames=30,
+                output_width=1280,
+                output_height=720,
+                output_fps=30.0,
+                identity_similarity=0.92,
+                temporal_consistency=0.91,
+                blend_quality=0.88,
+                p95_inference_ms=110.0,
+            ),
+        )
+
+    async def transform_voice(payload, _profile):
+        return VoiceTransformOutput(
+            payload=payload,
+            evidence=VoiceRealismEvidence(
+                evaluator_id="voice-eval",
+                evaluator_version="test-1",
+                window_duration_seconds=1.2,
+                sample_rate_hz=48000,
+                channels=1,
+                speaker_similarity=0.9,
+                content_preservation=0.96,
+                naturalness=0.84,
+                clipped_fraction=0.0001,
+                dropout_fraction=0.0002,
+                p95_processing_ms=120.0,
+            ),
+        )
+
+    async def label_video(payload):
+        return payload
+
+    async def scenario():
+        worker = RunPodLiveWorkerServer(
+            service_token=SERVICE_TOKEN,
+            ticket_secret=SIGNING_SECRET,
+            transform_face=transform_face,
+            transform_voice=transform_voice,
+            label_synthetic_video=label_video,
+            realism_policy=quality_policy,
+            require_realism_evidence=True,
+        )
+        server = await asyncio.start_server(worker.handle, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        await write_message(
+            writer,
+            {
+                "type": "hello",
+                "service_token": SERVICE_TOKEN,
+                "ticket": issue_session_ticket(make_claims(), SIGNING_SECRET),
+                "session_id": "session-test",
+            },
+        )
+        assert (await read_message(reader)).header["type"] == "ready"
+        await write_message(
+            writer,
+            {
+                "type": "request",
+                "request_id": "sync-audio",
+                "session_id": "session-test",
+                "media_kind": "audio",
+                "profile_id": "voice-test",
+                "timestamp_ms": 1000,
+                "sequence": 1,
+                "sample_rate_hz": 48000,
+                "channels": 1,
+            },
+            b"audio",
+        )
+        assert (await read_message(reader)).header["type"] == "result"
+        await write_message(
+            writer,
+            {
+                "type": "request",
+                "request_id": "late-video",
+                "session_id": "session-test",
+                "media_kind": "video",
+                "profile_id": "face-test",
+                "timestamp_ms": 900,
+                "sequence": 1,
+                "width": 1280,
+                "height": 720,
+                "fps": 30,
+            },
+            b"frame",
+        )
+        error = await read_message(reader)
+        assert error.header["type"] == "error"
+        assert error.header["code"] == "av_sync_threshold_exceeded"
+        assert face_called is False
+        writer.close()
+        await writer.wait_closed()
+        server.close()
+        await server.wait_closed()
+
+    asyncio.run(scenario())

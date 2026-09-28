@@ -7,7 +7,7 @@ from .realism_quality_gate import RealismQualityPolicy, validate_av_drift
 class AVSyncState:
     audio_ts_ms: int = 0
     video_ts_ms: int = 0
-    max_drift_ms: int = 80
+    max_drift_ms: float = 80.0
 
     @property
     def drift_ms(self) -> int:

@@ -29,6 +29,8 @@ from .realism_quality_gate import (
     validate_face_realism,
     validate_voice_realism,
 )
+from .avsync import AVSyncState
+from .realism_quality_gate import RealismEvidenceError
 from .worker_protocol import InferenceRequest, InferenceResult, MediaKind
 
 MAX_HEADER_BYTES = 4096
@@ -413,6 +415,10 @@ class RunPodLiveWorkerServer:
 
             last_sequence: dict[str, int] = {}
             inflight_ids: set[str] = set()
+            av_sync = AVSyncState()
+            saw_audio_timestamp = False
+            saw_video_timestamp = False
+            av_sync_by_request: dict[str, dict[str, int | float]] = {}
 
             async def send(header: dict[str, Any], payload: bytes = b"") -> None:
                 async with write_lock:
@@ -484,6 +490,9 @@ class RunPodLiveWorkerServer:
                     }
                     if quality_evidence is not None:
                         quality_evidence["transport_inference_ms"] = inference_ms
+                        paired_sync = av_sync_by_request.get(request_id)
+                        if paired_sync is not None:
+                            quality_evidence["av_sync"] = paired_sync
                         response["realism_evidence"] = quality_evidence
                     await send(response, transformed)
                 except Exception:
@@ -496,6 +505,7 @@ class RunPodLiveWorkerServer:
                     )
                 finally:
                     inflight_ids.discard(request_id)
+                    av_sync_by_request.pop(request_id, None)
 
             while True:
                 message = await read_message(reader)
@@ -516,6 +526,27 @@ class RunPodLiveWorkerServer:
                 # The selected profile is validated above before any model code runs.
                 if kind not in (MediaKind.VIDEO, MediaKind.AUDIO):
                     raise StreamProtocolError("unsupported media kind")
+                if self.require_realism_evidence and self.realism_policy is not None:
+                    if kind == MediaKind.AUDIO:
+                        av_sync.audio_ts_ms = message.header["timestamp_ms"]
+                        saw_audio_timestamp = True
+                    else:
+                        av_sync.video_ts_ms = message.header["timestamp_ms"]
+                        saw_video_timestamp = True
+                    if saw_audio_timestamp and saw_video_timestamp:
+                        try:
+                            av_sync_by_request[request_id] = av_sync.validate_realism(
+                                self.realism_policy
+                            )
+                        except RealismEvidenceError:
+                            await send(
+                                {
+                                    "type": "error",
+                                    "request_id": request_id,
+                                    "code": "av_sync_threshold_exceeded",
+                                }
+                            )
+                            continue
                 inflight_ids.add(request_id)
                 task = asyncio.create_task(process(message.header, message.payload))
                 inflight.add(task)
