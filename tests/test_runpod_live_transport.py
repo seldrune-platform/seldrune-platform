@@ -157,6 +157,7 @@ def test_worker_round_trips_labeled_video_and_transformed_voice():
                 "width": 1080,
                 "height": 1920,
                 "fps": 7500 / 253,
+                "pixel_format": "jpeg",
             },
             b"frame",
         )
@@ -165,6 +166,7 @@ def test_worker_round_trips_labeled_video_and_transformed_voice():
         assert video.header["synthetic_label_applied"] is True
         assert (video.header["width"], video.header["height"]) == (1080, 1920)
         assert video.header["fps"] == pytest.approx(7500 / 253)
+        assert video.header["pixel_format"] == "jpeg"
         assert video.payload == b"AI-SYNTHETIC|frame:face-test"
 
         await write_message(
