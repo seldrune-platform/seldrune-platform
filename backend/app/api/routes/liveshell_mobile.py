@@ -95,7 +95,7 @@ def _gateway_configuration(
     *,
     url_env: str = "SELDRUNE_LIVESHIFT_WORKER_URL",
     token_env: str = "SELDRUNE_LIVESHIFT_WORKER_TOKEN",
-    feature_name: str = "LiveShell GPU session gateway",
+    feature_name: str = "live GPU session gateway",
 ) -> tuple[str, str]:
     base_url = os.getenv(url_env, "").strip().rstrip("/")
     token = os.getenv(token_env, "").strip()
@@ -135,7 +135,7 @@ def _parse_gateway_session(
     except ValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="The LiveShell GPU gateway returned an invalid session response.",
+            detail="The live GPU gateway returned an invalid session response.",
         ) from exc
 
     if (
@@ -148,7 +148,7 @@ def _parse_gateway_session(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=(
-                "The LiveShell GPU gateway did not verify both authorized profiles "
+                "The live GPU gateway did not verify both authorized profiles "
                 "and the synthetic-media indicator."
             ),
         )
@@ -247,25 +247,25 @@ async def create_liveshell_live_session(
     except httpx.TimeoutException as exc:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="The LiveShell GPU gateway timed out while starting the session.",
+            detail="The live GPU gateway timed out while starting the session.",
         ) from exc
     except httpx.RequestError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="The LiveShell GPU gateway could not be reached.",
+            detail="The live GPU gateway could not be reached.",
         ) from exc
 
     if response.status_code not in {200, 201}:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="The LiveShell GPU gateway rejected the session request.",
+            detail="The live GPU gateway rejected the session request.",
         )
     try:
         gateway_payload = response.json()
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="The LiveShell GPU gateway returned an invalid session response.",
+            detail="The live GPU gateway returned an invalid session response.",
         ) from exc
 
     try:
@@ -314,7 +314,7 @@ async def close_liveshell_live_session(
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", session_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="LiveShell session not found.",
+            detail="Live session not found.",
         )
 
     base_url, token = _gateway_configuration()
@@ -334,17 +334,17 @@ async def close_liveshell_live_session(
     except httpx.TimeoutException as exc:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="The LiveShell GPU gateway timed out while closing the session.",
+            detail="The live GPU gateway timed out while closing the session.",
         ) from exc
     except httpx.RequestError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="The LiveShell GPU gateway could not be reached.",
+            detail="The live GPU gateway could not be reached.",
         ) from exc
 
     if response.status_code not in {200, 202, 204, 404}:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="The LiveShell GPU gateway could not close the session.",
+            detail="The live GPU gateway could not close the session.",
         )
     return {"closed": True}
