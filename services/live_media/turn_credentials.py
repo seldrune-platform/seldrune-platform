@@ -83,10 +83,14 @@ def issue_turn_credentials(
         raise ValueError("TURN shared secret must contain at least 32 bytes")
     if not isinstance(subject, str) or not _SUBJECT_PATTERN.fullmatch(subject):
         raise ValueError("TURN credential subject is invalid")
-    if type(ttl_seconds) is not int or not (
-        MIN_TURN_CREDENTIAL_TTL_SECONDS
-        <= ttl_seconds
-        <= MAX_TURN_CREDENTIAL_TTL_SECONDS
+    if (
+        isinstance(ttl_seconds, bool)
+        or not isinstance(ttl_seconds, int)
+        or not (
+            MIN_TURN_CREDENTIAL_TTL_SECONDS
+            <= ttl_seconds
+            <= MAX_TURN_CREDENTIAL_TTL_SECONDS
+        )
     ):
         raise ValueError("TURN credential lifetime is outside the supported range")
     if now is None:
