@@ -125,6 +125,7 @@ def test_worker_round_trips_labeled_video_and_transformed_voice():
             transform_face=transform_face,
             transform_voice=transform_voice,
             label_synthetic_video=label_video,
+            actual_accelerator_profile="rtx-4090",
         )
         server = await asyncio.start_server(worker.handle, "127.0.0.1", 0)
         port = server.sockets[0].getsockname()[1]
@@ -141,6 +142,7 @@ def test_worker_round_trips_labeled_video_and_transformed_voice():
         )
         ready = await read_message(reader)
         assert ready.header["type"] == "ready"
+        assert ready.header["actual_accelerator_profile"] == "rtx-4090"
 
         await write_message(
             writer,
