@@ -181,6 +181,8 @@ def test_mobile_page_product_hub_and_assets_are_served():
     assert products.status_code == 200
     assert 'href="/liveshell/mobile"' in products.text
     assert javascript.status_code == 200
+    assert "output.measurement_status === 'measured'" in javascript.text
+    assert "Awaiting first decoded frame" in javascript.text
     assert stylesheet.status_code == 200
     assert faceswap_javascript.status_code == 200
 
