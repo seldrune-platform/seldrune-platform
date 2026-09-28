@@ -53,7 +53,10 @@ def test_live_offer_accepts_4090_baseline_and_1080p_target():
 
 def test_live_offer_accepts_rtx_pro_4500_se_profile():
     payload = valid_offer(target_accelerator_profile="rtx-pro-4500-se")
+    response = valid_gateway_response(actual_accelerator_profile="rtx-pro-4500-se")
+    result = _parse_gateway_session(payload, response)
     assert payload.target_accelerator_profile == "rtx-pro-4500-se"
+    assert result.actual_accelerator_profile == "rtx-pro-4500-se"
 
 
 def test_live_offer_defaults_to_1080p30_for_hd():
