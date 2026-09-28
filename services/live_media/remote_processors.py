@@ -8,9 +8,13 @@ from .worker_pool import WorkerPool
 from .worker_protocol import InferenceRequest, MediaKind
 
 
-def _session_profile(configured: str, requested: str) -> str:
-    """Require the pipeline profile to match the worker ticket's session binding."""
-    if not configured or not requested:
+def _session_profile(configured: str, requested: str | None) -> str:
+    """Require an explicit pipeline profile to match the session binding."""
+    if not configured:
+        raise ValueError("authorized session profile is required")
+    if requested is None:
+        return configured
+    if not requested:
         raise ValueError("authorized session profile is required")
     if requested != configured:
         raise ValueError("profile does not match the session-bound profile")
@@ -28,7 +32,9 @@ class RemoteVideoProcessor(VideoProcessor):
     fps: int = 30
     sequence: int = field(default=0, init=False)
 
-    async def process(self, frame: MediaFrame, profile_id: str) -> MediaFrame:
+    async def process(
+        self, frame: MediaFrame, profile_id: str | None = None
+    ) -> MediaFrame:
         bound_profile = _session_profile(self.profile_id, profile_id)
         request = InferenceRequest(
             request_id=str(uuid4()),
@@ -57,7 +63,9 @@ class RemoteAudioProcessor(AudioProcessor):
     channels: int = 1
     sequence: int = field(default=0, init=False)
 
-    async def process(self, frame: MediaFrame, profile_id: str) -> MediaFrame:
+    async def process(
+        self, frame: MediaFrame, profile_id: str | None = None
+    ) -> MediaFrame:
         bound_profile = _session_profile(self.profile_id, profile_id)
         request = InferenceRequest(
             request_id=str(uuid4()),
