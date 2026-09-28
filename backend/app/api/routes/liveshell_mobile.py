@@ -58,7 +58,9 @@ class LiveSessionOffer(BaseModel):
     consent_confirmed: bool = False
     synthetic_media_indicator_enabled: bool = False
     video_resolution: Literal["720p", "1080p"] = "720p"
-    target_accelerator_profile: Literal["rtx-4090", "rtx-5090", "rtx-pro-6000-blackwell"] = "rtx-4090"
+    target_accelerator_profile: Literal[
+        "rtx-4090", "rtx-5090", "rtx-pro-6000-blackwell"
+    ] = "rtx-4090"
 
 
 class GatewayDescription(BaseModel):
