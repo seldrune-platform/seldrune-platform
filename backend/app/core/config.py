@@ -89,7 +89,9 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_settings(self) -> "Settings":
-        if self.live_profile_authorizer_token and len(self.live_profile_authorizer_token.encode("utf-8")) < 32:
+        if self.live_profile_authorizer_token and len(
+            self.live_profile_authorizer_token.encode("utf-8")
+        ) < 32:
             raise ValueError("SELDRUNE_LIVE_PROFILE_AUTHORIZER_TOKEN must be at least 32 bytes")
         if self.environment.lower() in {"prod", "production"}:
             if self.auth_secret_key == "development-only-change-this-secret":

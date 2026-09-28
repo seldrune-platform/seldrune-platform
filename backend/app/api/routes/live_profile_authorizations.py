@@ -208,7 +208,10 @@ def review_profile_authorization(
         )
     )
     if item is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="profile request not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="profile request not found",
+        )
     if item.status != "pending":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

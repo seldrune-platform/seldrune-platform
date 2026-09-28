@@ -1,8 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-import pytest
-
 from backend.app.core.config import settings
 from tests.test_autonomous_execution import register_owner
 
