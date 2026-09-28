@@ -161,20 +161,43 @@
       const actualGpu = result.actual_accelerator_profile || 'worker GPU not reported';
       q('#gpu-detail').textContent = actualGpu;
       const output = result.output || {};
-      const dimensions = output.width && output.height
-        ? output.width + '×' + output.height + ' · ' + (output.fps || 'fps unreported')
-        : 'resolution unreported';
+      const outputMeasured = output.measurement_status === 'measured';
+      const hasProfile = output.width && output.height;
+      const dimensions = outputMeasured && hasProfile
+        ? 'Measured ' + output.width + '×' + output.height + ' · ' + (output.fps || 'fps unreported')
+        : hasProfile
+          ? 'Gateway profile ' + output.width + '×' + output.height + ' · unmeasured'
+          : 'Awaiting first decoded frame';
       const sampleRate = output.audio_sample_rate_hz || 0;
       q('#output-metrics').textContent = dimensions;
-      q('#audio-detail').textContent = sampleRate ? sampleRate + ' Hz return' : 'Return rate unreported';
+      q('#audio-detail').textContent = outputMeasured
+        ? (sampleRate ? 'Measured ' + sampleRate + ' Hz return' : 'Return rate unreported')
+        : (sampleRate ? 'Gateway profile ' + sampleRate + ' Hz · unmeasured' : '48 kHz target · measurement pending');
       q('#proof-detail').textContent = 'Live session · evidence pending';
-      const requiredWidth = q('#resolution').value === '1080p' ? 1920 : 1280;
-      const requiredHeight = q('#resolution').value === '1080p' ? 1080 : 720;
 
-      if (output.width >= requiredWidth && output.height >= requiredHeight && output.fps >= 24 && sampleRate >= 48000) {
-        showStatus('Connected. The gateway reports the requested HD resolution, at least 24 fps, and 48 kHz audio; production evidence still needs a measured phone-session receipt.', 'success');
+      if (outputMeasured) {
+        const shortEdge = Math.min(output.width || 0, output.height || 0);
+        const longEdge = Math.max(output.width || 0, output.height || 0);
+        const fullHd = shortEdge >= 1080 && longEdge >= 1920;
+        const hdFallback = shortEdge >= 720 && longEdge >= 1280;
+        const meetsResolution = q('#resolution').value === '1080p'
+          ? (fullHd || hdFallback)
+          : hdFallback;
+        if (meetsResolution && output.fps >= 29 && sampleRate === 48000) {
+          showStatus(
+            fullHd || q('#resolution').value === '720p'
+              ? 'Connected. The browser received measured HD video and 48 kHz audio; production evidence still needs a session receipt.'
+              : 'Connected at the measured 720p fallback. The gateway must record this fallback and the session quality evidence.',
+            'success',
+          );
+        } else {
+          showStatus('Connected, but measured video or audio output is below the supported profile.', 'error');
+        }
       } else {
-        showStatus('Connected, but the gateway has not reported verified HD video and 48 kHz audio output.', 'error');
+        showStatus(
+          'Connected. Worker session validated; waiting for first transformed frames to measure resolution, frame rate, and 48 kHz audio.',
+          'success',
+        );
       }
       setConnection('NEGOTIATED');
     } catch (error) {
