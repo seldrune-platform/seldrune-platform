@@ -7,7 +7,7 @@ pipeline.
 1. Start a session with both face and voice profiles authorized.
 2. Open the bridge with the exact virtual microphone playback-device name.
 3. It publishes 720p by default (1080p is configurable) and 48 kHz PCM audio.
-   Every outgoing video frame contains an embedded AI-ALTERED badge.
+   Every outgoing frame carries a small, unbranded “AI modified” disclosure badge in the upper-right corner.
 4. Select the virtual camera and the paired recording endpoint in the meeting
    application's normal camera and microphone settings.
 
@@ -23,7 +23,7 @@ call. The local receipt reports delivery and configuration only, not face or
 voice quality.
 
 The bridge refuses to start unless authorization approves both profiles and
-visible disclosure stays enabled. It validates raw RGB24 video, PCM16 audio,
+the embedded disclosure stays enabled. It validates raw RGB24 video, PCM16 audio,
 monotonic timestamps, device delivery, and the evidence receipt.
 
 Consumer Skype was retired on May 5, 2025; Skype for Business is separate. Use
