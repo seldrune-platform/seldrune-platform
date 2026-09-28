@@ -226,7 +226,7 @@ def test_gateway_ice_endpoint_authenticates_and_returns_expiring_credentials():
         FakeWorkerSession(),
         turn_urls=["turn:relay.example.test:3478?transport=udp"],
         turn_shared_secret="t" * 48,
-        turn_credential_ttl_seconds=3600,
+        turn_credential_ttl_seconds=3900,
     )
     with TestClient(create_app(gateway)) as client:
         denied = client.get("/v1/ice-servers")
@@ -246,7 +246,7 @@ def test_gateway_ice_endpoint_authenticates_and_returns_expiring_credentials():
     assert session_turn.username and session_turn.credential
     assert session_turn.username != turn["username"]
     expiry, subject = turn["username"].split(":", 1)
-    assert int(expiry) >= int(time.time()) + 3590
+    assert int(expiry) >= int(time.time()) + 3890
     assert subject
     assert turn["credential"]
     assert "t" * 48 not in accepted.text
