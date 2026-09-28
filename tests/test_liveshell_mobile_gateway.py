@@ -51,6 +51,16 @@ def test_live_offer_accepts_4090_baseline_and_1080p_target():
     assert payload.target_accelerator_profile == "rtx-4090"
 
 
+def test_live_offer_accepts_cloud_rtx_pro_6000_profile():
+    payload = valid_offer(target_accelerator_profile="rtx-pro-6000-blackwell")
+    response = valid_gateway_response(
+        actual_accelerator_profile="rtx-pro-6000-blackwell"
+    )
+    result = _parse_gateway_session(payload, response)
+    assert payload.target_accelerator_profile == "rtx-pro-6000-blackwell"
+    assert result.actual_accelerator_profile == "rtx-pro-6000-blackwell"
+
+
 def test_live_offer_rejects_unknown_gpu_target():
     with pytest.raises(ValidationError):
         valid_offer(target_accelerator_profile="rtx-4080")
@@ -139,6 +149,7 @@ def test_mobile_page_product_hub_and_assets_are_served():
 
     assert page.status_code == 200
     assert "LIVESHELL · MOBILE STUDIO" in page.text
+    assert 'value="rtx-pro-6000-blackwell"' in page.text
     assert faceswap_page.status_code == 200
     assert "Mobile FaceSwap" in faceswap_page.text
     assert products.status_code == 200
