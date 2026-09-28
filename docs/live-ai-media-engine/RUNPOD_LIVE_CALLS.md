@@ -33,6 +33,7 @@ Do not treat VRAM or a GPU model name as evidence of output quality. Compare the
 - A strict production quality contract: the face adapter must return decoded HD dimensions, 30 fps windowed identity/temporal/blend metrics, and p95 inference evidence; the voice adapter must return decoded 48 kHz windowed speaker/content/naturalness, clipping/dropout, and p95 processing evidence.
 - The production entrypoint requires explicit evaluator-calibrated pass thresholds in `SELDRUNE_LIVE_REALISM_POLICY_JSON`. It rejects byte-only adapters, missing evidence, evidence below threshold, and per-request latency over budget. The worker client carries measured evidence with each result.
 - The strict live worker checks paired audio/video timestamps against the configured drift limit before inference and returns paired sync evidence with quality reports. `AVSyncState.validate_realism` is available to the gateway for client-side output measurements.
+- A session-scoped `RunPodLiveSession` bridge binds one worker client to face/voice profile IDs and a shared `LivePipeline`/`WorkerPool`; it exposes video/audio dispatch and idempotent close. The gateway does not invoke this bridge yet.
 
 This bridge is a transport foundation. It does not install or train a face or voice model, connect the production LiveShell gateway to the RunPod listener, configure TURN, or prove a real phone/desktop call. The existing RTX 4090 uploaded-video worker and its port configuration remain unchanged. No GPU output or HD quality claim is made by unit tests. Perceptual thresholds must be calibrated on rights-cleared, consented evaluation samples for the selected model and evaluator; this example shows configuration shape, not validated performance:
 ```json
@@ -46,7 +47,7 @@ The dedicated live worker entrypoint is `python -m services.live_media.runpod_li
 ## Required next integrations
 
 - Configure a distinct RunPod image and direct TCP port for the live worker; keep HTTP port 8000 and the current batch worker intact.
-- Connect the Seldrune gateway's verified session lifecycle to ticket issuance, one session-scoped worker client, and the existing `LivePipeline`/`WorkerPool` interfaces.
+- Invoke `RunPodLiveSession.connect` from the gateway's verified session lifecycle after ticket issuance; route both media tracks through its bound `LivePipeline`/`WorkerPool`, and close it on stop, disconnect, ticket expiry, or worker failure. The external WebRTC gateway lifecycle and authenticated TURN path remain pending.
 - Load rights-cleared, authorized face and voice model adapters; fail readiness unless both adapters and the synthetic-video labeler are present.
 - Configure authenticated TURN credentials for clients whose networks cannot establish a direct WebRTC path.
 - Build the desktop companion's virtual camera and microphone path and validate the normal Teams/Zoom device selectors. Keep phone support in the browser Live Room unless a native mobile companion is built.
