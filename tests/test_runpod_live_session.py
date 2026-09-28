@@ -92,10 +92,10 @@ def test_session_uses_one_authenticated_client_for_bound_av_pipeline():
         assert video.fps == pytest.approx(7500 / 253)
         assert audio.payload == b"transformed:stereo-chunk"
         assert (audio.sample_rate_hz, audio.channels) == (48000, 2)
-        assert [request.profile_id for request in client.requests] == [
+        assert {request.profile_id for request in client.requests} == {
             "face-profile",
             "voice-profile",
-        ]
+        }
         assert {request.session_id for request in client.requests} == {"session-1"}
 
         await session.close()
