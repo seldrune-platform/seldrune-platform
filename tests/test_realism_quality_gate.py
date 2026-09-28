@@ -46,18 +46,6 @@ def test_face_gate_requires_windowed_hd_output_and_all_realism_metrics():
     assert report["evaluator_version"] == "2.1"
 
 
-@pytest.mark.parametrize(
-    "changes",
-    [
-        {"window_frames": 1},
-        {"output_width": 640},
-        {"output_fps": 24.0},
-        {"identity_similarity": 0.79},
-        {"temporal_consistency": 0.79},
-        {"blend_quality": 0.79},
-        {"p95_inference_ms": 151.0},
-    ],
-)
 def test_face_gate_accepts_full_hd_portrait_orientation():
     evidence = FaceRealismEvidence(
         evaluator_id="face-eval",
@@ -75,6 +63,18 @@ def test_face_gate_accepts_full_hd_portrait_orientation():
     assert (report["output_width"], report["output_height"]) == (1080, 1920)
 
 
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"window_frames": 1},
+        {"output_width": 640},
+        {"output_fps": 24.0},
+        {"identity_similarity": 0.79},
+        {"temporal_consistency": 0.79},
+        {"blend_quality": 0.79},
+        {"p95_inference_ms": 151.0},
+    ],
+)
 def test_face_gate_rejects_quality_or_format_below_policy(changes):
     values = {
         "evaluator_id": "face-eval",
