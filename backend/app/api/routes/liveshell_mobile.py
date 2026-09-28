@@ -11,7 +11,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError
 
 from backend.app.api.dependencies import require_org_permission
@@ -145,6 +145,73 @@ def _gateway_configuration(
     return base_url, token
 
 
+def _parse_gateway_ice_servers(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, dict) or not isinstance(value.get("ice_servers"), list):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The LiveShell GPU gateway returned invalid ICE server settings.",
+        )
+    result: list[dict[str, object]] = []
+    for item in value["ice_servers"]:
+        if not isinstance(item, dict):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="The LiveShell GPU gateway returned invalid ICE server settings.",
+            )
+        urls = item.get("urls")
+        if isinstance(urls, str):
+            urls = [urls]
+        if (
+            not isinstance(urls, list)
+            or not urls
+            or any(
+                not isinstance(url, str)
+                or not url
+                or len(url) > 2048
+                or url != url.strip()
+                or not url.lower().startswith(("stun:", "stuns:", "turn:", "turns:"))
+                for url in urls
+            )
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="The LiveShell GPU gateway returned invalid ICE server settings.",
+            )
+        username, credential = item.get("username"), item.get("credential")
+        if (username is None) != (credential is None):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="The LiveShell GPU gateway returned invalid ICE server settings.",
+            )
+        has_turn = any(url.lower().startswith(("turn:", "turns:")) for url in urls)
+        if has_turn and (
+            not isinstance(username, str)
+            or not username
+            or not isinstance(credential, str)
+            or not credential
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="The LiveShell GPU gateway returned invalid ICE server settings.",
+            )
+        if not has_turn and username is not None:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="The LiveShell GPU gateway returned invalid ICE server settings.",
+            )
+        server: dict[str, object] = {"urls": urls}
+        if username is not None:
+            server["username"] = username
+            server["credential"] = credential
+        result.append(server)
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The LiveShell GPU gateway returned invalid ICE server settings.",
+        )
+    return result
+
+
 def _parse_gateway_session(
     payload: LiveSessionOffer,
     value: object,
@@ -261,6 +328,51 @@ def liveshell_live_readiness(
         "production_evidence_required": True,
         "note": "Configuration is not proof that a worker, model, or HD stream is ready.",
     }
+
+
+@api_router.get("/{organization_id}/liveshift/live/ice-servers")
+async def liveshell_live_ice_servers(
+    organization_id: UUID,
+    _membership: LiveRunDep,
+) -> JSONResponse:
+    """Proxy browser ICE settings without exposing the Coturn shared secret."""
+    base_url, token = _gateway_configuration()
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(10.0, connect=3.0),
+            follow_redirects=False,
+        ) as client:
+            response = await client.get(
+                f"{base_url}/v1/ice-servers",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+    except httpx.TimeoutException as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="The LiveShell GPU gateway timed out while loading ICE settings.",
+        ) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The LiveShell GPU gateway could not be reached.",
+        ) from exc
+
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The LiveShell GPU gateway could not provide ICE settings.",
+        )
+    try:
+        ice_servers = _parse_gateway_ice_servers(response.json())
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The LiveShell GPU gateway returned invalid ICE server settings.",
+        ) from exc
+    result = JSONResponse({"ice_servers": ice_servers})
+    result.headers["Cache-Control"] = "no-store"
+    result.headers["Pragma"] = "no-cache"
+    return result
 
 
 @api_router.post("/{organization_id}/liveshift/live/sessions")
