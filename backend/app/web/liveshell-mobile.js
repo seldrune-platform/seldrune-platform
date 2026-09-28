@@ -8,6 +8,8 @@
     peer: null,
     sessionId: '',
     facingMode: 'user',
+    gatewayAudioSampleRate: 0,
+    mediaMonitorTimer: 0,
   };
 
   const api = async (path, options = {}) => {
@@ -91,6 +93,60 @@
     });
   }
 
+  async function refreshReturnedMedia() {
+    const peer = state.peer;
+    if (!peer) return;
+
+    const video = q('#remote-video');
+    const videoTrack = video.srcObject && video.srcObject.getVideoTracks()[0];
+    const audioElement = q('#remote-audio');
+    const audioTrack = audioElement.srcObject && audioElement.srcObject.getAudioTracks()[0];
+    const videoSettings = videoTrack && videoTrack.getSettings ? videoTrack.getSettings() : {};
+    const audioSettings = audioTrack && audioTrack.getSettings ? audioTrack.getSettings() : {};
+    const width = video.videoWidth || videoSettings.width || 0;
+    const height = video.videoHeight || videoSettings.height || 0;
+    let videoReport = null;
+    let audioReport = null;
+
+    try {
+      const reports = await peer.getStats();
+      reports.forEach(report => {
+        if (report.type !== 'inbound-rtp') return;
+        const kind = report.kind || report.mediaType;
+        if (kind === 'video') videoReport = report;
+        if (kind === 'audio') audioReport = report;
+      });
+    } catch (_) {
+      // Track state and intrinsic video dimensions remain useful if stats are unavailable.
+    }
+
+    const framesDecoded = videoReport && Number.isFinite(videoReport.framesDecoded)
+      ? videoReport.framesDecoded : null;
+    const fps = videoReport && Number.isFinite(videoReport.framesPerSecond)
+      ? Math.round(videoReport.framesPerSecond) : null;
+    const videoLive = Boolean(videoTrack && videoTrack.readyState === 'live' && width && height);
+    const audioLive = Boolean(audioTrack && audioTrack.readyState === 'live');
+
+    q('#output-metrics').textContent = videoLive
+      ? 'Browser: ' + width + '×' + height + (fps ? ' · ' + fps + ' fps' : '')
+      : 'Waiting for returned frames';
+
+    const measuredRate = Number(audioSettings.sampleRate) || 0;
+    const gatewayRate = state.gatewayAudioSampleRate;
+    q('#audio-detail').textContent = audioLive
+      ? 'Browser track live' + (measuredRate ? ' · ' + measuredRate + ' Hz' : ' · rate unavailable')
+        + (gatewayRate ? ' · gateway reports ' + gatewayRate + ' Hz' : '')
+      : (gatewayRate ? 'Gateway reports ' + gatewayRate + ' Hz · waiting for browser track' : 'Waiting for returned audio');
+
+    const videoCount = framesDecoded === null ? 'decoder count unavailable' : framesDecoded + ' decoded frames';
+    const audioCount = audioReport && Number.isFinite(audioReport.packetsReceived)
+      ? audioReport.packetsReceived + ' audio packets'
+      : (audioLive ? 'audio track live' : 'audio track pending');
+    q('#proof-detail').textContent = videoLive || audioLive
+      ? 'Browser receive · ' + videoCount + ' · ' + audioCount
+      : 'No returned tracks yet';
+  }
+
   function attachReturnedTrack(event) {
     const track = event.track;
     const stream = new MediaStream([track]);
@@ -101,6 +157,7 @@
       q('#remote-audio').srcObject = stream;
       q('#remote-audio').play().catch(() => {});
     }
+    void refreshReturnedMedia();
   }
 
   async function startLive(event) {
@@ -161,22 +218,27 @@
       const actualGpu = result.actual_accelerator_profile || 'worker GPU not reported';
       q('#gpu-detail').textContent = actualGpu;
       const output = result.output || {};
+      state.gatewayAudioSampleRate = Number(output.audio_sample_rate_hz) || 0;
       const dimensions = output.width && output.height
         ? output.width + '×' + output.height + ' · ' + (output.fps || 'fps unreported')
         : 'resolution unreported';
-      const sampleRate = output.audio_sample_rate_hz || 0;
-      q('#output-metrics').textContent = dimensions;
-      q('#audio-detail').textContent = sampleRate ? sampleRate + ' Hz return' : 'Return rate unreported';
-      q('#proof-detail').textContent = 'Live session · evidence pending';
+      q('#output-metrics').textContent = 'Waiting for browser frames · gateway reports ' + dimensions;
+      q('#audio-detail').textContent = state.gatewayAudioSampleRate
+        ? 'Gateway reports ' + state.gatewayAudioSampleRate + ' Hz · waiting for browser track'
+        : 'Waiting for returned audio';
+      q('#proof-detail').textContent = 'Waiting for returned browser tracks';
       const requiredWidth = q('#resolution').value === '1080p' ? 1920 : 1280;
       const requiredHeight = q('#resolution').value === '1080p' ? 1080 : 720;
 
-      if (output.width >= requiredWidth && output.height >= requiredHeight && output.fps >= 24 && sampleRate >= 48000) {
-        showStatus('Connected. The gateway reports the requested HD resolution, at least 24 fps, and 48 kHz audio; production evidence still needs a measured phone-session receipt.', 'success');
+      if (output.width >= requiredWidth && output.height >= requiredHeight && output.fps >= 24 && state.gatewayAudioSampleRate >= 48000) {
+        showStatus('Session connected. The gateway reports the requested HD targets; browser-received frames and audio are measured below.', 'success');
       } else {
-        showStatus('Connected, but the gateway has not reported verified HD video and 48 kHz audio output.', 'error');
+        showStatus('Session connected. Waiting for browser-received video and audio measurements.', 'success');
       }
       setConnection('NEGOTIATED');
+      if (state.mediaMonitorTimer) window.clearInterval(state.mediaMonitorTimer);
+      state.mediaMonitorTimer = window.setInterval(() => { void refreshReturnedMedia(); }, 1000);
+      void refreshReturnedMedia();
     } catch (error) {
       showStatus('The live session could not start: ' + error.message, 'error');
       await stopLive(true);
@@ -189,6 +251,11 @@
   async function stopLive(closeRemote = true) {
     const sessionId = state.sessionId;
     state.sessionId = '';
+    if (state.mediaMonitorTimer) {
+      window.clearInterval(state.mediaMonitorTimer);
+      state.mediaMonitorTimer = 0;
+    }
+    state.gatewayAudioSampleRate = 0;
     if (closeRemote && sessionId && state.organizationId && token) {
       try {
         await api(
@@ -216,9 +283,9 @@
     q('#capture-resolution').textContent = '—';
     q('#capture-detail').textContent = 'Not started';
     q('#gpu-detail').textContent = 'Not connected';
-    q('#output-metrics').textContent = 'HD pending';
-    q('#proof-detail').textContent = 'Not verified';
-    q('#audio-detail').textContent = '48 kHz target';
+    q('#output-metrics').textContent = 'Waiting for returned frames';
+    q('#proof-detail').textContent = 'No returned tracks yet';
+    q('#audio-detail').textContent = 'Waiting for returned audio';
     q('#stop-button').disabled = true;
     q('#switch-camera').disabled = true;
     q('#preview-button').disabled = false;
