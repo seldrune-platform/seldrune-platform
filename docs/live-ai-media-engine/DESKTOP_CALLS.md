@@ -21,3 +21,7 @@ plane -> authorized face/voice transforms -> synchronized return stream ->
 desktop virtual camera/microphone -> meeting application.
 
 The desktop remains a thin client; model inference belongs on cloud GPU workers.
+
+## Desktop device implementation
+
+See [DESKTOP_DEVICE_SETUP.md](DESKTOP_DEVICE_SETUP.md) for the current desktop output bridge, format contracts, setup requirements, and verification limits.
