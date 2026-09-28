@@ -229,8 +229,8 @@ class _VideoCodec:
         import numpy as np
         from av import VideoFrame
 
-        width = frame.width or int(getattr(original, "width"))
-        height = frame.height or int(getattr(original, "height"))
+        width = frame.width or int(original.width)
+        height = frame.height or int(original.height)
         if len(frame.payload) != width * height * 3:
             raise ValueError("RunPod video result is not packed RGB24 for its dimensions")
 
@@ -291,7 +291,10 @@ class _AudioCodec:
         returned.sample_rate = frame.sample_rate_hz or 48_000
         returned.planes[0].update(frame.payload)
         returned.pts = getattr(original, "pts", None)
-        returned.time_base = getattr(original, "time_base", None) or Fraction(1, returned.sample_rate)
+        returned.time_base = (
+            getattr(original, "time_base", None)
+            or Fraction(1, returned.sample_rate)
+        )
         return returned
 
     async def encode(self, frame: MediaFrame, original: object) -> object:
@@ -430,10 +433,17 @@ class LiveMediaGateway:
             )
             client = getattr(worker_session, "client", None)
             if getattr(client, "require_realism_evidence", False) is not True:
-                raise GatewayUnavailable("RunPod worker strict quality evidence is not enabled")
+                raise GatewayUnavailable(
+                    "RunPod worker strict quality evidence is not enabled"
+                )
             accelerator = getattr(client, "actual_accelerator_profile", None)
-            if accelerator not in SUPPORTED_ACCELERATOR_PROFILES or accelerator != request.target_accelerator_profile:
-                raise GatewayUnavailable("RunPod worker did not attest the selected accelerator")
+            if (
+                accelerator not in SUPPORTED_ACCELERATOR_PROFILES
+                or accelerator != request.target_accelerator_profile
+            ):
+                raise GatewayUnavailable(
+                    "RunPod worker did not attest the selected accelerator"
+                )
 
             peer = self.peer_factory(self.settings.ice_servers)
             metrics = _OutputMetrics()
