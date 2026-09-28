@@ -8,23 +8,33 @@ from .worker_pool import WorkerPool
 from .worker_protocol import InferenceRequest, MediaKind
 
 
+def _session_profile(configured: str, requested: str) -> str:
+    """Require the pipeline profile to match the worker ticket's session binding."""
+    if not configured or not requested:
+        raise ValueError("authorized session profile is required")
+    if requested != configured:
+        raise ValueError("profile does not match the session-bound profile")
+    return configured
+
+
 @dataclass
 class RemoteVideoProcessor(VideoProcessor):
     pool: WorkerPool
     session_id: str
     profile_id: str
     region: str
-    width: int = 1280
-    height: int = 720
+    width: int = 1920
+    height: int = 1080
     fps: int = 30
     sequence: int = field(default=0, init=False)
 
-    async def process(self, frame: MediaFrame) -> MediaFrame:
+    async def process(self, frame: MediaFrame, profile_id: str) -> MediaFrame:
+        bound_profile = _session_profile(self.profile_id, profile_id)
         request = InferenceRequest(
             request_id=str(uuid4()),
             session_id=self.session_id,
             media_kind=MediaKind.VIDEO,
-            profile_id=self.profile_id,
+            profile_id=bound_profile,
             timestamp_ms=frame.timestamp_ms,
             payload=frame.payload,
             sequence=self.sequence,
@@ -47,12 +57,13 @@ class RemoteAudioProcessor(AudioProcessor):
     channels: int = 1
     sequence: int = field(default=0, init=False)
 
-    async def process(self, frame: MediaFrame) -> MediaFrame:
+    async def process(self, frame: MediaFrame, profile_id: str) -> MediaFrame:
+        bound_profile = _session_profile(self.profile_id, profile_id)
         request = InferenceRequest(
             request_id=str(uuid4()),
             session_id=self.session_id,
             media_kind=MediaKind.AUDIO,
-            profile_id=self.profile_id,
+            profile_id=bound_profile,
             timestamp_ms=frame.timestamp_ms,
             payload=frame.payload,
             sequence=self.sequence,
