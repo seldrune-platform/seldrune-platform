@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from backend.app.main import app
 from backend.app.api.routes.liveshell_mobile import (
     LiveSessionOffer,
+    _effective_video_resolution,
     _parse_gateway_session,
     create_liveshell_live_session,
 )
@@ -35,6 +36,9 @@ def valid_gateway_response(**changes):
         "face_profile_authorized": True,
         "voice_profile_authorized": True,
         "synthetic_media_indicator_enabled": True,
+        "runpod_session_connected": True,
+        "session_ticket_validated": True,
+        "realism_evidence_required": True,
         "actual_accelerator_profile": "rtx-4090",
         "output_width": 1280,
         "output_height": 720,
@@ -85,7 +89,11 @@ def test_gateway_session_requires_matching_authorized_profiles():
     assert result.face_profile_authorized
     assert result.voice_profile_authorized
     assert result.synthetic_media_indicator_enabled
+    assert result.runpod_session_connected
+    assert result.session_ticket_validated
+    assert result.realism_evidence_required
     assert result.actual_accelerator_profile == "rtx-4090"
+    assert _effective_video_resolution(result.output_width, result.output_height) == "720p"
 
 
 @pytest.mark.parametrize(
@@ -94,6 +102,9 @@ def test_gateway_session_requires_matching_authorized_profiles():
         {"face_profile_authorized": False},
         {"voice_profile_authorized": False},
         {"synthetic_media_indicator_enabled": False},
+        {"runpod_session_connected": False},
+        {"session_ticket_validated": False},
+        {"realism_evidence_required": False},
         {"face_profile_id": "different-face"},
         {"voice_profile_id": "different-voice"},
     ],
@@ -172,3 +183,31 @@ def test_mobile_page_product_hub_and_assets_are_served():
     assert javascript.status_code == 200
     assert stylesheet.status_code == 200
     assert faceswap_javascript.status_code == 200
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"audio_sample_rate_hz": 44_100},
+        {"output_fps": 28.9},
+        {"output_width": 640, "output_height": 480},
+    ],
+)
+def test_gateway_rejects_unusable_media_metadata(changes):
+    with pytest.raises(HTTPException) as error:
+        _parse_gateway_session(valid_offer(), valid_gateway_response(**changes))
+    assert error.value.status_code == 502
+
+
+@pytest.mark.parametrize(
+    ("width", "height", "expected"),
+    [
+        (1920, 1080, "1080p"),
+        (1080, 1920, "1080p"),
+        (1280, 720, "720p"),
+        (720, 1280, "720p"),
+        (640, 480, None),
+    ],
+)
+def test_gateway_resolution_is_orientation_neutral(width, height, expected):
+    assert _effective_video_resolution(width, height) == expected
