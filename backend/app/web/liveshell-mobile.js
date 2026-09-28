@@ -8,6 +8,8 @@
     peer: null,
     sessionId: '',
     facingMode: 'user',
+    browserDecodedVideo: null,
+    outputProfile: null,
   };
 
   const api = async (path, options = {}) => {
@@ -34,6 +36,44 @@
 
   function setConnection(value) {
     q('#connection-state').textContent = value;
+  }
+
+  function renderOutputMetrics() {
+    const profile = state.outputProfile || {};
+    const decoded = state.browserDecodedVideo;
+    if (decoded) {
+      q('#output-metrics').textContent =
+        'Browser decoded ' + decoded.width + '×' + decoded.height + ' · FPS pending';
+    } else if (profile.width && profile.height) {
+      q('#output-metrics').textContent =
+        'Gateway profile ' + profile.width + '×' + profile.height + ' · unmeasured';
+    } else {
+      q('#output-metrics').textContent = 'Awaiting first decoded frame';
+    }
+
+    const sampleRate = profile.audio_sample_rate_hz || 0;
+    q('#audio-detail').textContent = profile.measurement_status === 'measured'
+      ? (sampleRate ? 'Measured ' + sampleRate + ' Hz return' : 'Return rate unreported')
+      : (sampleRate ? 'Gateway profile ' + sampleRate + ' Hz · unmeasured' : '48 kHz target · measurement pending');
+  }
+
+  function showBrowserVideoStatus() {
+    const decoded = state.browserDecodedVideo;
+    if (!decoded) return;
+    const shortEdge = Math.min(decoded.width, decoded.height);
+    const longEdge = Math.max(decoded.width, decoded.height);
+    const tier = shortEdge >= 1080 && longEdge >= 1920
+      ? '1080p'
+      : shortEdge >= 720 && longEdge >= 1280
+        ? '720p'
+        : '';
+    if (!tier) {
+      showStatus('The browser decoded video below the 720p minimum; FPS, audio, and quality evidence are pending.', 'error');
+    } else if (tier === '720p' && q('#resolution').value === '1080p') {
+      showStatus('The browser decoded the 720p fallback. FPS, audio, and evaluator evidence remain pending.', 'success');
+    } else {
+      showStatus('The browser decoded ' + tier + ' video. FPS, audio, and evaluator evidence remain pending.', 'success');
+    }
   }
 
   function captureConstraints() {
@@ -95,8 +135,25 @@
     const track = event.track;
     const stream = new MediaStream([track]);
     if (track.kind === 'video') {
-      q('#remote-video').srcObject = stream;
+      const video = q('#remote-video');
+      video.srcObject = stream;
       q('.output-card').classList.add('active');
+      video.addEventListener('loadeddata', () => {
+        const recordFrame = () => {
+          if (state.browserDecodedVideo || !video.videoWidth || !video.videoHeight) return;
+          state.browserDecodedVideo = {
+            width: video.videoWidth,
+            height: video.videoHeight,
+          };
+          renderOutputMetrics();
+          showBrowserVideoStatus();
+        };
+        if (typeof video.requestVideoFrameCallback === 'function') {
+          video.requestVideoFrameCallback(recordFrame);
+        } else {
+          recordFrame();
+        }
+      }, {once: true});
     } else if (track.kind === 'audio') {
       q('#remote-audio').srcObject = stream;
       q('#remote-audio').play().catch(() => {});
@@ -118,6 +175,8 @@
       return;
     }
 
+    state.browserDecodedVideo = null;
+    state.outputProfile = null;
     q('#connect-button').disabled = true;
     q('#preview-button').disabled = true;
     showStatus('Requesting camera and microphone…');
@@ -162,20 +221,14 @@
       q('#gpu-detail').textContent = actualGpu;
       const output = result.output || {};
       const outputMeasured = output.measurement_status === 'measured';
-      const hasProfile = output.width && output.height;
-      const dimensions = outputMeasured && hasProfile
-        ? 'Measured ' + output.width + '×' + output.height + ' · ' + (output.fps || 'fps unreported')
-        : hasProfile
-          ? 'Gateway profile ' + output.width + '×' + output.height + ' · unmeasured'
-          : 'Awaiting first decoded frame';
-      const sampleRate = output.audio_sample_rate_hz || 0;
-      q('#output-metrics').textContent = dimensions;
-      q('#audio-detail').textContent = outputMeasured
-        ? (sampleRate ? 'Measured ' + sampleRate + ' Hz return' : 'Return rate unreported')
-        : (sampleRate ? 'Gateway profile ' + sampleRate + ' Hz · unmeasured' : '48 kHz target · measurement pending');
+      state.outputProfile = output;
+      renderOutputMetrics();
       q('#proof-detail').textContent = 'Live session · evidence pending';
 
-      if (outputMeasured) {
+      if (state.browserDecodedVideo) {
+        showBrowserVideoStatus();
+      } else if (outputMeasured) {
+        const sampleRate = output.audio_sample_rate_hz || 0;
         const shortEdge = Math.min(output.width || 0, output.height || 0);
         const longEdge = Math.max(output.width || 0, output.height || 0);
         const fullHd = shortEdge >= 1080 && longEdge >= 1920;
@@ -186,8 +239,8 @@
         if (meetsResolution && output.fps >= 29 && sampleRate === 48000) {
           showStatus(
             fullHd || q('#resolution').value === '720p'
-              ? 'Connected. The browser received measured HD video and 48 kHz audio; production evidence still needs a session receipt.'
-              : 'Connected at the measured 720p fallback. The gateway must record this fallback and the session quality evidence.',
+              ? 'Connected. Measured HD video and 48 kHz audio passed; evaluator and latency evidence remain pending.'
+              : 'Connected at the measured 720p fallback. Evaluator and latency evidence remain pending.',
             'success',
           );
         } else {
@@ -195,7 +248,7 @@
         }
       } else {
         showStatus(
-          'Connected. Worker session validated; waiting for first transformed frames to measure resolution, frame rate, and 48 kHz audio.',
+          'Connected. Worker session validated; waiting for the first transformed frame. Audio and quality evidence remain pending.',
           'success',
         );
       }
@@ -212,6 +265,8 @@
   async function stopLive(closeRemote = true) {
     const sessionId = state.sessionId;
     state.sessionId = '';
+    state.browserDecodedVideo = null;
+    state.outputProfile = null;
     if (closeRemote && sessionId && state.organizationId && token) {
       try {
         await api(
