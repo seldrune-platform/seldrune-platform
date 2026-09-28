@@ -138,7 +138,12 @@ def test_mobile_page_product_hub_and_assets_are_served():
         faceswap_javascript = client.get("/console-assets/liveshell-face-swap-mobile.js")
 
     assert page.status_code == 200
-    assert "LIVESHELL · MOBILE STUDIO" in page.text
+    assert "<title>Live video</title>" in page.text
+    assert "Seldrune" not in page.text
+    assert "SELDRUNE" not in page.text
+    assert "LiveShell" not in page.text
+    assert "Start session" in page.text
+    assert "AI modified" in page.text
     assert faceswap_page.status_code == 200
     assert "Mobile FaceSwap" in faceswap_page.text
     assert products.status_code == 200
