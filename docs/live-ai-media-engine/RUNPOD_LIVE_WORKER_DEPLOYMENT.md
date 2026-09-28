@@ -70,7 +70,8 @@ style profile contains `voice-style.json` with only `gain_db`, `presence`,
 and `warmth`; the adapter enforces bounded values and preserves 48 kHz sample
 count and timing. The rolling evaluators report an explicit `warming` state
 until 30 video frames and one second of audio have actually been observed; they
-do not invent a full quality window on the first packet.
+do not invent a full quality window on the first packet. Windows are isolated
+by live session ID and profile, so each new call starts a fresh warmup.
 
 The worker listens on `0.0.0.0:8765` by default. Set
 `SELDRUNE_LIVE_WORKER_PORT` only when the pod and gateway are configured for

@@ -6,6 +6,8 @@ from array import array
 
 from PIL import Image
 
+from services.live_media import live_quality_evaluators as quality_evaluators
+
 from services.live_media.live_profile_store import (
     load_voice_style,
     resolve_face_reference,
@@ -137,3 +139,59 @@ def test_quality_warmup_is_explicit_instead_of_faking_full_windows():
     assert face["window_frames"] == 12
     assert voice["state"] == "warming"
     assert voice["window_duration_seconds"] == 0.42
+
+
+
+def test_quality_windows_are_isolated_by_session_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(quality_evaluators, "_FACE_WINDOW", 30)
+    monkeypatch.setattr(quality_evaluators, "_VOICE_WINDOW_SECONDS", 1.0)
+    monkeypatch.setattr(
+        quality_evaluators,
+        "_face_measurements",
+        lambda _payload, _profile_id: (0.95, 0.85, (1.0, 0.0)),
+    )
+    session_a = f"{tmp_path}-session-a"
+    session_b = f"{tmp_path}-session-b"
+
+    async def evaluate_face_for(session_id):
+        return await quality_evaluators.evaluate_face(
+            b"labeled-frame",
+            "shared-face-profile",
+            source_payload=b"source-frame",
+            media_metadata={
+                "session_id": session_id,
+                "width": 1280,
+                "height": 720,
+                "fps": 30.0,
+            },
+            processing_ms=4.0,
+        )
+
+    face_a_first = asyncio.run(evaluate_face_for(session_a))
+    face_b_first = asyncio.run(evaluate_face_for(session_b))
+    face_a_second = asyncio.run(evaluate_face_for(session_a))
+    assert face_a_first.window_frames == 1
+    assert face_b_first.window_frames == 1
+    assert face_a_second.window_frames == 2
+
+    voice_samples = array("h", [1200] * 480).tobytes()
+
+    async def evaluate_voice_for(session_id):
+        return await quality_evaluators.evaluate_voice(
+            voice_samples,
+            "shared-voice-profile",
+            source_payload=voice_samples,
+            media_metadata={
+                "session_id": session_id,
+                "sample_rate_hz": 48000,
+                "channels": 1,
+            },
+            processing_ms=0.5,
+        )
+
+    voice_a_first = asyncio.run(evaluate_voice_for(session_a))
+    voice_b_first = asyncio.run(evaluate_voice_for(session_b))
+    voice_a_second = asyncio.run(evaluate_voice_for(session_a))
+    assert round(voice_a_first.window_duration_seconds, 6) == 0.01
+    assert round(voice_b_first.window_duration_seconds, 6) == 0.01
+    assert round(voice_a_second.window_duration_seconds, 6) == 0.02

@@ -535,6 +535,7 @@ class RunPodLiveWorkerServer:
                             "width", "height", "fps", "sample_rate_hz", "channels", "pixel_format"
                         )
                     }
+                    media_metadata["session_id"] = claims.session_id
                     transform_started = perf_counter()
                     if kind == MediaKind.VIDEO:
                         model_output = await _invoke_transform(

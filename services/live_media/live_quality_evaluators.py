@@ -13,7 +13,7 @@ import math
 import os
 import sys
 from array import array
-from collections import deque
+from collections import OrderedDict, deque
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -74,8 +74,43 @@ class _VoiceWindowState:
     total_samples: int = 0
 
 
-_FACE_STATES: dict[str, _FaceWindowState] = {}
-_VOICE_STATES: dict[tuple[str, int, int], _VoiceWindowState] = {}
+# Bound state across completed sessions while keeping every live-session window isolated.
+_MAX_SESSION_STATE_ENTRIES = 128
+_FACE_STATES: OrderedDict[tuple[str, str], _FaceWindowState] = OrderedDict()
+_VOICE_STATES: OrderedDict[tuple[str, str, int, int], _VoiceWindowState] = OrderedDict()
+
+
+def _require_session_id(media_metadata: dict[str, object]) -> str:
+    session_id = media_metadata.get("session_id")
+    if not isinstance(session_id, str) or not session_id or len(session_id) > 128:
+        raise ValueError("quality evaluator requires a live session id")
+    return session_id
+
+
+def _face_window_state(session_id: str, profile_id: str) -> _FaceWindowState:
+    key = (session_id, profile_id)
+    state = _FACE_STATES.get(key)
+    if state is None:
+        state = _FaceWindowState()
+        _FACE_STATES[key] = state
+    _FACE_STATES.move_to_end(key)
+    while len(_FACE_STATES) > _MAX_SESSION_STATE_ENTRIES:
+        _FACE_STATES.popitem(last=False)
+    return state
+
+
+def _voice_window_state(
+    session_id: str, profile_id: str, sample_rate: int, channels: int
+) -> _VoiceWindowState:
+    key = (session_id, profile_id, sample_rate, channels)
+    state = _VOICE_STATES.get(key)
+    if state is None:
+        state = _VoiceWindowState()
+        _VOICE_STATES[key] = state
+    _VOICE_STATES.move_to_end(key)
+    while len(_VOICE_STATES) > _MAX_SESSION_STATE_ENTRIES:
+        _VOICE_STATES.popitem(last=False)
+    return state
 
 
 def _ensure_facefusion_import_path() -> None:
@@ -168,8 +203,9 @@ async def evaluate_face(
     ):
         raise ValueError("face evaluator requires width, height, and fps metadata")
 
+    session_id = _require_session_id(media_metadata)
     identity, blend, embedding = _face_measurements(output_payload, profile_id)
-    state = _FACE_STATES.setdefault(profile_id, _FaceWindowState())
+    state = _face_window_state(session_id, profile_id)
     temporal = 1.0
     if state.previous_embedding is not None:
         import numpy as np
@@ -292,14 +328,14 @@ async def evaluate_voice(
     if not 0.1 <= _VOICE_WINDOW_SECONDS <= 5.0:
         raise RuntimeError("voice quality window is outside the supported range")
 
+    session_id = _require_session_id(media_metadata)
     chunk = _voice_chunk(
         source_payload,
         output_payload,
         channels=channels,
         processing_ms=processing_ms,
     )
-    key = (profile_id, sample_rate, channels)
-    state = _VOICE_STATES.setdefault(key, _VoiceWindowState())
+    state = _voice_window_state(session_id, profile_id, sample_rate, channels)
     state.chunks.append(chunk)
     state.total_samples += chunk.sample_count
     required_samples = max(1, int(round(sample_rate * _VOICE_WINDOW_SECONDS)))
