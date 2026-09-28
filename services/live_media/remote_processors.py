@@ -47,6 +47,7 @@ class RemoteVideoProcessor(VideoProcessor):
             width=frame.width if frame.width is not None else self.width,
             height=frame.height if frame.height is not None else self.height,
             fps=frame.fps if frame.fps is not None else self.fps,
+            pixel_format=frame.pixel_format,
         )
         self.sequence += 1
         result = await self.pool.infer(request, self.region)
@@ -56,6 +57,7 @@ class RemoteVideoProcessor(VideoProcessor):
             width=result.width if result.width is not None else frame.width,
             height=result.height if result.height is not None else frame.height,
             fps=result.fps if result.fps is not None else frame.fps,
+            pixel_format=result.pixel_format or frame.pixel_format,
             sample_rate_hz=(
                 result.sample_rate_hz
                 if result.sample_rate_hz is not None
