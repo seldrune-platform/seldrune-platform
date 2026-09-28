@@ -71,6 +71,51 @@ def test_live_pipeline_dispatches_bound_video_and_audio_profiles() -> None:
     asyncio.run(scenario())
 
 
+def test_remote_processors_forward_and_preserve_decoded_media_metadata() -> None:
+    async def scenario() -> None:
+        pool = RecordingWorkerPool()
+        video_processor = RemoteVideoProcessor(
+            pool=pool,
+            session_id="session-1",
+            profile_id="face-profile-1",
+            region="us-east",
+        )
+        audio_processor = RemoteAudioProcessor(
+            pool=pool,
+            session_id="session-1",
+            profile_id="voice-profile-1",
+            region="us-east",
+        )
+        source_fps = 7500 / 253
+        video_frame = MediaFrame(
+            b"portrait-video",
+            1000,
+            width=1080,
+            height=1920,
+            fps=source_fps,
+        )
+        audio_frame = MediaFrame(
+            b"stereo-audio",
+            1010,
+            sample_rate_hz=48000,
+            channels=2,
+        )
+
+        video = await video_processor.process(video_frame)
+        audio = await audio_processor.process(audio_frame)
+
+        video_request, _ = pool.calls[0]
+        audio_request, _ = pool.calls[1]
+        assert (video_request.width, video_request.height) == (1080, 1920)
+        assert video_request.fps == pytest.approx(source_fps)
+        assert (audio_request.sample_rate_hz, audio_request.channels) == (48000, 2)
+        assert (video.width, video.height) == (1080, 1920)
+        assert video.fps == pytest.approx(source_fps)
+        assert (audio.sample_rate_hz, audio.channels) == (48000, 2)
+
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize("processor_kind", ["video", "audio"])
 def test_remote_processor_rejects_profile_outside_session_binding(
     processor_kind: str,
