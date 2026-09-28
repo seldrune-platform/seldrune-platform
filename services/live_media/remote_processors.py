@@ -29,7 +29,7 @@ class RemoteVideoProcessor(VideoProcessor):
     region: str
     width: int = 1920
     height: int = 1080
-    fps: int = 30
+    fps: float = 30.0
     sequence: int = field(default=0, init=False)
 
     async def process(
@@ -44,13 +44,25 @@ class RemoteVideoProcessor(VideoProcessor):
             timestamp_ms=frame.timestamp_ms,
             payload=frame.payload,
             sequence=self.sequence,
-            width=self.width,
-            height=self.height,
-            fps=self.fps,
+            width=frame.width if frame.width is not None else self.width,
+            height=frame.height if frame.height is not None else self.height,
+            fps=frame.fps if frame.fps is not None else self.fps,
         )
         self.sequence += 1
         result = await self.pool.infer(request, self.region)
-        return MediaFrame(result.payload, result.timestamp_ms)
+        return MediaFrame(
+            result.payload,
+            result.timestamp_ms,
+            width=result.width if result.width is not None else frame.width,
+            height=result.height if result.height is not None else frame.height,
+            fps=result.fps if result.fps is not None else frame.fps,
+            sample_rate_hz=(
+                result.sample_rate_hz
+                if result.sample_rate_hz is not None
+                else frame.sample_rate_hz
+            ),
+            channels=result.channels if result.channels is not None else frame.channels,
+        )
 
 
 @dataclass
@@ -75,9 +87,25 @@ class RemoteAudioProcessor(AudioProcessor):
             timestamp_ms=frame.timestamp_ms,
             payload=frame.payload,
             sequence=self.sequence,
-            sample_rate_hz=self.sample_rate_hz,
-            channels=self.channels,
+            sample_rate_hz=(
+                frame.sample_rate_hz
+                if frame.sample_rate_hz is not None
+                else self.sample_rate_hz
+            ),
+            channels=frame.channels if frame.channels is not None else self.channels,
         )
         self.sequence += 1
         result = await self.pool.infer(request, self.region)
-        return MediaFrame(result.payload, result.timestamp_ms)
+        return MediaFrame(
+            result.payload,
+            result.timestamp_ms,
+            width=result.width if result.width is not None else frame.width,
+            height=result.height if result.height is not None else frame.height,
+            fps=result.fps if result.fps is not None else frame.fps,
+            sample_rate_hz=(
+                result.sample_rate_hz
+                if result.sample_rate_hz is not None
+                else frame.sample_rate_hz
+            ),
+            channels=result.channels if result.channels is not None else frame.channels,
+        )
