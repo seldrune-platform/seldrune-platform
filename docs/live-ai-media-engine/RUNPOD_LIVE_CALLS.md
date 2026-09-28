@@ -13,6 +13,7 @@ Keep RTX 4090 as the performance-oriented live baseline: RunPod's public Secure 
 Keep the media gateway available separately, route every active transformed call through the selected cloud GPU, and stop or scale down GPU workers after the last call. Pre-warm the worker before admitting a call; a warm minimum improves join time but incurs GPU charges while idle. If the product must keep one worker warm around the clock, budget its full hourly rate rather than treating GPU use as intermittent.
 
 Do not treat VRAM or a GPU model name as evidence of output quality. Compare the 4500 SE and 4090 using the same authorized face/voice profiles and capture/network path. Keep 1080p30 only when decoded output sustains 30 fps, video inference p95 stays under one frame interval (33 ms), audio remains 48 kHz with real-time processing, end-to-end latency and A/V drift meet the release gates, and quality evaluators pass. Otherwise show the measured fallback instead of claiming HD readiness.
+
 ## Media route
 
 1. The signed-in owner console checks organization permission and face/voice profile authorization. It records the user's explicit consent and keeps the AI-synthetic disclosure visible.
