@@ -11,6 +11,8 @@ Build with `Dockerfile.webrtc-gateway`. The service exposes:
 - `POST /v1/sessions`: authenticates the Seldrune API, authorizes both profiles,
   verifies explicit disclosure flags, creates a short-lived signed worker ticket,
   connects to the RunPod worker over hostname-validated TLS, and answers the SDP offer.
+- `GET /v1/ice-servers`: authenticates the Seldrune API and returns STUN plus
+  short-lived Coturn credentials for the browser. Responses are not cacheable.
 - `DELETE /v1/sessions/{session_id}`: closes a session only for its organization and user.
 - `GET /healthz` and `GET /readyz`: process health and configuration readiness.
 
@@ -28,7 +30,10 @@ Configure these gateway environment variables:
 | `SELDRUNE_LIVE_WORKER_PORT` | Worker TCP port (default 8765). |
 | `SELDRUNE_LIVE_WORKER_TLS_NAME` | Expected certificate hostname; defaults to the worker host. |
 | `SELDRUNE_LIVE_WORKER_REGION` | Worker region label bound to the session. |
-| `SELDRUNE_LIVE_ICE_SERVERS_JSON` | Optional JSON array of STUN/TURN entries. TURN credentials are used by the gateway only. |
+| `SELDRUNE_LIVE_ICE_SERVERS_JSON` | Optional JSON array of STUN entries and gateway-only static ICE entries. Do not put static TURN entries here when dynamic TURN is enabled. |
+| `SELDRUNE_LIVE_TURN_URLS_JSON` | Optional JSON array of `turn:` or `turns:` relay URLs for Coturn REST authentication. |
+| `SELDRUNE_LIVE_TURN_SHARED_SECRET` | Coturn `static-auth-secret`; at least 32 random bytes. It stays inside the gateway. |
+| `SELDRUNE_LIVE_TURN_CREDENTIAL_TTL_SECONDS` | Lifetime of generated browser and gateway credentials (default 3600); must cover the configured session lifetime and may be at most 86400. |
 | `SELDRUNE_LIVE_MAX_SESSIONS` | Local session capacity (default 1). |
 | `SELDRUNE_LIVE_MAX_INFLIGHT` | Shared audio/video worker requests (1 or 2; default 2). |
 | `SELDRUNE_LIVE_SESSION_TTL_SECONDS` | Session cleanup lifetime (default 3600). |
@@ -41,11 +46,13 @@ only the reference and digest, not raw face or voice media. Configure the built-
 and matching service tokens in the gateway and backend. The per-session consent and
 synthetic-media disclosure checks remain separate. Do not set an allow-all authorizer.
 
-Run this service on a host that supports WebRTC ICE media traffic and outbound
-connectivity to the configured STUN/TURN servers. The browser currently supplies a
-STUN server; browser-side TURN credentials and restrictive-NAT fallback still need
-wiring before claiming universal mobile connectivity. Keep this service to one
-instance while session state is in memory.
+The authenticated Seldrune API proxies `/v1/ice-servers` to the gateway and returns
+only derived, expiring browser credentials with `Cache-Control: no-store`. Configure
+TURN URLs and the shared secret together; the generated credential lifetime must be
+at least the gateway session lifetime. Set Coturn's `static-auth-secret` to the same
+server-side value. A real Coturn relay still needs to be provisioned and tested from
+the target mobile networks before claiming universal connectivity. Keep this service
+to one instance while session state is in memory.
 
 ## RunPod worker wire format
 
