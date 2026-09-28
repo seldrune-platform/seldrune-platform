@@ -54,7 +54,13 @@
     }
   } catch {}
 
-  function setMarkerPosition(left, top) {
+  function saveMarkerPosition() {
+    try {
+      localStorage.setItem(markerPositionStorageKey, JSON.stringify(markerPosition));
+    } catch {}
+  }
+
+  function setMarkerPosition(left, top, persist = true) {
     const wrap = q('.output-wrap');
     const badge = q('#synthetic-badge');
     if (!wrap || !badge || !wrap.clientWidth || !badge.offsetWidth) return;
@@ -75,9 +81,7 @@
       x: leftRange ? (boundedLeft - min) / leftRange : 0,
       y: topRange ? (boundedTop - min) / topRange : 0,
     };
-    try {
-      localStorage.setItem(markerPositionStorageKey, JSON.stringify(markerPosition));
-    } catch {}
+    if (persist) saveMarkerPosition();
   }
 
   function applyMarkerPosition() {
@@ -90,6 +94,7 @@
     setMarkerPosition(
       min + markerPosition.x * Math.max(0, maxLeft - min),
       min + markerPosition.y * Math.max(0, maxTop - min),
+      false,
     );
   }
 
@@ -117,6 +122,7 @@
       setMarkerPosition(
         event.clientX - rect.left - markerDrag.x,
         event.clientY - rect.top - markerDrag.y,
+        false,
       );
     });
 
@@ -124,6 +130,7 @@
       if (!markerDrag || markerDrag.pointerId !== event.pointerId) return;
       markerDrag = null;
       badge.setAttribute('aria-grabbed', 'false');
+      saveMarkerPosition();
     };
     badge.addEventListener('pointerup', finishMarkerDrag);
     badge.addEventListener('pointercancel', finishMarkerDrag);
