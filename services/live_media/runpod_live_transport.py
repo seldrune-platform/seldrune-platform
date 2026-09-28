@@ -13,6 +13,7 @@ import asyncio
 import base64
 import hmac
 import json
+import math
 import secrets
 import ssl
 import struct
@@ -278,16 +279,19 @@ def _validate_media_request(
         width = header.get("width")
         height = header.get("height")
         fps = header.get("fps")
+        valid_dimensions = type(width) is int and type(height) is int
+        long_edge = max(width, height) if valid_dimensions else 0
+        short_edge = min(width, height) if valid_dimensions else 0
+        valid_fps = type(fps) in (int, float) and math.isfinite(float(fps))
         if (
-            type(width) is not int
-            or type(height) is not int
-            or type(fps) is not int
-            or width < 1280
-            or height < 720
+            not valid_dimensions
+            or not valid_fps
+            or short_edge < 720
+            or long_edge < 1280
             or fps < 24
             or fps > 60
-            or width > 3840
-            or height > 2160
+            or short_edge > 2160
+            or long_edge > 3840
         ):
             raise StreamProtocolError("video does not meet the supported HD profile")
     else:
@@ -484,11 +488,29 @@ class RunPodLiveWorkerServer:
                         "inference_ms": inference_ms,
                         "synthetic_label_applied": kind == MediaKind.VIDEO,
                         "sample_rate_hz": header.get("sample_rate_hz"),
+                        "channels": header.get("channels"),
                         "width": header.get("width"),
                         "height": header.get("height"),
                         "fps": header.get("fps"),
                     }
                     if quality_evidence is not None:
+                        if kind == MediaKind.VIDEO:
+                            response["width"] = quality_evidence.get(
+                                "output_width", response["width"]
+                            )
+                            response["height"] = quality_evidence.get(
+                                "output_height", response["height"]
+                            )
+                            response["fps"] = quality_evidence.get(
+                                "output_fps", response["fps"]
+                            )
+                        else:
+                            response["sample_rate_hz"] = quality_evidence.get(
+                                "sample_rate_hz", response["sample_rate_hz"]
+                            )
+                            response["channels"] = quality_evidence.get(
+                                "channels", response["channels"]
+                            )
                         quality_evidence["transport_inference_ms"] = inference_ms
                         paired_sync = av_sync_by_request.get(request_id)
                         if paired_sync is not None:
@@ -699,6 +721,12 @@ class RunPodLiveWorkerClient:
                         StreamProtocolError("worker returned an empty result")
                     )
                     continue
+                is_video = header.get("media_kind") == "video"
+                width = header.get("width")
+                height = header.get("height")
+                fps = header.get("fps")
+                sample_rate_hz = header.get("sample_rate_hz")
+                channels = header.get("channels")
                 future.set_result(
                     InferenceResult(
                         request_id=request_id,
@@ -706,6 +734,23 @@ class RunPodLiveWorkerClient:
                         payload=message.payload,
                         inference_ms=float(header["inference_ms"]),
                         quality_evidence=quality_evidence,
+                        width=width if is_video and type(width) is int else None,
+                        height=height if is_video and type(height) is int else None,
+                        fps=(
+                            float(fps)
+                            if is_video
+                            and type(fps) in (int, float)
+                            and math.isfinite(float(fps))
+                            else None
+                        ),
+                        sample_rate_hz=(
+                            sample_rate_hz
+                            if not is_video and type(sample_rate_hz) is int
+                            else None
+                        ),
+                        channels=(
+                            channels if not is_video and type(channels) is int else None
+                        ),
                     )
                 )
         except asyncio.CancelledError:
