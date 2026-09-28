@@ -199,10 +199,12 @@ def validate_face_realism(
     evidence: FaceRealismEvidence, policy: RealismQualityPolicy
 ) -> dict[str, Any]:
     evidence.validate()
+    long_edge = max(evidence.output_width, evidence.output_height)
+    short_edge = min(evidence.output_width, evidence.output_height)
     checks = (
         evidence.window_frames >= policy.min_face_window_frames,
-        evidence.output_width >= policy.min_video_width,
-        evidence.output_height >= policy.min_video_height,
+        long_edge >= policy.min_video_width,
+        short_edge >= policy.min_video_height,
         evidence.output_fps >= policy.min_video_fps,
         evidence.identity_similarity >= policy.face_min_identity_similarity,
         evidence.temporal_consistency >= policy.face_min_temporal_consistency,
