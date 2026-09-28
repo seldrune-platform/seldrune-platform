@@ -32,6 +32,33 @@ def _load_async_adapter(setting: str, name: str) -> Adapter:
     return adapter
 
 
+
+
+def detect_actual_accelerator_profile() -> str:
+    """Map the visible CUDA device to a supported profile; never trust a requested target."""
+    try:
+        import torch
+    except ImportError as exc:
+        raise RuntimeError("PyTorch is required to attest the live GPU") from exc
+    if not torch.cuda.is_available():
+        raise RuntimeError("a CUDA accelerator is required for LiveShell")
+    name = torch.cuda.get_device_name(0).casefold()
+    if "rtx pro 4500 se" in name:
+        profile, minimum_gib = "rtx-pro-4500-se", 0.0
+    elif "rtx pro 6000" in name and "blackwell" in name:
+        profile, minimum_gib = "rtx-pro-6000-blackwell", 90.0
+    elif "rtx 5090" in name:
+        profile, minimum_gib = "rtx-5090", 31.5
+    elif "rtx 4090" in name:
+        profile, minimum_gib = "rtx-4090", 23.5
+    else:
+        raise RuntimeError("the visible CUDA device is not a supported LiveShell profile")
+    total_gib = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+    if total_gib < minimum_gib:
+        raise RuntimeError("the visible CUDA device has less memory than its supported profile")
+    return profile
+
+
 def worker_from_environment() -> tuple[
     RunPodLiveWorkerServer, ssl.SSLContext, str, int
 ]:
@@ -70,8 +97,10 @@ def worker_from_environment() -> tuple[
     if not 1 <= port <= 65535:
         raise RuntimeError("SELDRUNE_LIVE_WORKER_PORT is outside the valid range")
 
+    actual_accelerator_profile = detect_actual_accelerator_profile()
     worker = RunPodLiveWorkerServer(
         service_token=service_token,
+        actual_accelerator_profile=actual_accelerator_profile,
         ticket_secret=ticket_secret,
         transform_face=face_transform,
         transform_voice=voice_transform,
