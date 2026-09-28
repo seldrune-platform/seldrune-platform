@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#080b14">
+  <title>Mobile FaceSwap Studio · Seldrune</title>
+  <link rel="stylesheet" href="/console-assets/liveshell-mobile.css">
+  <link rel="stylesheet" href="/console-assets/liveshell-face-swap-mobile.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/console"><span class="mark">S</span><span>SELDRUNE</span></a>
+    <span class="product-mark">LIVESHELL · FACE SWAP STUDIO</span>
+    <a class="top-link" href="/web/products.html">Products</a>
+  </header>
+  <main class="shell">
+    <section class="intro panel">
+      <div>
+        <p class="eyebrow">MOBILE VIDEO PROCESSING · RUNPOD RTX 4090</p>
+        <h1>FaceSwap studio</h1>
+        <p class="intro-copy">Choose an authorized face image and a video from your phone. Seldrune processes the video on the configured GPU worker and returns a clearly labeled result.</p>
+      </div>
+      <div id="worker-state" class="gateway-state" role="status" aria-live="polite">Checking GPU worker…</div>
+    </section>
+    <section class="quality-strip" aria-label="Processing details">
+      <div><small>GPU TARGET</small><strong id="gpu-target">RTX 4090</strong></div>
+      <div><small>VIDEO INPUT</small><strong>Up to 1080p · 30 sec</strong></div>
+      <div><small>AUDIO OUTPUT</small><strong>48 kHz AAC</strong></div>
+      <div><small>DISCLOSURE</small><strong>Visible AI label</strong></div>
+    </section>
+    <section class="studio-grid faceswap-grid">
+      <form id="job-form" class="panel controls" enctype="multipart/form-data">
+        <div class="section-heading">
+          <div><p class="eyebrow">NEW VIDEO JOB</p><h2>Choose your media</h2></div>
+          <span class="secure-pill">ORGANIZATION RUN PERMISSION REQUIRED</span>
+        </div>
+        <label for="source-face">Authorized face image</label>
+        <input id="source-face" name="source_face" type="file" accept="image/jpeg,image/png,image/webp" required>
+        <small class="field-note">JPG, PNG, or WebP · max 15 MB</small>
+        <label for="target-video">Target video</label>
+        <input id="target-video" name="target_video" type="file" accept="video/mp4,video/quicktime,video/webm" required>
+        <small class="field-note">MP4, MOV, M4V, or WebM · up to 30 seconds · max 75 MB</small>
+        <fieldset class="consent-box">
+          <legend>Required authorization</legend>
+          <label class="check-row"><input id="face-consent" type="checkbox"><span>I have permission to use the person’s face in the selected image.</span></label>
+          <label class="check-row"><input id="video-rights" type="checkbox"><span>I have the right to process and edit the selected video.</span></label>
+          <label class="check-row"><input id="synthetic-indicator" type="checkbox"><span>Keep a visible AI synthetic-media label on the output video.</span></label>
+        </fieldset>
+        <div class="action-row">
+          <button id="process-button" class="button primary" type="submit" disabled>Process video</button>
+          <button id="delete-button" class="button danger" type="button" disabled>Delete job data</button>
+        </div>
+        <p id="job-status" class="status-message" role="status" aria-live="polite">Sign in through the Seldrune console to check worker readiness.</p>
+        <p class="privacy-note">The face image and target video are sent to the configured RunPod worker for processing. Worker files expire after one hour and can be deleted sooner. The original audio is retained and re-encoded to AAC at 48 kHz; this app does not convert voices.</p>
+      </form>
+      <section class="panel media-panel" aria-label="Face-swap output">
+        <div class="section-heading">
+          <div><p class="eyebrow">PROCESSED RESULT</p><h2>Video preview</h2></div>
+          <span id="job-state" class="connection-state">READY</span>
+        </div>
+        <div class="output-wrap faceswap-output">
+          <video id="output-video" controls playsinline></video>
+          <div id="synthetic-badge" class="synthetic-badge">AI TRANSFORMED · SYNTHETIC MEDIA</div>
+          <div id="output-placeholder" class="video-placeholder">Your labeled output appears here after processing.</div>
+        </div>
+        <div class="telemetry">
+          <div><small>GPU</small><strong id="output-gpu">Not connected</strong></div>
+          <div><small>OUTPUT SIZE</small><strong id="output-dimensions">Not measured</strong></div>
+          <div><small>AUDIO</small><strong id="output-audio">Original audio retained</strong></div>
+          <div><small>FACE MODEL</small><strong id="output-model">Not started</strong></div>
+        </div>
+        <a id="download-button" class="button secondary download-button" href="#" hidden>Download labeled video</a>
+        <p class="evidence-note">The result panel shows dimensions and audio metadata measured by the worker. RTX 4090 is the selected baseline; 1080p quality depends on the uploaded source and model output.</p>
+      </section>
+    </section>
+  </main>
+  <script src="/console-assets/liveshell-face-swap-mobile.js" defer></script>
+</body>
+</html>

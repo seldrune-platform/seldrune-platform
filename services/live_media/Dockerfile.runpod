@@ -1,0 +1,27 @@
+FROM runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
+
+ARG FACEFUSION_COMMIT=358f169e95e2b02431722cc287db8acda6658df1
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    FACEFUSION_ROOT=/opt/facefusion \
+    SELDRUNE_RUNPOD_JOB_DIR=/workspace/seldrune-faceswap-jobs
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ffmpeg git fonts-dejavu-core libgl1 libglib2.0-0 libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone https://github.com/facefusion/facefusion.git /opt/facefusion \
+    && git -C /opt/facefusion checkout "${FACEFUSION_COMMIT}" \
+    && cd /opt/facefusion \
+    && python install.py cuda@12 --skip-conda \
+    && python -c "import onnxruntime as ort; assert 'CUDAExecutionProvider' in ort.get_available_providers()"
+
+RUN python -m pip install --no-cache-dir \
+      'fastapi>=0.115,<1.0' \
+      'uvicorn[standard]>=0.32,<1.0' \
+      'python-multipart>=0.0.20,<1.0'
+
+WORKDIR /app
+COPY services/live_media/runpod_facefusion_worker.py /app/runpod_facefusion_worker.py
+EXPOSE 8000
+CMD ["uvicorn", "runpod_facefusion_worker:app", "--host", "0.0.0.0", "--port", "8000"]

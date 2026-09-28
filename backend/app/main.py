@@ -25,6 +25,10 @@ from backend.app.api.routes.liveshell_mobile import (
     api_router as liveshell_mobile_api_router,
     page_router as liveshell_mobile_page_router,
 )
+from backend.app.api.routes.liveshell_jobs import (
+    api_router as liveshell_jobs_api_router,
+    page_router as liveshell_jobs_page_router,
+)
 from backend.app.api.routes.membership_admin import router as membership_admin_router
 from backend.app.api.routes.model_provider_connections import (
     router as model_provider_connections_router,
@@ -63,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(console_router)
     app.include_router(mail_page_router)
     app.include_router(liveshell_mobile_page_router)
+    app.include_router(liveshell_jobs_page_router)
     app.mount("/console-assets", StaticFiles(directory=WEB_ROOT), name="console-assets")
     app.mount("/mail-assets", StaticFiles(directory=WEB_ROOT), name="mail-assets")
     app.mount("/web", StaticFiles(directory=WEB_ROOT), name="web-assets")
@@ -93,6 +98,7 @@ def create_app() -> FastAPI:
         mail_oauth_router,
         liveshift_face_router,
         liveshell_mobile_api_router,
+        liveshell_jobs_api_router,
         secret_references_router,
         security_events_router,
         seldrune_gpt_router,

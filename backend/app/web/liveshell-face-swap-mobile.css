@@ -1,0 +1,9 @@
+.faceswap-grid { align-items: start; }
+.field-note { display: block; margin: -8px 0 18px; color: #a5aec2; font-size: .82rem; }
+.controls input[type="file"] { width: 100%; min-height: 48px; padding: 10px; color: #edf1ff; border: 1px solid rgba(255,255,255,.18); border-radius: 12px; background: rgba(255,255,255,.04); }
+.faceswap-output { position: relative; min-height: 250px; display: grid; place-items: center; overflow: hidden; border-radius: 14px; background: #05070c; }
+.faceswap-output video { display: block; width: 100%; max-height: 62vh; background: #05070c; }
+.faceswap-output video:not([src]) { display: none; }
+.download-button { display: inline-flex; margin-top: 16px; text-decoration: none; }
+.download-button[hidden] { display: none; }
+@media (max-width: 720px) { .faceswap-output { min-height: 210px; } .faceswap-output video { max-height: 46vh; } }
