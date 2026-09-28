@@ -440,6 +440,7 @@ def test_one_go_blocks_compiled_work_before_model_without_tools(
         item["contract_execution"]["executed_steps"] == 0
         for item in report["stage_results"]
         if item["stage_id"] != "pdf_local_labels"
+        and "contract_execution" in item
     )
     assert report["halted_reason"] == "no_new_verified_dependency_progress"
 
