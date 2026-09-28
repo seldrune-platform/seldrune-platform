@@ -208,12 +208,19 @@ async def evaluate_face(
     state = _face_window_state(session_id, profile_id)
     temporal = 1.0
     if state.previous_embedding is not None:
-        import numpy as np
-
-        previous = np.asarray(state.previous_embedding, dtype=np.float32)
-        current = np.asarray(embedding, dtype=np.float32)
-        denominator = float(np.linalg.norm(previous) * np.linalg.norm(current))
-        cosine = float(np.dot(previous, current) / denominator) if denominator > 0 else -1.0
+        previous = [float(value) for value in state.previous_embedding]
+        current = [float(value) for value in embedding]
+        if len(previous) != len(current):
+            raise ValueError("face evaluator embedding dimensions changed")
+        denominator = math.sqrt(
+            sum(value * value for value in previous)
+            * sum(value * value for value in current)
+        )
+        cosine = (
+            sum(a * b for a, b in zip(previous, current, strict=True)) / denominator
+            if denominator > 0
+            else -1.0
+        )
         temporal = _clamp_score((cosine + 1.0) / 2.0)
     state.previous_embedding = embedding
     state.identities.append(identity)
