@@ -313,6 +313,7 @@ def _validate_media_request(
         width = header.get("width")
         height = header.get("height")
         fps = header.get("fps")
+        pixel_format = header.get("pixel_format")
         valid_dimensions = type(width) is int and type(height) is int
         long_edge = max(width, height) if valid_dimensions else 0
         short_edge = min(width, height) if valid_dimensions else 0
@@ -326,6 +327,7 @@ def _validate_media_request(
             or fps > 60
             or short_edge > 2160
             or long_edge > 3840
+            or pixel_format not in (None, "jpeg", "rgb24")
         ):
             raise StreamProtocolError("video does not meet the supported HD profile")
     else:
@@ -481,7 +483,9 @@ class RunPodLiveWorkerServer:
                     quality_evidence: dict[str, Any] | None = None
                     media_metadata = {
                         key: header.get(key)
-                        for key in ("width", "height", "fps", "sample_rate_hz", "channels")
+                        for key in (
+                            "width", "height", "fps", "sample_rate_hz", "channels", "pixel_format"
+                        )
                     }
                     if kind == MediaKind.VIDEO:
                         model_output = await _invoke_transform(
@@ -543,6 +547,7 @@ class RunPodLiveWorkerServer:
                         "width": header.get("width"),
                         "height": header.get("height"),
                         "fps": header.get("fps"),
+                        "pixel_format": header.get("pixel_format"),
                     }
                     if quality_evidence is not None:
                         if kind == MediaKind.VIDEO:
@@ -672,6 +677,7 @@ class RunPodLiveWorkerClient:
         self._slots = asyncio.Semaphore(max_inflight)
         self._pending: dict[str, asyncio.Future[InferenceResult]] = {}
         self._expected: dict[str, tuple[MediaKind, int]] = {}
+        self._expected_pixel_format: dict[str, str | None] = {}
         self._next_sequence = {str(MediaKind.VIDEO): 0, str(MediaKind.AUDIO): 0}
         self._closed = False
         self._reader_task = asyncio.create_task(self._read_results())
@@ -759,11 +765,13 @@ class RunPodLiveWorkerClient:
                     continue
                 header = message.header
                 expected_kind, expected_timestamp = self._expected[request_id]
+                expected_pixel_format = self._expected_pixel_format[request_id]
                 if (
                     header.get("type") != "result"
                     or header.get("session_id") != self.session_id
                     or header.get("media_kind") != str(expected_kind)
                     or header.get("timestamp_ms") != expected_timestamp
+                    or header.get("pixel_format") != expected_pixel_format
                     or (
                         header.get("synthetic_label_applied") is not True
                         and header.get("media_kind") == MediaKind.VIDEO
@@ -817,6 +825,11 @@ class RunPodLiveWorkerClient:
                         channels=(
                             channels if not is_video and type(channels) is int else None
                         ),
+                        pixel_format=(
+                            header.get("pixel_format")
+                            if is_video and isinstance(header.get("pixel_format"), str)
+                            else None
+                        ),
                     )
                 )
         except asyncio.CancelledError:
@@ -853,6 +866,12 @@ class RunPodLiveWorkerClient:
                 "live worker is busy; stale media was not queued"
             ) from exc
         kind = MediaKind(request.media_kind)
+        if kind == MediaKind.VIDEO and request.pixel_format not in (None, "jpeg", "rgb24"):
+            self._slots.release()
+            raise StreamProtocolError("unsupported video pixel format")
+        if kind == MediaKind.AUDIO and request.pixel_format is not None:
+            self._slots.release()
+            raise StreamProtocolError("audio requests cannot declare a video pixel format")
         if request.request_id in self._pending:
             self._slots.release()
             raise StreamProtocolError("duplicate in-flight request id")
@@ -861,6 +880,7 @@ class RunPodLiveWorkerClient:
         )
         self._pending[request.request_id] = future
         self._expected[request.request_id] = (kind, request.timestamp_ms)
+        self._expected_pixel_format[request.request_id] = request.pixel_format
         header: dict[str, Any] = {
             "type": "request",
             "request_id": request.request_id,
@@ -875,6 +895,8 @@ class RunPodLiveWorkerClient:
                 height=request.height or height,
                 fps=request.fps or fps,
             )
+            if request.pixel_format is not None:
+                header["pixel_format"] = request.pixel_format
         else:
             header.update(
                 sample_rate_hz=request.sample_rate_hz or sample_rate_hz,
@@ -891,6 +913,7 @@ class RunPodLiveWorkerClient:
         finally:
             self._pending.pop(request.request_id, None)
             self._expected.pop(request.request_id, None)
+            self._expected_pixel_format.pop(request.request_id, None)
             self._slots.release()
 
     async def __call__(
