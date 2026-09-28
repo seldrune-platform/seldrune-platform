@@ -88,7 +88,7 @@ class GatewaySession(BaseModel):
     voice_profile_authorized: StrictBool
     synthetic_media_indicator_enabled: StrictBool
     actual_accelerator_profile: Literal[
-        "rtx-4090", "rtx-5090", "rtx-pro-6000-blackwell"
+        "rtx-4090", "rtx-pro-4500-se", "rtx-5090", "rtx-pro-6000-blackwell"
     ] | None = None
     output_width: int | None = Field(default=None, ge=1, le=7680)
     output_height: int | None = Field(default=None, ge=1, le=4320)
