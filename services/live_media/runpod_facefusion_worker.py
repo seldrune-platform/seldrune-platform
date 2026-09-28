@@ -12,8 +12,9 @@ import os
 import shutil
 import sys
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, AsyncIterator
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
@@ -31,7 +32,33 @@ DATA_ROOT = Path(os.getenv("SELDRUNE_RUNPOD_JOB_DIR", "/workspace/seldrune-faces
 FACEFUSION_ROOT = Path(os.getenv("FACEFUSION_ROOT", "/opt/facefusion"))
 JOBS: dict[str, dict[str, object]] = {}
 GPU_SLOT = asyncio.Semaphore(1)
-app = FastAPI(title="Seldrune RunPod FaceSwap Worker", docs_url=None, redoc_url=None)
+
+
+async def _cleanup_expired_jobs() -> None:
+    while True:
+        await asyncio.sleep(60)
+        _prune_expired_jobs()
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    cleanup_task = asyncio.create_task(_cleanup_expired_jobs())
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+
+
+app = FastAPI(
+    title="Seldrune RunPod FaceSwap Worker",
+    docs_url=None,
+    redoc_url=None,
+    lifespan=_lifespan,
+)
 
 
 def _authorize(authorization: str | None) -> None:
