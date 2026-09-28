@@ -52,7 +52,11 @@ TURN URLs and the shared secret together; the generated credential lifetime must
 the gateway session lifetime by five minutes. Set Coturn's `static-auth-secret` to the same
 server-side value. A real Coturn relay still needs to be provisioned and tested from
 the target mobile networks before claiming universal connectivity. Keep this service
-to one instance while session state is in memory.
+to one instance while session state is in memory. A WebRTC peer that stays
+disconnected for 15 seconds releases its gateway and GPU worker session; a
+reconnection within that window preserves the call. Failed or closed peers
+release immediately. The browser uses the same grace window and stops local
+camera and microphone capture when the connection does not return.
 
 ## RunPod worker wire format
 
