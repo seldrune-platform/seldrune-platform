@@ -58,7 +58,7 @@ class LiveSessionOffer(BaseModel):
     consent_confirmed: bool = False
     synthetic_media_indicator_enabled: bool = False
     video_resolution: Literal["720p", "1080p"] = "720p"
-    target_accelerator_profile: Literal["rtx-4090", "rtx-5090"] = "rtx-4090"
+    target_accelerator_profile: Literal["rtx-4090", "rtx-5090", "rtx-pro-6000-blackwell"] = "rtx-4090"
 
 
 class GatewayDescription(BaseModel):
@@ -189,14 +189,14 @@ def liveshell_live_readiness(
             "gateway_configured": False,
             "video_target": "1280x720 at 30 fps",
             "audio_target_sample_rate_hz": 48_000,
-            "accelerator_targets": ["rtx-4090", "rtx-5090"],
+            "accelerator_targets": ["rtx-4090", "rtx-5090", "rtx-pro-6000-blackwell"],
             "production_evidence_required": True,
         }
     return {
         "gateway_configured": True,
         "video_target": "1280x720 at 30 fps",
         "audio_target_sample_rate_hz": 48_000,
-        "accelerator_targets": ["rtx-4090", "rtx-5090"],
+        "accelerator_targets": ["rtx-4090", "rtx-5090", "rtx-pro-6000-blackwell"],
         "production_evidence_required": True,
         "note": "Configuration is not proof that a worker, model, or HD stream is ready.",
     }
