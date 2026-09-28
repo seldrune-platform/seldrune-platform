@@ -6,9 +6,11 @@ import asyncio
 import io
 from pathlib import Path
 
+from services.live_media.synthetic_disclosure import get_visible_disclosure_label
+
 from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
 
-_LABEL = "AI MODIFIED"
+_LABEL = get_visible_disclosure_label()
 _FONT_CANDIDATES = (
     Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
     Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),

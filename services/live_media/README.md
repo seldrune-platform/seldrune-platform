@@ -81,3 +81,17 @@ readiness from signaling alone.
 
 Install only the media dependencies with the gateway Dockerfile. The normal Seldrune
 API image remains independent of aiortc.
+
+
+## Change the visible disclosure wording
+
+The label renderer is in `synthetic_video_labeler.py`; its wording is kept in
+`synthetic_disclosure.py`. To change the wording, edit
+`VISIBLE_DISCLOSURE_LABEL` in that file and choose one of these clear labels:
+`AI MODIFIED`, `AI-ALTERED VIDEO`, or `SYNTHETIC MEDIA`.
+
+Blank text and wording that does not identify altered or synthetic media are
+rejected, so the worker cannot start with an empty or misleading label. There is
+no disable setting. Session consent and profile authorization remain separate
+required checks. Verify changes with
+`pytest -q tests/test_synthetic_video_disclosure.py`.
