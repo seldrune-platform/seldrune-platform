@@ -4,17 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#080b14">
-  <title>LiveShell Mobile Studio · Seldrune</title>
+  <title>Live video</title>
   <link rel="stylesheet" href="/console-assets/liveshell-mobile.css">
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="/console"><span class="mark">S</span><span>SELDRUNE</span></a>
-    <span class="product-mark">LIVESHELL · MOBILE STUDIO</span>
-    <a class="top-link" href="/liveshell/faceswap/mobile">FaceSwap Studio</a>
-    <a class="top-link" href="/web/products.html">Products</a>
-  </header>
-
   <main class="shell">
     <section class="intro panel">
       <div>
@@ -71,12 +64,12 @@
 
         <div class="action-row">
           <button id="preview-button" class="button secondary" type="button">Preview camera &amp; mic</button>
-          <button id="connect-button" class="button primary" type="submit" disabled>Start LiveShell</button>
+          <button id="connect-button" class="button primary" type="submit" disabled>Start session</button>
           <button id="stop-button" class="button danger" type="button" disabled>Stop session</button>
         </div>
         <button id="switch-camera" class="text-button" type="button" disabled>Switch front / rear camera</button>
-        <p id="session-status" class="status-message" role="status" aria-live="polite">Sign in through the Seldrune console to check LiveShell readiness.</p>
-        <p class="privacy-note">Seldrune handles signaling and sends media to the configured private GPU gateway. Live media does not pass through the Seldrune API server. Only enter profile IDs already enrolled and authorized for this organization.</p>
+        <p id="session-status" class="status-message" role="status" aria-live="polite">Sign in to check live-session readiness.</p>
+        <p class="privacy-note">The service handles signaling and sends media to the configured private GPU gateway. Live media does not pass through the API server. Only enter profile IDs already enrolled and authorized for your organization.</p>
       </form>
 
       <section class="panel media-panel" aria-label="Camera preview and transformed output">
@@ -93,7 +86,7 @@
             <div class="video-label"><span>LIVE RETURN</span><span id="output-metrics">HD pending</span></div>
             <div class="output-wrap">
               <video id="remote-video" autoplay muted playsinline></video>
-              <div id="synthetic-badge" class="synthetic-badge">AI TRANSFORMED · SYNTHETIC MEDIA</div>
+              <div id="synthetic-badge" class="synthetic-badge">AI modified</div>
               <div id="output-placeholder" class="video-placeholder">Transformed video appears here after an authorized GPU session connects.</div>
             </div>
             <audio id="remote-audio" autoplay controls></audio>
@@ -106,6 +99,7 @@
           <div><small>PROOF STATUS</small><strong id="proof-detail">Not verified</strong></div>
         </div>
         <p class="evidence-note">4090 is the selected baseline target; 5090 offers more memory and compute headroom. HD quality and latency stay unverified until a real phone session returns measured frames and audio.</p>
+        <p class="evidence-note">This page previews the live return in the browser. Routing it as a camera and microphone in a native meeting app is a separate integration step.</p>
       </section>
     </section>
   </main>
