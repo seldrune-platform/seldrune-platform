@@ -48,6 +48,8 @@ SUPPORTED_ACCELERATOR_PROFILES = frozenset({
     "rtx-4090", "rtx-pro-4500-se", "rtx-5090", "rtx-pro-6000-blackwell",
 })
 
+DISCONNECT_GRACE_SECONDS = 15
+
 
 @dataclass(frozen=True)
 class ProfileAuthorization:
@@ -575,9 +577,29 @@ class LiveMediaGateway:
             async with self._lock:
                 self._sessions[session_id] = active
 
+            disconnect_task: asyncio.Task[None] | None = None
+
+            async def close_if_disconnected() -> None:
+                nonlocal disconnect_task
+                try:
+                    await asyncio.sleep(DISCONNECT_GRACE_SECONDS)
+                    disconnect_task = None
+                    await self.close(session_id, require_disconnected=True)
+                except asyncio.CancelledError:
+                    return
+
             def on_connection_state_change() -> None:
-                if getattr(peer, "connectionState", "") in {"failed", "closed"}:
-                    asyncio.get_running_loop().create_task(self.close(session_id))
+                nonlocal disconnect_task
+                connection_state = getattr(peer, "connectionState", "")
+                if connection_state == "disconnected":
+                    if disconnect_task is None or disconnect_task.done():
+                        disconnect_task = asyncio.create_task(close_if_disconnected())
+                    return
+                if disconnect_task is not None:
+                    disconnect_task.cancel()
+                    disconnect_task = None
+                if connection_state in {"failed", "closed"}:
+                    asyncio.create_task(self.close(session_id))
 
             peer.on("connectionstatechange", on_connection_state_change)
             return GatewaySessionResponse(
@@ -611,7 +633,7 @@ class LiveMediaGateway:
 
     async def close(
         self, session_id: str, *, organization_id: str | None = None,
-        user_id: str | None = None,
+        user_id: str | None = None, require_disconnected: bool = False,
     ) -> bool:
         async with self._lock:
             active = self._sessions.get(session_id)
@@ -620,6 +642,11 @@ class LiveMediaGateway:
             if organization_id is not None and active.organization_id != organization_id:
                 return False
             if user_id is not None and active.user_id != user_id:
+                return False
+            if (
+                require_disconnected
+                and getattr(active.peer, "connectionState", "") != "disconnected"
+            ):
                 return False
             self._sessions.pop(session_id, None)
         await active.close()
