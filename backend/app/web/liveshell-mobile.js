@@ -44,7 +44,8 @@
     const decoded = state.browserDecodedVideo;
     if (decoded) {
       q('#output-metrics').textContent =
-        'Browser decoded ' + decoded.width + '×' + decoded.height + ' · FPS pending';
+        'Browser decoded ' + decoded.width + '×' + decoded.height + ' · ' +
+        (Number.isFinite(decoded.fps) ? decoded.fps.toFixed(1) + ' preview fps' : 'FPS pending');
     } else if (profile.width && profile.height) {
       q('#output-metrics').textContent =
         'Gateway profile ' + profile.width + '×' + profile.height + ' · unmeasured';
@@ -68,12 +69,19 @@
       : shortEdge >= 720 && longEdge >= 1280
         ? '720p'
         : '';
+    const measuredFps = Number.isFinite(decoded.fps);
+    const fpsDetail = measuredFps ? ' at ' + decoded.fps.toFixed(1) + ' preview fps' : '';
+    const pending = measuredFps
+      ? 'Audio and evaluator evidence remain pending.'
+      : 'FPS, audio, and evaluator evidence remain pending.';
     if (!tier) {
-      showStatus('The browser decoded video below the 720p minimum; FPS, audio, and quality evidence are pending.', 'error');
+      showStatus('The browser decoded video below the 720p minimum' + fpsDetail + '. ' + pending, 'error');
+    } else if (measuredFps && decoded.fps < 29) {
+      showStatus('The browser decoded ' + tier + ' video' + fpsDetail + ', below the 30 fps target. ' + pending, 'error');
     } else if (tier === '720p' && q('#resolution').value === '1080p') {
-      showStatus('The browser decoded the 720p fallback. FPS, audio, and evaluator evidence remain pending.', 'success');
+      showStatus('The browser decoded the 720p fallback' + fpsDetail + '. ' + pending, 'success');
     } else {
-      showStatus('The browser decoded ' + tier + ' video. FPS, audio, and evaluator evidence remain pending.', 'success');
+      showStatus('The browser decoded ' + tier + ' video' + fpsDetail + '. ' + pending, 'success');
     }
   }
 
@@ -137,20 +145,65 @@
     const stream = new MediaStream([track]);
     if (track.kind === 'video') {
       const video = q('#remote-video');
+      const observedPeer = state.peer;
       video.srcObject = stream;
       q('.output-card').classList.add('active');
       video.addEventListener('loadeddata', () => {
-        const recordFrame = () => {
-          if (state.browserDecodedVideo || !video.videoWidth || !video.videoHeight) return;
-          state.browserDecodedVideo = {
-            width: video.videoWidth,
-            height: video.videoHeight,
-          };
-          renderOutputMetrics();
-          showBrowserVideoStatus();
+        let windowStartMs = null;
+        let windowFrameCount = null;
+        let lastFrameMs = null;
+        const active = () => state.peer === observedPeer && video.srcObject === stream;
+        const recordFrame = (now, metadata = {}) => {
+          if (!active()) return;
+          const width = video.videoWidth;
+          const height = video.videoHeight;
+          if (width && height) {
+            const previous = state.browserDecodedVideo;
+            const resolutionChanged = !previous || previous.width !== width || previous.height !== height;
+            const presentedFrames = Number.isFinite(metadata.presentedFrames)
+              ? metadata.presentedFrames : null;
+            let fps = resolutionChanged ? null : previous.fps;
+            if (Number.isFinite(now)) lastFrameMs = now;
+            if (resolutionChanged) {
+              windowStartMs = null;
+              windowFrameCount = null;
+            }
+            if (fps === 0 && windowStartMs === null) fps = null;
+            if (Number.isFinite(now) && presentedFrames !== null) {
+              if (windowStartMs === null || windowFrameCount === null || presentedFrames < windowFrameCount) {
+                windowStartMs = now;
+                windowFrameCount = presentedFrames;
+              } else if (now - windowStartMs >= 2000) {
+                fps = Math.max(0, (presentedFrames - windowFrameCount) * 1000 / (now - windowStartMs));
+                windowStartMs = now;
+                windowFrameCount = presentedFrames;
+              }
+            }
+            if (resolutionChanged || fps !== previous.fps) {
+              state.browserDecodedVideo = {width, height, fps};
+              renderOutputMetrics();
+              showBrowserVideoStatus();
+            }
+          }
+          if (typeof video.requestVideoFrameCallback === 'function') {
+            video.requestVideoFrameCallback(recordFrame);
+          }
         };
         if (typeof video.requestVideoFrameCallback === 'function') {
+          const checkStall = () => {
+            if (!active()) return;
+            if (lastFrameMs !== null && performance.now() - lastFrameMs >= 3000 &&
+                state.browserDecodedVideo && state.browserDecodedVideo.fps !== 0) {
+              state.browserDecodedVideo = {...state.browserDecodedVideo, fps: 0};
+              windowStartMs = null;
+              windowFrameCount = null;
+              renderOutputMetrics();
+              showBrowserVideoStatus();
+            }
+            setTimeout(checkStall, 1000);
+          };
           video.requestVideoFrameCallback(recordFrame);
+          setTimeout(checkStall, 1000);
         } else {
           recordFrame();
         }
