@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from typing import Callable, Protocol
+from typing import Protocol
 
 
 class VideoSink(Protocol):
@@ -284,8 +285,8 @@ async def relay_returned_track(track: object, output: DesktopLiveCallOutput) -> 
         layout = getattr(frame, "layout", None)
         channels = len(getattr(layout, "channels", ()))
         if sample_rate != output.sample_rate_hz or channels != output.channels:
-            raise ValueError("returned audio sample rate or channel count does not match output")
+            raise ValueError("returned audio format does not match the selected output")
         samples = np.asarray(frame.to_ndarray(format="s16"), dtype=np.int16)
-        if samples.size == 0:
+        if not samples.size:
             raise ValueError("returned audio frame is empty")
         await output.publish_audio(samples.tobytes(), timestamp_ms)
