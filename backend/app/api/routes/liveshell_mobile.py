@@ -91,13 +91,18 @@ class GatewaySession(BaseModel):
     output_fps: float | None = Field(default=None, ge=1, le=120)
 
 
-def _gateway_configuration() -> tuple[str, str]:
-    base_url = os.getenv("SELDRUNE_LIVESHIFT_WORKER_URL", "").strip().rstrip("/")
-    token = os.getenv("SELDRUNE_LIVESHIFT_WORKER_TOKEN", "").strip()
+def _gateway_configuration(
+    *,
+    url_env: str = "SELDRUNE_LIVESHIFT_WORKER_URL",
+    token_env: str = "SELDRUNE_LIVESHIFT_WORKER_TOKEN",
+    feature_name: str = "LiveShell GPU session gateway",
+) -> tuple[str, str]:
+    base_url = os.getenv(url_env, "").strip().rstrip("/")
+    token = os.getenv(token_env, "").strip()
     if not base_url or not token:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="The LiveShell GPU session gateway is not configured.",
+            detail=f"The {feature_name} is not configured.",
         )
 
     parsed = urlsplit(base_url)
@@ -116,7 +121,7 @@ def _gateway_configuration() -> tuple[str, str]:
     ):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="The LiveShell GPU gateway URL must use HTTPS or a private service URL.",
+            detail=f"The {feature_name} URL must use HTTPS or a private service URL.",
         )
     return base_url, token
 
@@ -343,4 +348,3 @@ async def close_liveshell_live_session(
             detail="The LiveShell GPU gateway could not close the session.",
         )
     return {"closed": True}
-

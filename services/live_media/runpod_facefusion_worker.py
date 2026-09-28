@@ -35,7 +35,7 @@ app = FastAPI(title="Seldrune RunPod FaceSwap Worker", docs_url=None, redoc_url=
 
 
 def _authorize(authorization: str | None) -> None:
-    expected_token = os.getenv("SELDRUNE_LIVESHIFT_WORKER_TOKEN", "").strip()
+    expected_token = os.getenv("SELDRUNE_FACESWAP_WORKER_TOKEN", "").strip()
     if not expected_token:
         raise HTTPException(status_code=503, detail="Worker authentication is not configured.")
     expected = f"Bearer {expected_token}"

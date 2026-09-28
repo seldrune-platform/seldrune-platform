@@ -27,6 +27,14 @@ MAX_VIDEO_BYTES = 75 * 1024 * 1024
 MAX_OUTPUT_BYTES = 100 * 1024 * 1024
 
 
+def _faceswap_worker_configuration() -> tuple[str, str]:
+    return _gateway_configuration(
+        url_env="SELDRUNE_FACESWAP_WORKER_URL",
+        token_env="SELDRUNE_FACESWAP_WORKER_TOKEN",
+        feature_name="Seldrune FaceSwap GPU worker",
+    )
+
+
 @page_router.get("/liveshell/faceswap/mobile", include_in_schema=False)
 def liveshell_face_swap_mobile_page() -> Response:
     return Response(
@@ -124,7 +132,7 @@ async def liveshell_video_job_readiness(
     _membership: LiveRunDep,
 ) -> dict[str, object]:
     try:
-        base_url, token = _gateway_configuration()
+        base_url, token = _faceswap_worker_configuration()
     except HTTPException:
         return {
             "worker_configured": False,
@@ -196,7 +204,7 @@ async def create_liveshell_video_job(
         raise HTTPException(status_code=415, detail="Use an MP4, MOV, M4V, or WebM video.")
     face_data = await _read_file(source_face, MAX_FACE_BYTES, "face image")
     video_data = await _read_file(target_video, MAX_VIDEO_BYTES, "video")
-    base_url, token = _gateway_configuration()
+    base_url, token = _faceswap_worker_configuration()
     try:
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(90.0, connect=5.0),
@@ -266,7 +274,7 @@ async def get_liveshell_video_job(
     job_id: str,
     membership: LiveRunDep,
 ) -> dict[str, object]:
-    base_url, token = _gateway_configuration()
+    base_url, token = _faceswap_worker_configuration()
     try:
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(10.0, connect=3.0),
@@ -310,7 +318,7 @@ async def download_liveshell_video_job(
     job_id: str,
     membership: LiveRunDep,
 ) -> Response:
-    base_url, token = _gateway_configuration()
+    base_url, token = _faceswap_worker_configuration()
     try:
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(90.0, connect=5.0),
@@ -357,7 +365,7 @@ async def delete_liveshell_video_job(
     job_id: str,
     membership: LiveRunDep,
 ) -> dict[str, bool]:
-    base_url, token = _gateway_configuration()
+    base_url, token = _faceswap_worker_configuration()
     try:
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(10.0, connect=3.0),

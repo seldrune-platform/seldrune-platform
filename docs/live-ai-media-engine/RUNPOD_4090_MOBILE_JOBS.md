@@ -18,14 +18,14 @@ docker build -f services/live_media/Dockerfile.runpod -t seldrune-faceswap-worke
 
 The image pins the FaceFusion source revision used for the local integration and installs CUDA-enabled ONNX Runtime. FaceFusion downloads the selected model artifacts from its configured upstream provider when the first job runs.
 
-Configure the Pod to run this image, set a random `SELDRUNE_LIVESHIFT_WORKER_TOKEN` environment value, and expose internal port `8000` as HTTP. The Pod proxy is internet-accessible, so keep the bearer token enabled and store its matching value only in the Seldrune server environment. Never place it in browser JavaScript.
+Configure the Pod to run this image, set a random `SELDRUNE_FACESWAP_WORKER_TOKEN` environment value, and expose internal port `8000` as HTTP. The Pod proxy is internet-accessible, so keep the bearer token enabled and store its matching value only in the Seldrune server environment. Never place it in browser JavaScript.
 
 ## Seldrune settings
 
 Set these server-side values on the Seldrune web service:
 
-- `SELDRUNE_LIVESHIFT_WORKER_URL`: the RunPod HTTPS proxy URL for port 8000.
-- `SELDRUNE_LIVESHIFT_WORKER_TOKEN`: the same random worker token configured on the Pod.
+- `SELDRUNE_FACESWAP_WORKER_URL`: the RunPod HTTPS proxy URL for port 8000.
+- `SELDRUNE_FACESWAP_WORKER_TOKEN`: the same random worker token configured on the Pod.
 
 Seldrune sends organization and user IDs to the worker so it can bind each job to the requesting owner. Requests also require organization run permission, a face-use authorization checkbox, video editing rights confirmation, and the persistent synthetic-media label.
 

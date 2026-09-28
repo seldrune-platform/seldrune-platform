@@ -114,16 +114,35 @@ def test_gateway_url_must_be_https_or_private(monkeypatch):
 
 
 
+def test_faceswap_worker_configuration_is_separate_from_live_gateway(monkeypatch):
+    from backend.app.api.routes.liveshell_jobs import _faceswap_worker_configuration
+
+    monkeypatch.setenv("SELDRUNE_LIVESHIFT_WORKER_URL", "https://live-gateway.example")
+    monkeypatch.setenv("SELDRUNE_LIVESHIFT_WORKER_TOKEN", "live-token")
+    monkeypatch.setenv("SELDRUNE_FACESWAP_WORKER_URL", "https://pod-8000.proxy.runpod.net")
+    monkeypatch.setenv("SELDRUNE_FACESWAP_WORKER_TOKEN", "faceswap-token")
+
+    assert _faceswap_worker_configuration() == (
+        "https://pod-8000.proxy.runpod.net",
+        "faceswap-token",
+    )
+
+
 def test_mobile_page_product_hub_and_assets_are_served():
     with TestClient(app) as client:
         page = client.get("/liveshell/mobile")
+        faceswap_page = client.get("/liveshell/faceswap/mobile")
         products = client.get("/web/products.html")
         javascript = client.get("/console-assets/liveshell-mobile.js")
         stylesheet = client.get("/console-assets/liveshell-mobile.css")
+        faceswap_javascript = client.get("/console-assets/liveshell-face-swap-mobile.js")
 
     assert page.status_code == 200
     assert "LIVESHELL · MOBILE STUDIO" in page.text
+    assert faceswap_page.status_code == 200
+    assert "Mobile FaceSwap" in faceswap_page.text
     assert products.status_code == 200
     assert 'href="/liveshell/mobile"' in products.text
     assert javascript.status_code == 200
     assert stylesheet.status_code == 200
+    assert faceswap_javascript.status_code == 200
