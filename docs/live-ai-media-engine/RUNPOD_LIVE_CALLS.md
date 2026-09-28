@@ -6,7 +6,7 @@ The deployed RTX 4090 FaceSwap worker is an authenticated **uploaded-video job**
 
 The existing worker must therefore remain the batch-video path until a streaming worker is built, tested, and deliberately deployed. Do not advertise live calls as connected just because the batch worker reports ready.
 
-## Supported call path
+## Target desktop call path (not implemented)
 
 For desktop Teams, Zoom, or another meeting client with normal camera selection:
 
@@ -15,7 +15,7 @@ For desktop Teams, Zoom, or another meeting client with normal camera selection:
 3. The worker returns processed frames with a persistent, visible `AI-SYNTHETIC` label in the outgoing image. The companion exposes the returned image as a supported OS virtual camera. The user chooses that camera in Teams or Zoom's regular device settings.
 4. Meeting microphone audio stays local and unmodified for this face-only milestone. Do not upload microphone audio or apply voice conversion.
 
-A browser-only mobile page cannot register a system camera device for the native Android Teams or Zoom app. On phones, the initial supported option is a disclosed Seldrune browser Live Room. Native mobile-call camera integration needs a separately supported OS or conferencing API.
+A browser-only mobile page cannot register a system camera device for the native Android Teams or Zoom app. A disclosed Seldrune browser Live Room is a separate mobile target; it is not available until its own gateway is deployed and verified.
 
 ## RunPod transport constraint
 
