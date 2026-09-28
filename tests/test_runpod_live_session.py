@@ -72,6 +72,7 @@ def test_session_uses_one_authenticated_client_for_bound_av_pipeline():
                     width=1080,
                     height=1920,
                     fps=7500 / 253,
+                    pixel_format="jpeg",
                 )
             ),
             session.audio_frame(
@@ -90,6 +91,11 @@ def test_session_uses_one_authenticated_client_for_bound_av_pipeline():
         assert video.payload == b"transformed:portrait-frame"
         assert (video.width, video.height) == (1080, 1920)
         assert video.fps == pytest.approx(7500 / 253)
+        video_request = next(
+            request for request in client.requests
+            if request.media_kind == MediaKind.VIDEO
+        )
+        assert video_request.pixel_format == "jpeg"
         assert audio.payload == b"transformed:stereo-chunk"
         assert (audio.sample_rate_hz, audio.channels) == (48000, 2)
         assert {request.profile_id for request in client.requests} == {
