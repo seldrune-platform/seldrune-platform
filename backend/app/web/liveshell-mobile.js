@@ -7,6 +7,7 @@
     gatewayConfigured: false,
     localStream: null,
     peer: null,
+    disconnectTimer: null,
     sessionId: '',
     facingMode: 'user',
     browserDecodedVideo: null,
@@ -260,9 +261,25 @@
       for (const track of stream.getTracks()) peer.addTrack(track, stream);
       peer.addEventListener('track', attachReturnedTrack);
       peer.addEventListener('connectionstatechange', () => {
-        if (peer.connectionState === 'connected') setConnection('CONNECTED');
-        if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed') {
-          setConnection(peer.connectionState.toUpperCase());
+        if (state.peer !== peer) return;
+        if (peer.connectionState === 'connected') {
+          if (state.disconnectTimer) clearTimeout(state.disconnectTimer);
+          state.disconnectTimer = null;
+          setConnection('CONNECTED');
+        } else if (peer.connectionState === 'disconnected') {
+          setConnection('DISCONNECTED');
+          if (!state.disconnectTimer) {
+            state.disconnectTimer = setTimeout(() => {
+              state.disconnectTimer = null;
+              if (state.peer === peer && peer.connectionState === 'disconnected') {
+                showStatus('Connection lost. Local camera and microphone stopped.', 'error');
+                stopLive(true);
+              }
+            }, 15000);
+          }
+        } else if (peer.connectionState === 'failed') {
+          showStatus('LiveShell connection failed. Local media stopped.', 'error');
+          stopLive(true);
         }
       });
 
@@ -322,7 +339,7 @@
           'success',
         );
       }
-      setConnection('NEGOTIATED');
+      if (state.peer === peer && peer.connectionState !== 'connected') setConnection('NEGOTIATED');
     } catch (error) {
       showStatus('LiveShell could not start: ' + error.message, 'error');
       await stopLive(true);
@@ -333,6 +350,8 @@
   }
 
   async function stopLive(closeRemote = true, reportStopped = false) {
+    if (state.disconnectTimer) clearTimeout(state.disconnectTimer);
+    state.disconnectTimer = null;
     const sessionId = state.sessionId;
     state.sessionId = '';
     state.browserDecodedVideo = null;
@@ -456,6 +475,7 @@
   q('#stop-button').addEventListener('click', () => stopLive(true, true));
   q('#switch-camera').addEventListener('click', switchCamera);
   window.addEventListener('pagehide', () => {
+    if (state.disconnectTimer) clearTimeout(state.disconnectTimer);
     if (state.peer) state.peer.close();
     if (state.localStream) state.localStream.getTracks().forEach(track => track.stop());
   });
