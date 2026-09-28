@@ -87,13 +87,27 @@ class GatewaySession(BaseModel):
     face_profile_authorized: StrictBool
     voice_profile_authorized: StrictBool
     synthetic_media_indicator_enabled: StrictBool
+    runpod_session_connected: StrictBool
+    session_ticket_validated: StrictBool
+    realism_evidence_required: StrictBool
     actual_accelerator_profile: Literal[
         "rtx-4090", "rtx-pro-4500-se", "rtx-5090", "rtx-pro-6000-blackwell"
-    ] | None = None
-    output_width: int | None = Field(default=None, ge=1, le=7680)
-    output_height: int | None = Field(default=None, ge=1, le=4320)
-    audio_sample_rate_hz: int | None = Field(default=None, ge=1, le=192_000)
-    output_fps: float | None = Field(default=None, ge=1, le=120)
+    ]
+    output_width: int = Field(ge=1, le=7680)
+    output_height: int = Field(ge=1, le=4320)
+    audio_sample_rate_hz: int = Field(ge=1, le=192_000)
+    output_fps: float = Field(ge=1, le=120)
+
+
+def _effective_video_resolution(
+    width: int, height: int
+) -> Literal["720p", "1080p"] | None:
+    short_edge, long_edge = sorted((width, height))
+    if short_edge >= 1080 and long_edge >= 1920:
+        return "1080p"
+    if short_edge >= 720 and long_edge >= 1280:
+        return "720p"
+    return None
 
 
 def _gateway_configuration(
@@ -149,13 +163,27 @@ def _parse_gateway_session(
         or not result.face_profile_authorized
         or not result.voice_profile_authorized
         or not result.synthetic_media_indicator_enabled
+        or not result.runpod_session_connected
+        or not result.session_ticket_validated
+        or not result.realism_evidence_required
     ):
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=(
-                "The LiveShell GPU gateway did not verify both authorized profiles "
-                "and the synthetic-media indicator."
+                "The gateway did not verify both profiles, the disclosure, and a "
+                "ticket-validated RunPod session with strict quality checks enabled."
             ),
+        )
+
+    if (
+        _effective_video_resolution(result.output_width, result.output_height) is None
+        or result.audio_sample_rate_hz != 48_000
+        or result.output_fps < 29
+        or result.output_fps > 60
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The live gateway returned media metadata below the supported profile.",
         )
     return result
 
@@ -300,6 +328,9 @@ async def create_liveshell_live_session(
                 )
         raise
 
+    effective_resolution = _effective_video_resolution(
+        gateway_session.output_width, gateway_session.output_height
+    )
     return {
         "session_id": gateway_session.session_id,
         "answer": gateway_session.answer.model_dump(),
@@ -307,9 +338,17 @@ async def create_liveshell_live_session(
         "voice_profile_id": gateway_session.voice_profile_id,
         "synthetic_media_indicator_enabled": True,
         "actual_accelerator_profile": gateway_session.actual_accelerator_profile,
+        "runpod_session_connected": gateway_session.runpod_session_connected,
+        "session_ticket_validated": gateway_session.session_ticket_validated,
+        "realism_evidence_required": gateway_session.realism_evidence_required,
         "output": {
             "width": gateway_session.output_width,
             "height": gateway_session.output_height,
+            "resolution": effective_resolution,
+            "fallback_applied": (
+                payload.video_resolution == "1080p"
+                and effective_resolution == "720p"
+            ),
             "audio_sample_rate_hz": gateway_session.audio_sample_rate_hz,
             "fps": gateway_session.output_fps,
         },
