@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hmac
+import inspect
 import json
 import math
 import secrets
@@ -46,11 +47,38 @@ SUPPORTED_ACCELERATOR_PROFILES = frozenset({
     "rtx-pro-6000-blackwell",
 })
 
-Transform = Callable[
-    [bytes, str],
-    Awaitable[bytes | FaceTransformOutput | VoiceTransformOutput],
-]
+Transform = Callable[..., Awaitable[bytes | FaceTransformOutput | VoiceTransformOutput]]
 VideoLabeler = Callable[[bytes], Awaitable[bytes]]
+
+
+async def _invoke_transform(
+    adapter: Transform,
+    payload: bytes,
+    profile_id: str,
+    metadata: dict[str, Any],
+) -> bytes | FaceTransformOutput | VoiceTransformOutput:
+    """Pass validated frame metadata to adapters that declare that parameter."""
+    try:
+        parameters = inspect.signature(adapter).parameters
+    except (TypeError, ValueError):
+        parameters = {}
+    if "media_metadata" in parameters:
+        return await adapter(payload, profile_id, media_metadata=metadata)
+    if "metadata" in parameters:
+        return await adapter(payload, profile_id, metadata=metadata)
+    positional = [
+        parameter
+        for parameter in parameters.values()
+        if parameter.kind
+        in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    ]
+    has_varargs = any(
+        parameter.kind is inspect.Parameter.VAR_POSITIONAL
+        for parameter in parameters.values()
+    )
+    if len(positional) >= 3 or has_varargs:
+        return await adapter(payload, profile_id, metadata)
+    return await adapter(payload, profile_id)
 
 
 class StreamProtocolError(ValueError):
@@ -451,8 +479,14 @@ class RunPodLiveWorkerServer:
                     timestamp_ms = int(header["timestamp_ms"])
                     started = perf_counter()
                     quality_evidence: dict[str, Any] | None = None
+                    media_metadata = {
+                        key: header.get(key)
+                        for key in ("width", "height", "fps", "sample_rate_hz", "channels")
+                    }
                     if kind == MediaKind.VIDEO:
-                        model_output = await self.transform_face(payload, profile_id)
+                        model_output = await _invoke_transform(
+                            self.transform_face, payload, profile_id, media_metadata
+                        )
                         if isinstance(model_output, FaceTransformOutput):
                             if self.realism_policy is None:
                                 raise RuntimeError("face quality policy is not configured")
@@ -468,7 +502,9 @@ class RunPodLiveWorkerServer:
                             raise RuntimeError("face transform returned no output")
                         transformed = await self.label_synthetic_video(transformed)
                     else:
-                        model_output = await self.transform_voice(payload, profile_id)
+                        model_output = await _invoke_transform(
+                            self.transform_voice, payload, profile_id, media_metadata
+                        )
                         if isinstance(model_output, VoiceTransformOutput):
                             if self.realism_policy is None:
                                 raise RuntimeError("voice quality policy is not configured")
