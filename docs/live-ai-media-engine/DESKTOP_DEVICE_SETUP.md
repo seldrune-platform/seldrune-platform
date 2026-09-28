@@ -29,3 +29,5 @@ monotonic timestamps, device delivery, and the evidence receipt.
 Consumer Skype was retired on May 5, 2025; Skype for Business is separate. Use
 the Teams device flow for the consumer migration path.
 
+
+The desktop client can call relay_returned_track for each returned WebRTC track; the helper checks codec shape, sample rate, channel count, and timestamps before publishing to the OS devices.
