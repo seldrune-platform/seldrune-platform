@@ -1,4 +1,8 @@
 import asyncio
+import json
+from types import SimpleNamespace
+from uuid import uuid4
+
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -10,6 +14,8 @@ from backend.app.api.routes.liveshell_mobile import (
     _effective_video_resolution,
     _parse_gateway_session,
     create_liveshell_live_session,
+    liveshell_live_ice_servers,
+    _parse_gateway_ice_servers,
 )
 
 
@@ -162,6 +168,64 @@ def test_faceswap_worker_configuration_is_separate_from_live_gateway(monkeypatch
     )
 
 
+def test_live_ice_settings_proxy_is_authenticated_and_not_cacheable(monkeypatch):
+    import backend.app.api.routes.liveshell_mobile as liveshell_route
+
+    monkeypatch.setenv("SELDRUNE_LIVESHIFT_WORKER_URL", "https://gateway.example.test")
+    monkeypatch.setenv("SELDRUNE_LIVESHIFT_WORKER_TOKEN", "gateway-token")
+    observed = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "ice_servers": [
+                    {"urls": ["stun:stun.example.test:3478"]},
+                    {
+                        "urls": ["turns:turn.example.test:5349?transport=tcp"],
+                        "username": "2000000000:random-id",
+                        "credential": "derived-password",
+                    },
+                ]
+            }
+
+    class FakeAsyncClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def get(self, url, *, headers):
+            observed.update(url=url, headers=headers)
+            return FakeResponse()
+
+    monkeypatch.setattr(liveshell_route.httpx, "AsyncClient", FakeAsyncClient)
+    result = asyncio.run(
+        liveshell_live_ice_servers(uuid4(), SimpleNamespace(user_id=uuid4()))
+    )
+
+    assert result.status_code == 200
+    assert result.headers["cache-control"] == "no-store"
+    assert json.loads(result.body)["ice_servers"][1]["username"].endswith(":random-id")
+    assert observed["url"] == "https://gateway.example.test/v1/ice-servers"
+    assert observed["headers"] == {"Authorization": "Bearer gateway-token"}
+
+
+def test_live_ice_settings_proxy_rejects_malformed_gateway_payload():
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as error:
+        _parse_gateway_ice_servers(
+            {"ice_servers": [{"urls": ["turn:relay.example.test:3478"]}]}
+        )
+    assert error.value.status_code == 502
+
+
 def test_mobile_page_product_hub_and_assets_are_served():
     with TestClient(app) as client:
         page = client.get("/liveshell/mobile")
@@ -182,6 +246,9 @@ def test_mobile_page_product_hub_and_assets_are_served():
     assert 'href="/liveshell/mobile"' in products.text
     assert javascript.status_code == 200
     assert "output.measurement_status === 'measured'" in javascript.text
+    assert "liveshift/live/ice-servers" in javascript.text
+    assert "iceServers: iceConfiguration.ice_servers" in javascript.text
+    assert "stun:stun.l.google.com:19302" not in javascript.text
     assert "Awaiting first decoded frame" in javascript.text
     assert "Browser decoded " in javascript.text
     assert "FPS pending" in javascript.text
