@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import inspect
+from collections.abc import Awaitable, Callable
 
 from .pipeline import LivePipeline
 from .processors import MediaFrame
 from .transport_metadata import DeliveredAudioMetadata
 
-DecodeAudioFrame = Callable[[object], MediaFrame]
-EncodeAudioFrame = Callable[[MediaFrame, object], object]
+DecodeAudioFrame = Callable[[object], MediaFrame | Awaitable[MediaFrame]]
+EncodeAudioFrame = Callable[[MediaFrame, object], object | Awaitable[object]]
 
 
 class LiveShiftAudioTrack:
@@ -33,8 +34,12 @@ class LiveShiftAudioTrack:
     async def recv(self) -> object:
         source = await self._source_track.recv()
         decoded = self._decode_frame(source)
+        if inspect.isawaitable(decoded):
+            decoded = await decoded
         transformed = await self._pipeline.audio_frame(decoded)
         returned = self._encode_frame(transformed, source)
+        if inspect.isawaitable(returned):
+            returned = await returned
         if self._metadata_observer is not None:
             sample_rate = getattr(returned, "sample_rate", None)
             if sample_rate is not None:
@@ -72,8 +77,12 @@ def _build_real_aiortc_audio_track(
         async def recv(self) -> object:
             source = await source_track.recv()
             decoded = decode_frame(source)
+            if inspect.isawaitable(decoded):
+                decoded = await decoded
             transformed = await pipeline.audio_frame(decoded)
             returned = encode_frame(transformed, source)
+            if inspect.isawaitable(returned):
+                returned = await returned
             if metadata_observer is not None:
                 sample_rate = getattr(returned, "sample_rate", None)
                 if sample_rate is not None:
