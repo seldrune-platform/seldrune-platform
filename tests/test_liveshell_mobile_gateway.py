@@ -211,3 +211,23 @@ def test_gateway_rejects_unusable_media_metadata(changes):
 )
 def test_gateway_resolution_is_orientation_neutral(width, height, expected):
     assert _effective_video_resolution(width, height) == expected
+
+
+def test_gateway_response_marks_media_output_pending_until_first_frame():
+    response = valid_gateway_response()
+    for field in (
+        "output_width",
+        "output_height",
+        "audio_sample_rate_hz",
+        "output_fps",
+    ):
+        response.pop(field)
+
+    result = _parse_gateway_session(valid_offer(), response)
+    assert result.runpod_session_connected
+    assert result.session_ticket_validated
+    assert result.realism_evidence_required
+    assert result.output_width is None
+    assert result.output_height is None
+    assert result.audio_sample_rate_hz is None
+    assert result.output_fps is None
