@@ -271,7 +271,10 @@ def revoke_profile_authorization(
         )
     )
     if item is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="profile request not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="profile request not found",
+        )
     if (
         item.user_id != current_user.id
         and not has_permission(membership.role, Permission.MEMBERS_MANAGE)
