@@ -117,8 +117,10 @@ class GatewaySettings:
             raise ValueError("TURN shared secret must contain at least 32 bytes")
         if not 60 <= self.turn_credential_ttl_seconds <= MAX_TURN_CREDENTIAL_TTL_SECONDS:
             raise ValueError("TURN credential lifetime is outside the supported range")
-        if self.turn_urls and self.turn_credential_ttl_seconds < self.session_ttl_seconds:
-            raise ValueError("TURN credentials must remain valid for the session lifetime")
+        if self.turn_urls and self.turn_credential_ttl_seconds < self.session_ttl_seconds + 300:
+            raise ValueError(
+                "TURN credentials must cover the session lifetime plus five minutes"
+            )
         if self.turn_urls and any(
             url.lower().startswith(("turn:", "turns:"))
             for server in self.ice_servers
