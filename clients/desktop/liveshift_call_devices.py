@@ -49,7 +49,7 @@ class DesktopCallReceipt:
 
 
 class SyntheticMediaBadge:
-    """Burn an AI-ALTERED disclosure label into outgoing RGB video."""
+    """Burn a compact, unbranded AI-modified disclosure into outgoing RGB video."""
 
     def __call__(self, frame: bytes, width: int, height: int) -> object:
         try:
@@ -63,26 +63,27 @@ class SyntheticMediaBadge:
         pixels = np.frombuffer(frame, dtype=np.uint8).reshape(height, width, 3)
         image = Image.fromarray(pixels).copy()
         draw = ImageDraw.Draw(image)
-        size = max(14, height // 48)
+        size = max(12, min(16, height // 60))
         try:
-            font = ImageFont.truetype("DejaVuSans-Bold.ttf", size=size)
+            font = ImageFont.truetype("DejaVuSans.ttf", size=size)
         except OSError:
             try:
                 font = ImageFont.load_default(size=size)
             except TypeError:
                 font = ImageFont.load_default()
-        label = "AI-ALTERED"
+        label = "AI modified"
         left, top, right, bottom = draw.textbbox((0, 0), label, font=font)
-        pad_x, pad_y = max(8, size // 2), max(5, size // 3)
-        x1 = max(0, width - (right - left) - 2 * pad_x - max(10, width // 80))
-        y1 = max(0, height // 80)
+        pad_x, pad_y = max(6, size // 2), max(4, size // 3)
+        inset = max(8, width // 100)
+        x1 = max(0, width - (right - left) - 2 * pad_x - inset)
+        y1 = max(0, height // 100)
         x2, y2 = min(width - 1, x1 + right - left + 2 * pad_x), min(
             height - 1, y1 + bottom - top + 2 * pad_y
         )
-        draw.rounded_rectangle((x1, y1, x2, y2), radius=max(4, size // 4),
-                               fill=(20, 25, 30), outline=(255, 196, 0), width=2)
+        draw.rounded_rectangle((x1, y1, x2, y2), radius=max(4, size // 3),
+                               fill=(32, 38, 46), outline=(105, 112, 120), width=1)
         draw.text((x1 + pad_x - left, y1 + pad_y - top), label,
-                  fill=(255, 255, 255), font=font)
+                  fill=(232, 235, 238), font=font)
         return np.asarray(image, dtype=np.uint8).copy()
 
 
