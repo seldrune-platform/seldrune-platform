@@ -1,0 +1,18 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=8000 PYTHONPATH=/app
+WORKDIR /app
+
+RUN pip install --no-cache-dir \
+      'aiortc>=1.15,<2.0' \
+      'numpy>=1.26,<3.0' \
+      'fastapi>=0.115,<1.0' \
+      'uvicorn[standard]>=0.32,<1.0'
+
+RUN addgroup --system seldrune && adduser --system --ingroup seldrune seldrune
+COPY services/live_media /app/services/live_media
+RUN chown -R seldrune:seldrune /app
+USER seldrune
+
+EXPOSE 8000
+CMD ["sh", "-c", "uvicorn services.live_media.webrtc_gateway:app --host 0.0.0.0 --port ${PORT:-8000}"]
