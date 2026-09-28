@@ -24,8 +24,8 @@ def test_worker_command_pins_the_permissive_face_model_and_uses_argument_list():
     assert "cuda" in command
     assert "--face-selector-mode" in command
     assert str(source) in command
-    assert ";not-a-command.jpg" in command
-    assert ";" not in " ".join(command).split("--source-paths")[0]
+    source_index = command.index("--source-paths")
+    assert command[source_index + 1] == str(source)
 
 
 def test_worker_authentication_fails_closed(monkeypatch):
