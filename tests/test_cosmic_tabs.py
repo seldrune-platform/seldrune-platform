@@ -25,6 +25,17 @@ def test_cosmic_console_assets_define_unified_owner_portal():
     assert "@keyframes neural-drift" in portal_styles
 
 
+def test_media_workspace_embeds_live_camera_microphone_studio():
+    script = (Path("backend/app/web") / "console-cosmic-tabs.js").read_text()
+
+    assert "Seldrune Media camera, microphone, face and voice transformation workspace." in script
+    assert 'mediaStudio.id = "seldrune-media-live-studio";' in script
+    assert 'mediaStudioFrame.src = "/liveshell/mobile";' in script
+    assert 'mediaStudioFrame.allow = "camera; microphone; autoplay";' in script
+    assert "persistent AI transformed indicator are required" in script
+    assert 'grid("media")?.prepend(mediaStudio);' in script
+
+
 def test_owner_console_loads_unified_portal_assets():
     html = Path("backend/app/web/index.html").read_text()
     assert "/console-assets/console-cosmic-tabs.css" in html
