@@ -40,6 +40,111 @@
     q('#connection-state').textContent = value;
   }
 
+  const markerPositionStorageKey = 'seldrune.liveShell.markerPosition';
+  let markerPosition = null;
+  let markerDrag = null;
+
+  try {
+    const savedPosition = JSON.parse(localStorage.getItem(markerPositionStorageKey) || 'null');
+    if (savedPosition && Number.isFinite(savedPosition.x) && Number.isFinite(savedPosition.y)) {
+      markerPosition = {
+        x: Math.min(1, Math.max(0, savedPosition.x)),
+        y: Math.min(1, Math.max(0, savedPosition.y)),
+      };
+    }
+  } catch {}
+
+  function setMarkerPosition(left, top) {
+    const wrap = q('.output-wrap');
+    const badge = q('#synthetic-badge');
+    if (!wrap || !badge || !wrap.clientWidth || !badge.offsetWidth) return;
+
+    const min = 8;
+    const maxLeft = Math.max(min, wrap.clientWidth - badge.offsetWidth - min);
+    const maxTop = Math.max(min, wrap.clientHeight - badge.offsetHeight - min);
+    const boundedLeft = Math.min(maxLeft, Math.max(min, left));
+    const boundedTop = Math.min(maxTop, Math.max(min, top));
+    const leftRange = Math.max(0, maxLeft - min);
+    const topRange = Math.max(0, maxTop - min);
+
+    badge.style.left = boundedLeft + 'px';
+    badge.style.top = boundedTop + 'px';
+    badge.style.right = 'auto';
+    badge.style.bottom = 'auto';
+    markerPosition = {
+      x: leftRange ? (boundedLeft - min) / leftRange : 0,
+      y: topRange ? (boundedTop - min) / topRange : 0,
+    };
+    try {
+      localStorage.setItem(markerPositionStorageKey, JSON.stringify(markerPosition));
+    } catch {}
+  }
+
+  function applyMarkerPosition() {
+    const wrap = q('.output-wrap');
+    const badge = q('#synthetic-badge');
+    if (!markerPosition || !wrap || !badge || !wrap.clientWidth || !badge.offsetWidth) return;
+    const min = 8;
+    const maxLeft = Math.max(min, wrap.clientWidth - badge.offsetWidth - min);
+    const maxTop = Math.max(min, wrap.clientHeight - badge.offsetHeight - min);
+    setMarkerPosition(
+      min + markerPosition.x * Math.max(0, maxLeft - min),
+      min + markerPosition.y * Math.max(0, maxTop - min),
+    );
+  }
+
+  function installMarkerPositionControl() {
+    const wrap = q('.output-wrap');
+    const badge = q('#synthetic-badge');
+    if (!wrap || !badge) return;
+
+    badge.addEventListener('pointerdown', event => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      event.preventDefault();
+      const rect = badge.getBoundingClientRect();
+      markerDrag = {
+        pointerId: event.pointerId,
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      };
+      badge.setAttribute('aria-grabbed', 'true');
+      badge.setPointerCapture?.(event.pointerId);
+    });
+
+    badge.addEventListener('pointermove', event => {
+      if (!markerDrag || markerDrag.pointerId !== event.pointerId) return;
+      const rect = wrap.getBoundingClientRect();
+      setMarkerPosition(
+        event.clientX - rect.left - markerDrag.x,
+        event.clientY - rect.top - markerDrag.y,
+      );
+    });
+
+    const finishMarkerDrag = event => {
+      if (!markerDrag || markerDrag.pointerId !== event.pointerId) return;
+      markerDrag = null;
+      badge.setAttribute('aria-grabbed', 'false');
+    };
+    badge.addEventListener('pointerup', finishMarkerDrag);
+    badge.addEventListener('pointercancel', finishMarkerDrag);
+    badge.addEventListener('lostpointercapture', finishMarkerDrag);
+
+    badge.addEventListener('keydown', event => {
+      const step = 12;
+      const movement = {
+        ArrowLeft: [-step, 0],
+        ArrowRight: [step, 0],
+        ArrowUp: [0, -step],
+        ArrowDown: [0, step],
+      }[event.key];
+      if (!movement) return;
+      event.preventDefault();
+      setMarkerPosition(badge.offsetLeft + movement[0], badge.offsetTop + movement[1]);
+    });
+
+    window.addEventListener('resize', applyMarkerPosition, {passive: true});
+  }
+
   function renderOutputMetrics() {
     const profile = state.outputProfile || {};
     const decoded = state.browserDecodedVideo;
@@ -149,6 +254,7 @@
       const observedPeer = state.peer;
       video.srcObject = stream;
       q('.output-card').classList.add('active');
+      requestAnimationFrame(applyMarkerPosition);
       video.addEventListener('loadeddata', () => {
         let windowStartMs = null;
         let windowFrameCount = null;
@@ -476,6 +582,7 @@
   q('#preview-button').addEventListener('click', preview);
   q('#stop-button').addEventListener('click', () => stopLive(true, true));
   q('#switch-camera').addEventListener('click', switchCamera);
+  installMarkerPositionControl();
   window.addEventListener('pagehide', () => {
     if (state.disconnectTimer) clearTimeout(state.disconnectTimer);
     if (state.peer) state.peer.close();
