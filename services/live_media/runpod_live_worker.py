@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-import json
 import os
 import ssl
 from collections.abc import Awaitable, Callable

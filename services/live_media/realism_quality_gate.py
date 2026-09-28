@@ -33,9 +33,17 @@ def _score(value: object, name: str) -> float:
 
 
 def _evaluator(evaluator_id: str, evaluator_version: str) -> None:
-    if not isinstance(evaluator_id, str) or not evaluator_id.strip() or len(evaluator_id) > 128:
+    if (
+        not isinstance(evaluator_id, str)
+        or not evaluator_id.strip()
+        or len(evaluator_id) > 128
+    ):
         raise RealismEvidenceError("a named quality evaluator is required")
-    if not isinstance(evaluator_version, str) or not evaluator_version.strip() or len(evaluator_version) > 64:
+    if (
+        not isinstance(evaluator_version, str)
+        or not evaluator_version.strip()
+        or len(evaluator_version) > 64
+    ):
         raise RealismEvidenceError("a versioned quality evaluator is required")
 
 

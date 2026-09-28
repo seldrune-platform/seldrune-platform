@@ -33,7 +33,7 @@ This bridge is a transport foundation. It does not install or train a face or vo
 Use `FaceTransformOutput` and `VoiceTransformOutput` from `services.live_media.realism_quality_gate`; each result contains final decoded output bytes and a versioned evaluator report. No quality score is inferred from a model name, training loss, or successful transport.
 
 
-The dedicated live worker entrypoint is `python -m services.live_media.runpod_live_worker`. Configure `SELDRUNE_LIVE_WORKER_TOKEN`, `SELDRUNE_LIVE_TICKET_SECRET`, `SELDRUNE_LIVE_TLS_CERT`, `SELDRUNE_LIVE_TLS_KEY`, `SELDRUNE_FACE_TRANSFORM_ADAPTER`, `SELDRUNE_VOICE_TRANSFORM_ADAPTER`, and `SELDRUNE_SYNTHETIC_VIDEO_LABELER` on the separate worker. Adapter settings use `package.module:async_callable`; model packages and weights must be provided by the deployment image or mounted runtime. The listener defaults to TCP port `8765`, one active session, and two in-flight packets. These settings are separate from the existing uploaded-video service on port `8000`.
+The dedicated live worker entrypoint is `python -m services.live_media.runpod_live_worker`. Configure `SELDRUNE_LIVE_WORKER_TOKEN`, `SELDRUNE_LIVE_TICKET_SECRET`, `SELDRUNE_LIVE_REALISM_POLICY_JSON`, `SELDRUNE_LIVE_TLS_CERT`, `SELDRUNE_LIVE_TLS_KEY`, `SELDRUNE_FACE_TRANSFORM_ADAPTER`, `SELDRUNE_VOICE_TRANSFORM_ADAPTER`, and `SELDRUNE_SYNTHETIC_VIDEO_LABELER` on the separate worker. Adapter settings use `package.module:async_callable`; model packages and weights must be provided by the deployment image or mounted runtime. The listener defaults to TCP port `8765`, one active session, and two in-flight packets. These settings are separate from the existing uploaded-video service on port `8000`.
 
 ## Required next integrations
 

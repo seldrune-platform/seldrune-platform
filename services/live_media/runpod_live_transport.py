@@ -454,7 +454,9 @@ class RunPodLiveWorkerServer:
                         elif isinstance(model_output, bytes) and not self.require_realism_evidence:
                             transformed = model_output
                         else:
-                            raise RuntimeError("voice adapter must return measured realism evidence")
+                            raise RuntimeError(
+                                "voice adapter must return measured realism evidence"
+                            )
                         if not isinstance(transformed, bytes) or not transformed:
                             raise RuntimeError("voice transform returned no output")
                     if not isinstance(transformed, bytes) or not transformed:
