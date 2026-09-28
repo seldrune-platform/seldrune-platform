@@ -20,7 +20,7 @@ class InferenceRequest:
     sequence: int = 0
     width: int = 1280
     height: int = 720
-    fps: int = 30
+    fps: float = 30.0
     sample_rate_hz: int = 48000
     channels: int = 1
 
@@ -32,3 +32,8 @@ class InferenceResult:
     payload: bytes
     inference_ms: float
     quality_evidence: dict[str, object] | None = None
+    width: int | None = None
+    height: int | None = None
+    fps: float | None = None
+    sample_rate_hz: int | None = None
+    channels: int | None = None
