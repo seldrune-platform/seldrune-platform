@@ -234,6 +234,7 @@
     state.outputProfile = null;
     q('#connect-button').disabled = true;
     q('#preview-button').disabled = true;
+    q('#synthetic-indicator').disabled = true;
     showStatus('Requesting camera and microphone…');
     setConnection('CONNECTING');
     try {
@@ -378,6 +379,7 @@
     q('#audio-detail').textContent = '48 kHz target';
     q('#stop-button').disabled = true;
     q('#switch-camera').disabled = true;
+    q('#synthetic-indicator').disabled = false;
     q('#preview-button').disabled = false;
     setConnection('OFFLINE');
     if (reportStopped) showStatus('Local media stopped.', 'success');
