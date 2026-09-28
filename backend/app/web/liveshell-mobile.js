@@ -279,21 +279,11 @@
     }
   }
 
-  async function stopLive(closeRemote = true) {
+  async function stopLive(closeRemote = true, reportStopped = false) {
     const sessionId = state.sessionId;
     state.sessionId = '';
     state.browserDecodedVideo = null;
     state.outputProfile = null;
-    if (closeRemote && sessionId && state.organizationId && token) {
-      try {
-        await api(
-          '/organizations/' + state.organizationId + '/liveshift/live/sessions/' + encodeURIComponent(sessionId),
-          {method: 'DELETE'},
-        );
-      } catch (error) {
-        showStatus('Local media stopped. The gateway close request failed: ' + error.message, 'error');
-      }
-    }
     if (state.peer) {
       state.peer.getSenders().forEach(sender => sender.track && sender.track.stop());
       state.peer.close();
@@ -318,6 +308,17 @@
     q('#switch-camera').disabled = true;
     q('#preview-button').disabled = false;
     setConnection('OFFLINE');
+    if (reportStopped) showStatus('Local media stopped.', 'success');
+    if (closeRemote && sessionId && state.organizationId && token) {
+      try {
+        await api(
+          '/organizations/' + state.organizationId + '/liveshift/live/sessions/' + encodeURIComponent(sessionId),
+          {method: 'DELETE'},
+        );
+      } catch (error) {
+        showStatus('Local media stopped. The gateway close request failed: ' + error.message, 'error');
+      }
+    }
   }
 
   async function preview() {
@@ -399,7 +400,7 @@
 
   q('#session-form').addEventListener('submit', startLive);
   q('#preview-button').addEventListener('click', preview);
-  q('#stop-button').addEventListener('click', () => stopLive(true));
+  q('#stop-button').addEventListener('click', () => stopLive(true, true));
   q('#switch-camera').addEventListener('click', switchCamera);
   window.addEventListener('pagehide', () => {
     if (state.peer) state.peer.close();
