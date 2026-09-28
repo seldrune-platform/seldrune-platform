@@ -24,6 +24,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from .aiortc_audio_track import attach_audio_track
@@ -36,6 +37,12 @@ from .runpod_live_transport import (
     issue_session_ticket,
 )
 from .transport_metadata import DeliveredAudioMetadata, DeliveredVideoMetadata
+from .turn_credentials import (
+    DEFAULT_TURN_CREDENTIAL_TTL_SECONDS,
+    MAX_TURN_CREDENTIAL_TTL_SECONDS,
+    issue_turn_credentials,
+    validate_turn_urls,
+)
 
 SUPPORTED_ACCELERATOR_PROFILES = frozenset({
     "rtx-4090", "rtx-pro-4500-se", "rtx-5090", "rtx-pro-6000-blackwell",
@@ -80,6 +87,9 @@ class GatewaySettings:
     max_sessions: int = 1
     max_inflight: int = 2
     session_ttl_seconds: int = 3600
+    turn_urls: list[str] = field(default_factory=list)
+    turn_shared_secret: str | None = None
+    turn_credential_ttl_seconds: int = DEFAULT_TURN_CREDENTIAL_TTL_SECONDS
 
     def __post_init__(self) -> None:
         for name, value in (
@@ -99,6 +109,22 @@ class GatewaySettings:
             raise ValueError("session lifetime must be between one minute and one day")
         if not self.ice_servers:
             raise ValueError("at least one ICE server is required")
+        if self.turn_urls:
+            validate_turn_urls(self.turn_urls)
+        if bool(self.turn_urls) != bool(self.turn_shared_secret):
+            raise ValueError("TURN URLs and shared secret must be configured together")
+        if self.turn_shared_secret and len(self.turn_shared_secret.encode("utf-8")) < 32:
+            raise ValueError("TURN shared secret must contain at least 32 bytes")
+        if not 60 <= self.turn_credential_ttl_seconds <= MAX_TURN_CREDENTIAL_TTL_SECONDS:
+            raise ValueError("TURN credential lifetime is outside the supported range")
+        if self.turn_urls and self.turn_credential_ttl_seconds < self.session_ttl_seconds:
+            raise ValueError("TURN credentials must remain valid for the session lifetime")
+        if self.turn_urls and any(
+            url.lower().startswith(("turn:", "turns:"))
+            for server in self.ice_servers
+            for url in server.urls
+        ):
+            raise ValueError("use dynamic TURN URLs instead of static TURN ICE entries")
 
 
 class WebRTCOffer(BaseModel):
@@ -388,6 +414,35 @@ class LiveMediaGateway:
             supplied, self.settings.http_service_token
         )
 
+    def _turn_ice_servers(self, subject: str) -> list[IceServer]:
+        if not self.settings.turn_urls or not self.settings.turn_shared_secret:
+            return []
+        issued = issue_turn_credentials(
+            self.settings.turn_urls,
+            self.settings.turn_shared_secret,
+            subject=subject,
+            ttl_seconds=self.settings.turn_credential_ttl_seconds,
+        )
+        item = issued["ice_servers"][0]
+        return [IceServer(item["urls"], item["username"], item["credential"])]
+
+    def browser_ice_servers(self) -> list[IceServer]:
+        """Return public STUN entries and freshly issued, expiring TURN credentials."""
+        stun_urls = [
+            url
+            for server in self.settings.ice_servers
+            for url in server.urls
+            if url.lower().startswith(("stun:", "stuns:"))
+        ]
+        result = [IceServer(stun_urls)] if stun_urls else []
+        result.extend(self._turn_ice_servers(uuid4().hex))
+        if not result:
+            raise GatewayUnavailable("no browser-safe ICE servers are configured")
+        return result
+
+    def _ice_servers_for_session(self) -> list[IceServer]:
+        return [*self.settings.ice_servers, *self._turn_ice_servers(uuid4().hex)]
+
     async def _connect_worker(self, **kwargs: Any) -> RunPodLiveSession:
         return await RunPodLiveSession.connect(
             host=self.settings.worker_host,
@@ -466,7 +521,7 @@ class LiveMediaGateway:
                     "RunPod worker did not attest the selected accelerator"
                 )
 
-            peer = self.peer_factory(self.settings.ice_servers)
+            peer = self.peer_factory(self._ice_servers_for_session())
             metrics = _OutputMetrics()
             seen_tracks: set[str] = set()
             track_error: list[str] = []
@@ -600,6 +655,11 @@ def _parse_ice_servers(raw: str) -> list[IceServer]:
     return result
 
 
+def _parse_turn_urls(raw: str) -> list[str]:
+    values = json.loads(raw)
+    return validate_turn_urls(values)
+
+
 def _load_profile_authorizer(spec: str) -> ProfileAuthorizer:
     module_name, separator, attribute_name = spec.partition(":")
     if not separator or not module_name or not attribute_name:
@@ -622,6 +682,9 @@ def gateway_from_environment() -> LiveMediaGateway:
     ice_servers = _parse_ice_servers(ice_raw) if ice_raw else [
         IceServer(["stun:stun.l.google.com:19302"])
     ]
+    turn_urls_raw = setting("SELDRUNE_LIVE_TURN_URLS_JSON")
+    turn_urls = _parse_turn_urls(turn_urls_raw) if turn_urls_raw else []
+    turn_shared_secret = setting("SELDRUNE_LIVE_TURN_SHARED_SECRET")
     settings = GatewaySettings(
         http_service_token=setting("SELDRUNE_LIVESHIFT_WORKER_TOKEN"),
         worker_service_token=setting("SELDRUNE_LIVE_WORKER_TOKEN"),
@@ -635,6 +698,12 @@ def gateway_from_environment() -> LiveMediaGateway:
         max_sessions=int(setting("SELDRUNE_LIVE_MAX_SESSIONS") or "1"),
         max_inflight=int(setting("SELDRUNE_LIVE_MAX_INFLIGHT") or "2"),
         session_ttl_seconds=int(setting("SELDRUNE_LIVE_SESSION_TTL_SECONDS") or "3600"),
+        turn_urls=turn_urls,
+        turn_shared_secret=turn_shared_secret or None,
+        turn_credential_ttl_seconds=int(
+            setting("SELDRUNE_LIVE_TURN_CREDENTIAL_TTL_SECONDS")
+            or str(DEFAULT_TURN_CREDENTIAL_TTL_SECONDS)
+        ),
     )
     return LiveMediaGateway(
         settings,
@@ -679,6 +748,29 @@ def create_app(gateway: LiveMediaGateway | None = None) -> FastAPI:
             "active_session_count": len(current._sessions),
             "max_sessions": current.settings.max_sessions,
         }
+
+    @app.get("/v1/ice-servers")
+    async def ice_servers(request: Request) -> JSONResponse:
+        current = request.app.state.gateway
+        if current is None:
+            raise HTTPException(status_code=503, detail="LiveShell gateway is not configured")
+        if not current.authenticate(request.headers.get("authorization")):
+            raise HTTPException(status_code=401, detail="Gateway authentication failed")
+        try:
+            values = [
+                {
+                    "urls": item.urls,
+                    **({"username": item.username, "credential": item.credential}
+                       if item.username is not None else {}),
+                }
+                for item in current.browser_ice_servers()
+            ]
+        except GatewayUnavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        response = JSONResponse({"ice_servers": values})
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+        return response
 
     @app.post(
         "/v1/sessions",
