@@ -22,8 +22,16 @@ The existing mobile LiveShell page is a browser Live Room. A browser page cannot
 - A dedicated RunPod worker entrypoint that refuses to start without TLS files, strong service/ticket secrets, and async face, voice, and labeling adapters.
 - An injected face transform, injected voice transform, and required video-label callback. Missing model adapters cannot be presented as a successful transform.
 - Unit coverage for packet limits, ticket expiry/signature/consent, profile binding, output labeling, audio/video round trips, and the TLS startup requirement.
+- A strict production quality contract: the face adapter must return decoded HD dimensions, 30 fps windowed identity/temporal/blend metrics, and p95 inference evidence; the voice adapter must return decoded 48 kHz windowed speaker/content/naturalness, clipping/dropout, and p95 processing evidence.
+- The production entrypoint requires explicit evaluator-calibrated pass thresholds in `SELDRUNE_LIVE_REALISM_POLICY_JSON`. It rejects byte-only adapters, missing evidence, evidence below threshold, and per-request latency over budget. The worker client carries measured evidence with each result.
+- A/V drift can be validated against the same deployment policy through `AVSyncState.validate_realism`.
 
-This bridge is a transport foundation. It does not install or train a face or voice model, connect the production LiveShell gateway to the RunPod listener, configure TURN, or prove a real phone/desktop call. The existing RTX 4090 uploaded-video worker and its port configuration remain unchanged. No GPU output or HD quality claim is made by unit tests.
+This bridge is a transport foundation. It does not install or train a face or voice model, connect the production LiveShell gateway to the RunPod listener, configure TURN, or prove a real phone/desktop call. The existing RTX 4090 uploaded-video worker and its port configuration remain unchanged. No GPU output or HD quality claim is made by unit tests. Perceptual thresholds must be calibrated on rights-cleared, consented evaluation samples for the selected model and evaluator; this example shows configuration shape, not validated performance:
+```json
+{"face_min_identity_similarity":0.82,"face_min_temporal_consistency":0.85,"face_min_blend_quality":0.80,"voice_min_speaker_similarity":0.82,"voice_min_content_preservation":0.90,"voice_min_naturalness":0.75,"voice_max_clipped_fraction":0.001,"voice_max_dropout_fraction":0.001,"max_processing_p95_ms":150.0,"max_av_drift_ms":80.0}
+```
+Use `FaceTransformOutput` and `VoiceTransformOutput` from `services.live_media.realism_quality_gate`; each result contains final decoded output bytes and a versioned evaluator report. No quality score is inferred from a model name, training loss, or successful transport.
+
 
 The dedicated live worker entrypoint is `python -m services.live_media.runpod_live_worker`. Configure `SELDRUNE_LIVE_WORKER_TOKEN`, `SELDRUNE_LIVE_TICKET_SECRET`, `SELDRUNE_LIVE_TLS_CERT`, `SELDRUNE_LIVE_TLS_KEY`, `SELDRUNE_FACE_TRANSFORM_ADAPTER`, `SELDRUNE_VOICE_TRANSFORM_ADAPTER`, and `SELDRUNE_SYNTHETIC_VIDEO_LABELER` on the separate worker. Adapter settings use `package.module:async_callable`; model packages and weights must be provided by the deployment image or mounted runtime. The listener defaults to TCP port `8765`, one active session, and two in-flight packets. These settings are separate from the existing uploaded-video service on port `8000`.
 
@@ -43,4 +51,4 @@ The dedicated live worker entrypoint is `python -m services.live_media.runpod_li
 - Keep frame/audio queues bounded; drop stale video rather than accumulating latency.
 - Show a clear stop action and release camera, microphone, and worker resources after stop or disconnect.
 - Verify the `AI-SYNTHETIC` mark in the returned video frames, not only in a local UI overlay.
-- Claim HD readiness only after a real GPU-backed session produces a signed evidence receipt with returned frames, returned audio, resolution, frame rate, sample rate, p95 latency, and A/V drift.
+- Claim realistic HD readiness only after a real GPU-backed session passes the configured face and voice evidence gates and produces a signed receipt with returned frames, returned audio, decoded resolution/frame rate/sample rate, evaluator versions and scores, p95 latency, and paired A/V drift.

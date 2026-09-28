@@ -22,6 +22,13 @@ from time import perf_counter, time
 from typing import Any
 from uuid import uuid4
 
+from .realism_quality_gate import (
+    FaceTransformOutput,
+    RealismQualityPolicy,
+    VoiceTransformOutput,
+    validate_face_realism,
+    validate_voice_realism,
+)
 from .worker_protocol import InferenceRequest, InferenceResult, MediaKind
 
 MAX_HEADER_BYTES = 4096
@@ -30,7 +37,10 @@ MAX_AUDIO_PAYLOAD_BYTES = 512 * 1024
 MAX_TICKET_TTL_SECONDS = 900
 AUDIENCE = "seldrune-live-media"
 
-Transform = Callable[[bytes, str], Awaitable[bytes]]
+Transform = Callable[
+    [bytes, str],
+    Awaitable[bytes | FaceTransformOutput | VoiceTransformOutput],
+]
 VideoLabeler = Callable[[bytes], Awaitable[bytes]]
 
 
@@ -307,6 +317,8 @@ class RunPodLiveWorkerServer:
         label_synthetic_video: VideoLabeler,
         max_sessions: int = 1,
         max_inflight_per_connection: int = 2,
+        realism_policy: RealismQualityPolicy | None = None,
+        require_realism_evidence: bool = False,
     ) -> None:
         _secret_bytes(service_token)
         _secret_bytes(ticket_secret)
@@ -324,8 +336,12 @@ class RunPodLiveWorkerServer:
         self.transform_face = transform_face
         self.transform_voice = transform_voice
         self.label_synthetic_video = label_synthetic_video
+        if require_realism_evidence and realism_policy is None:
+            raise ValueError("strict live realism evidence requires a quality policy")
         self.max_sessions = max_sessions
         self.max_inflight_per_connection = max_inflight_per_connection
+        self.realism_policy = realism_policy
+        self.require_realism_evidence = require_realism_evidence
         self._used_tickets: dict[str, int] = {}
         self._active_sessions: set[str] = set()
 
@@ -391,6 +407,7 @@ class RunPodLiveWorkerServer:
                     "video_profile": "hd-720p30-minimum",
                     "audio_sample_rate_hz": 48000,
                     "synthetic_video_label_required": True,
+                    "realism_evidence_required": self.require_realism_evidence,
                 },
             )
 
@@ -408,13 +425,47 @@ class RunPodLiveWorkerServer:
                     profile_id = str(header["profile_id"])
                     timestamp_ms = int(header["timestamp_ms"])
                     started = perf_counter()
+                    quality_evidence: dict[str, Any] | None = None
                     if kind == MediaKind.VIDEO:
-                        transformed = await self.transform_face(payload, profile_id)
+                        model_output = await self.transform_face(payload, profile_id)
+                        if isinstance(model_output, FaceTransformOutput):
+                            if self.realism_policy is None:
+                                raise RuntimeError("face quality policy is not configured")
+                            transformed = model_output.payload
+                            quality_evidence = validate_face_realism(
+                                model_output.evidence, self.realism_policy
+                            )
+                        elif isinstance(model_output, bytes) and not self.require_realism_evidence:
+                            transformed = model_output
+                        else:
+                            raise RuntimeError("face adapter must return measured realism evidence")
+                        if not isinstance(transformed, bytes) or not transformed:
+                            raise RuntimeError("face transform returned no output")
                         transformed = await self.label_synthetic_video(transformed)
                     else:
-                        transformed = await self.transform_voice(payload, profile_id)
+                        model_output = await self.transform_voice(payload, profile_id)
+                        if isinstance(model_output, VoiceTransformOutput):
+                            if self.realism_policy is None:
+                                raise RuntimeError("voice quality policy is not configured")
+                            transformed = model_output.payload
+                            quality_evidence = validate_voice_realism(
+                                model_output.evidence, self.realism_policy
+                            )
+                        elif isinstance(model_output, bytes) and not self.require_realism_evidence:
+                            transformed = model_output
+                        else:
+                            raise RuntimeError("voice adapter must return measured realism evidence")
+                        if not isinstance(transformed, bytes) or not transformed:
+                            raise RuntimeError("voice transform returned no output")
                     if not isinstance(transformed, bytes) or not transformed:
                         raise RuntimeError("media transform returned no output")
+                    inference_ms = max((perf_counter() - started) * 1000, 0.001)
+                    if (
+                        self.require_realism_evidence
+                        and self.realism_policy is not None
+                        and inference_ms > self.realism_policy.max_processing_p95_ms
+                    ):
+                        raise RuntimeError("live transform exceeded the processing latency limit")
                     response = {
                         "type": "result",
                         "request_id": request_id,
@@ -422,13 +473,16 @@ class RunPodLiveWorkerServer:
                         "media_kind": str(kind),
                         "timestamp_ms": timestamp_ms,
                         "sequence": header["sequence"],
-                        "inference_ms": max((perf_counter() - started) * 1000, 0.001),
+                        "inference_ms": inference_ms,
                         "synthetic_label_applied": kind == MediaKind.VIDEO,
                         "sample_rate_hz": header.get("sample_rate_hz"),
                         "width": header.get("width"),
                         "height": header.get("height"),
                         "fps": header.get("fps"),
                     }
+                    if quality_evidence is not None:
+                        quality_evidence["transport_inference_ms"] = inference_ms
+                        response["realism_evidence"] = quality_evidence
                     await send(response, transformed)
                 except Exception:
                     await send(
@@ -498,10 +552,12 @@ class RunPodLiveWorkerClient:
         *,
         session_id: str,
         max_inflight: int = 2,
+        require_realism_evidence: bool = False,
     ) -> None:
         self.reader = reader
         self.writer = writer
         self.session_id = session_id
+        self.require_realism_evidence = require_realism_evidence
         self._write_lock = asyncio.Lock()
         if max_inflight < 1:
             raise ValueError("at least one in-flight media request is required")
@@ -553,7 +609,15 @@ class RunPodLiveWorkerClient:
             writer.close()
             await writer.wait_closed()
             raise StreamProtocolError("RunPod worker did not admit the live session")
-        return cls(reader, writer, session_id=session_id, max_inflight=max_inflight)
+        return cls(
+            reader,
+            writer,
+            session_id=session_id,
+            max_inflight=max_inflight,
+            require_realism_evidence=(
+                ready.header.get("realism_evidence_required") is True
+            ),
+        )
 
     async def _read_results(self) -> None:
         try:
@@ -586,6 +650,17 @@ class RunPodLiveWorkerClient:
                 ):
                     future.set_exception(StreamProtocolError("invalid worker result"))
                     continue
+                quality_evidence = header.get("realism_evidence")
+                if (
+                    (quality_evidence is not None and not isinstance(quality_evidence, dict))
+                    or (self.require_realism_evidence and not isinstance(quality_evidence, dict))
+                    or (
+                        isinstance(quality_evidence, dict)
+                        and quality_evidence.get("media_kind") != str(expected_kind)
+                    )
+                ):
+                    future.set_exception(StreamProtocolError("missing or invalid realism evidence"))
+                    continue
                 if not message.payload:
                     future.set_exception(
                         StreamProtocolError("worker returned an empty result")
@@ -597,6 +672,7 @@ class RunPodLiveWorkerClient:
                         timestamp_ms=int(header["timestamp_ms"]),
                         payload=message.payload,
                         inference_ms=float(header["inference_ms"]),
+                        quality_evidence=quality_evidence,
                     )
                 )
         except asyncio.CancelledError:

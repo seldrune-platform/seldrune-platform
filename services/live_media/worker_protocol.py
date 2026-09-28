@@ -31,3 +31,4 @@ class InferenceResult:
     timestamp_ms: int
     payload: bytes
     inference_ms: float
+    quality_evidence: dict[str, object] | None = None

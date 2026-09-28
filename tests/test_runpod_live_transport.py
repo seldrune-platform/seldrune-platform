@@ -18,6 +18,14 @@ from services.live_media.runpod_live_transport import (
 )
 from services.live_media.worker_protocol import InferenceRequest, MediaKind
 
+from services.live_media.realism_quality_gate import (
+    FaceRealismEvidence,
+    FaceTransformOutput,
+    RealismQualityPolicy,
+    VoiceRealismEvidence,
+    VoiceTransformOutput,
+)
+
 SIGNING_SECRET = "s" * 48
 SERVICE_TOKEN = "w" * 40
 
@@ -334,3 +342,128 @@ def test_server_refuses_to_start_without_tls():
     )
     with pytest.raises(ValueError, match="TLS"):
         asyncio.run(worker.serve("0.0.0.0", 9000, ssl_context=None))
+
+
+def test_strict_worker_requires_and_returns_realism_evidence():
+    quality_policy = RealismQualityPolicy(
+        face_min_identity_similarity=0.8,
+        face_min_temporal_consistency=0.8,
+        face_min_blend_quality=0.8,
+        voice_min_speaker_similarity=0.8,
+        voice_min_content_preservation=0.9,
+        voice_min_naturalness=0.75,
+        voice_max_clipped_fraction=0.001,
+        voice_max_dropout_fraction=0.001,
+        max_processing_p95_ms=150.0,
+        max_av_drift_ms=80.0,
+    )
+
+    async def transform_face(payload, _profile):
+        return FaceTransformOutput(
+            payload=payload + b"-face",
+            evidence=FaceRealismEvidence(
+                evaluator_id="face-eval",
+                evaluator_version="test-1",
+                window_frames=30,
+                output_width=1280,
+                output_height=720,
+                output_fps=30.0,
+                identity_similarity=0.92,
+                temporal_consistency=0.91,
+                blend_quality=0.88,
+                p95_inference_ms=110.0,
+            ),
+        )
+
+    async def transform_voice(payload, _profile):
+        return VoiceTransformOutput(
+            payload=payload + b"-voice",
+            evidence=VoiceRealismEvidence(
+                evaluator_id="voice-eval",
+                evaluator_version="test-1",
+                window_duration_seconds=1.2,
+                sample_rate_hz=48000,
+                channels=1,
+                speaker_similarity=0.9,
+                content_preservation=0.96,
+                naturalness=0.84,
+                clipped_fraction=0.0001,
+                dropout_fraction=0.0002,
+                p95_processing_ms=120.0,
+            ),
+        )
+
+    async def label_video(payload):
+        return b"AI-SYNTHETIC|" + payload
+
+    async def scenario():
+        worker = RunPodLiveWorkerServer(
+            service_token=SERVICE_TOKEN,
+            ticket_secret=SIGNING_SECRET,
+            transform_face=transform_face,
+            transform_voice=transform_voice,
+            label_synthetic_video=label_video,
+            realism_policy=quality_policy,
+            require_realism_evidence=True,
+        )
+        server = await asyncio.start_server(worker.handle, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        ticket = issue_session_ticket(make_claims(), SIGNING_SECRET)
+        await write_message(
+            writer,
+            {
+                "type": "hello",
+                "service_token": SERVICE_TOKEN,
+                "ticket": ticket,
+                "session_id": "session-test",
+            },
+        )
+        ready = await read_message(reader)
+        assert ready.header["realism_evidence_required"] is True
+
+        client = RunPodLiveWorkerClient(
+            reader,
+            writer,
+            session_id="session-test",
+            max_inflight=2,
+            require_realism_evidence=True,
+        )
+        video, audio = await asyncio.gather(
+            client.infer(
+                InferenceRequest(
+                    request_id="quality-video",
+                    session_id="session-test",
+                    media_kind=MediaKind.VIDEO,
+                    profile_id="face-test",
+                    timestamp_ms=100,
+                    payload=b"frame",
+                    sequence=1,
+                    width=1280,
+                    height=720,
+                    fps=30,
+                )
+            ),
+            client.infer(
+                InferenceRequest(
+                    request_id="quality-audio",
+                    session_id="session-test",
+                    media_kind=MediaKind.AUDIO,
+                    profile_id="voice-test",
+                    timestamp_ms=110,
+                    payload=b"audio",
+                    sequence=1,
+                    sample_rate_hz=48000,
+                    channels=1,
+                )
+            ),
+        )
+        assert video.quality_evidence["media_kind"] == "video"
+        assert video.payload == b"AI-SYNTHETIC|frame-face"
+        assert audio.quality_evidence["evaluator_id"] == "voice-eval"
+        assert audio.payload == b"audio-voice"
+        await client.close()
+        server.close()
+        await server.wait_closed()
+
+    asyncio.run(scenario())

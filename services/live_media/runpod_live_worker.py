@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import json
 import os
 import ssl
 from collections.abc import Awaitable, Callable
 
+from .realism_quality_gate import RealismEvidenceError, RealismQualityPolicy
 from .runpod_live_transport import RunPodLiveWorkerServer
 
-Adapter = Callable[..., Awaitable[bytes]]
+Adapter = Callable[..., Awaitable[object]]
 
 
 def _required_setting(name: str) -> str:
@@ -49,6 +51,12 @@ def worker_from_environment() -> tuple[
         _required_setting("SELDRUNE_SYNTHETIC_VIDEO_LABELER"),
         "SELDRUNE_SYNTHETIC_VIDEO_LABELER",
     )
+    try:
+        realism_policy = RealismQualityPolicy.from_json(
+            _required_setting("SELDRUNE_LIVE_REALISM_POLICY_JSON")
+        )
+    except RealismEvidenceError as exc:
+        raise RuntimeError("SELDRUNE_LIVE_REALISM_POLICY_JSON is invalid") from exc
 
     cert_path = _required_setting("SELDRUNE_LIVE_TLS_CERT")
     key_path = _required_setting("SELDRUNE_LIVE_TLS_KEY")
@@ -69,6 +77,8 @@ def worker_from_environment() -> tuple[
         transform_face=face_transform,
         transform_voice=voice_transform,
         label_synthetic_video=video_labeler,
+        realism_policy=realism_policy,
+        require_realism_evidence=True,
         max_sessions=int(os.getenv("SELDRUNE_LIVE_MAX_SESSIONS", "1")),
         max_inflight_per_connection=int(
             os.getenv("SELDRUNE_LIVE_MAX_INFLIGHT", "2")
