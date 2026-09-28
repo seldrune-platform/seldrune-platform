@@ -47,9 +47,9 @@ model quality, or consciousness.
 - universal tool and provider gateway
 - autonomous product factory
 
-The Live Face and Voice track is intentionally paused by owner instruction.
-Paused stages remain visible in the graph but are excluded from the parallel
-ready wave.
+The Live Face and Voice track was resumed by owner instruction on
+2026-09-28. Its production milestones remain pending until compatible models,
+the GPU session gateway, and mobile HD/audio evidence gates pass.
 
 ## Parallel readiness
 
@@ -59,12 +59,12 @@ A pending stage is ready when:
 - its workstream is not paused; and
 - the stage itself is not paused.
 
-The first mission snapshot exposes four parallel-ready stages:
-
-- UNARCHI v0.31 renewed-degradation recovery cycle;
-- unified multi-provider model router;
-- local PDF label editing;
-- provider connector expansion.
+The ready wave is recalculated from the dependency graph and verified
+roadmap evidence. On 2026-09-28 the live face-runtime and voice-runtime stages
+were reopened as external-resource work. They can be queued as plans, but
+queueing does not start a GPU worker or incur provider charges. The controller
+still requires a connected provider, policy, and evidence before external work
+can run.
 
 They are queued as ordinary Seldrune tasks. Queueing is idempotent for the
 current master mission task.

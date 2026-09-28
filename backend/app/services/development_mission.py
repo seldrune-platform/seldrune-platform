@@ -50,13 +50,7 @@ WORKSTREAMS = (
     WorkstreamDefinition("unarchi", "UNARCHI cognitive intelligence", 24),
     WorkstreamDefinition("model_bus", "Multi-model intelligence bus", 16),
     WorkstreamDefinition("console", "Owner console and execution control", 15),
-    WorkstreamDefinition(
-        "live_media",
-        "Live face and voice platform",
-        15,
-        paused=True,
-        paused_reason="Paused by owner while cognitive execution architecture is built.",
-    ),
+    WorkstreamDefinition("live_media", "Live face and voice platform", 15),
     WorkstreamDefinition("cost_control", "Cost and local-processing control", 8),
     WorkstreamDefinition("tooling", "Universal tool and provider gateway", 12),
     WorkstreamDefinition("factory", "Autonomous product factory", 10),
@@ -403,7 +397,6 @@ STAGES = (
         ("live_media_architecture",),
         ("vision", "gpu"),
         execution_mode="external-resource",
-        paused_reason="Track paused by owner.",
     ),
     StageDefinition(
         "live_voice_runtime",
@@ -415,7 +408,6 @@ STAGES = (
         ("live_media_architecture",),
         ("audio", "gpu"),
         execution_mode="external-resource",
-        paused_reason="Track paused by owner.",
     ),
     StageDefinition(
         "live_av_sync",
@@ -427,7 +419,6 @@ STAGES = (
         ("live_face_runtime", "live_voice_runtime"),
         ("media", "validation"),
         execution_mode="external-resource",
-        paused_reason="Track paused by owner.",
     ),
     StageDefinition(
         "live_mobile_webrtc",
@@ -439,7 +430,6 @@ STAGES = (
         ("live_av_sync",),
         ("webrtc", "mobile"),
         execution_mode="external-resource",
-        paused_reason="Track paused by owner.",
     ),
     StageDefinition(
         "live_scale_release",
@@ -451,7 +441,6 @@ STAGES = (
         ("live_mobile_webrtc",),
         ("deployment", "validation"),
         execution_mode="owner-gated",
-        paused_reason="Track paused by owner.",
     ),
     StageDefinition(
         "pdf_local_exact",

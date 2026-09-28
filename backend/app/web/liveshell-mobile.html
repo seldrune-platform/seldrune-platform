@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#080b14">
+  <title>LiveShell Mobile Studio · Seldrune</title>
+  <link rel="stylesheet" href="/console-assets/liveshell-mobile.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/console"><span class="mark">S</span><span>SELDRUNE</span></a>
+    <span class="product-mark">LIVESHELL · MOBILE STUDIO</span>
+    <a class="top-link" href="/web/products.html">Products</a>
+  </header>
+
+  <main class="shell">
+    <section class="intro panel">
+      <div>
+        <p class="eyebrow">PHONE CAMERA + CLOUD GPU</p>
+        <h1>Live face &amp; voice studio</h1>
+        <p class="intro-copy">Use an authorized face and voice profile. Your phone captures the camera and microphone; the configured GPU gateway returns the transformed WebRTC stream.</p>
+      </div>
+      <div id="gateway-state" class="gateway-state" role="status" aria-live="polite">
+        Checking session gateway…
+      </div>
+    </section>
+
+    <section class="quality-strip" aria-label="Live output targets">
+      <div><small>VIDEO TARGET</small><strong>720p30 baseline</strong></div>
+      <div><small>VOICE TARGET</small><strong>48 kHz</strong></div>
+      <div><small>GPU BASELINE</small><strong>RTX 4090</strong></div>
+      <div><small>MORE HEADROOM</small><strong>RTX 5090</strong></div>
+    </section>
+
+    <section class="studio-grid">
+      <form id="session-form" class="panel controls">
+        <div class="section-heading">
+          <div><p class="eyebrow">SESSION SETUP</p><h2>Authorized profiles</h2></div>
+          <span class="secure-pill">ORG RUN PERMISSION REQUIRED</span>
+        </div>
+        <label for="face-profile">Enrolled face profile ID</label>
+        <input id="face-profile" name="face-profile" autocomplete="off" required maxlength="100" pattern="[A-Za-z0-9][A-Za-z0-9._:-]*" placeholder="face-profile-id">
+        <label for="voice-profile">Enrolled voice profile ID</label>
+        <input id="voice-profile" name="voice-profile" autocomplete="off" required maxlength="100" pattern="[A-Za-z0-9][A-Za-z0-9._:-]*" placeholder="voice-profile-id">
+
+        <div class="two-col">
+          <div>
+            <label for="resolution">Output target</label>
+            <select id="resolution" name="resolution">
+              <option value="720p">HD · 720p / 30 fps</option>
+              <option value="1080p">Full HD · 1080p / 30 fps</option>
+            </select>
+          </div>
+          <div>
+            <label for="gpu-target">GPU target profile</label>
+            <select id="gpu-target" name="gpu-target">
+              <option value="rtx-4090">RTX 4090 · baseline</option>
+              <option value="rtx-5090">RTX 5090 · more headroom</option>
+            </select>
+          </div>
+        </div>
+
+        <fieldset class="consent-box">
+          <legend>Required safeguards</legend>
+          <label class="check-row"><input id="face-consent" type="checkbox"><span>I have authorization to use the selected face profile.</span></label>
+          <label class="check-row"><input id="voice-consent" type="checkbox"><span>I have authorization to use the selected voice profile.</span></label>
+          <label class="check-row"><input id="synthetic-indicator" type="checkbox"><span>Keep the visible synthetic-media indicator on throughout the stream.</span></label>
+        </fieldset>
+
+        <div class="action-row">
+          <button id="preview-button" class="button secondary" type="button">Preview camera &amp; mic</button>
+          <button id="connect-button" class="button primary" type="submit" disabled>Start LiveShell</button>
+          <button id="stop-button" class="button danger" type="button" disabled>Stop session</button>
+        </div>
+        <button id="switch-camera" class="text-button" type="button" disabled>Switch front / rear camera</button>
+        <p id="session-status" class="status-message" role="status" aria-live="polite">Sign in through the Seldrune console to check LiveShell readiness.</p>
+        <p class="privacy-note">Seldrune handles signaling and sends media to the configured private GPU gateway. Live media does not pass through the Seldrune API server. Only enter profile IDs already enrolled and authorized for this organization.</p>
+      </form>
+
+      <section class="panel media-panel" aria-label="Camera preview and transformed output">
+        <div class="section-heading">
+          <div><p class="eyebrow">LIVE MEDIA</p><h2>Phone preview &amp; return</h2></div>
+          <span id="connection-state" class="connection-state">OFFLINE</span>
+        </div>
+        <div class="video-grid">
+          <article class="video-card">
+            <div class="video-label"><span>LOCAL CAMERA</span><span id="capture-resolution">—</span></div>
+            <video id="local-video" autoplay muted playsinline></video>
+          </article>
+          <article class="video-card output-card">
+            <div class="video-label"><span>LIVE RETURN</span><span id="output-metrics">HD pending</span></div>
+            <div class="output-wrap">
+              <video id="remote-video" autoplay muted playsinline></video>
+              <div id="synthetic-badge" class="synthetic-badge">AI TRANSFORMED · SYNTHETIC MEDIA</div>
+              <div id="output-placeholder" class="video-placeholder">Transformed video appears here after an authorized GPU session connects.</div>
+            </div>
+            <audio id="remote-audio" autoplay controls></audio>
+          </article>
+        </div>
+        <div class="telemetry">
+          <div><small>PHONE CAPTURE</small><strong id="capture-detail">Not started</strong></div>
+          <div><small>GPU WORKER</small><strong id="gpu-detail">Not connected</strong></div>
+          <div><small>AUDIO RETURN</small><strong id="audio-detail">48 kHz target</strong></div>
+          <div><small>PROOF STATUS</small><strong id="proof-detail">Not verified</strong></div>
+        </div>
+        <p class="evidence-note">4090 is the selected baseline target; 5090 offers more memory and compute headroom. HD quality and latency stay unverified until a real phone session returns measured frames and audio.</p>
+      </section>
+    </section>
+  </main>
+  <script src="/console-assets/liveshell-mobile.js" defer></script>
+</body>
+</html>

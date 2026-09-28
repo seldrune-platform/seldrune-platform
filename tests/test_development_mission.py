@@ -174,7 +174,7 @@ def test_development_mission_calculates_evidence_weighted_progress() -> None:
     assert workstreams["model_bus"]["percentage"] == 95.0
     assert workstreams["console"]["percentage"] == 90.0
     assert workstreams["live_media"]["percentage"] == 25.0
-    assert workstreams["live_media"]["paused"] is True
+    assert workstreams["live_media"]["paused"] is False
     stages = {item["id"]: item for item in mission["stages"]}
     assert stages["unarchi_v37"]["status"] == "completed"
     assert stages["unarchi_v37"]["completion_source"] == "roadmap_evidence"
@@ -204,8 +204,10 @@ def test_development_mission_calculates_evidence_weighted_progress() -> None:
         "pdf_local_labels",
         "provider_connectors",
         "factory_build_test",
+        "live_face_runtime",
+        "live_voice_runtime",
     }
-    assert "live_face_runtime" in mission["paused_stage_ids"]
+    assert "live_face_runtime" not in mission["paused_stage_ids"]
     assert mission["execution_policy"]["single_go_intent"] is True
     assert mission["execution_policy"]["dependency_guard"] is True
     assert mission["execution_policy"]["auto_execute_external_actions"] is False
@@ -226,7 +228,7 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
     payload = first.json()
     assert payload["created"] is True
     assert payload["overall_percentage"] == 73.4
-    assert payload["auto_queued_count"] == 6
+    assert payload["auto_queued_count"] == 8
     assert set(payload["auto_queued_stage_ids"]) == {
         "local_model_pool",
         "cost_aware_model_router",
@@ -234,6 +236,8 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
         "pdf_local_labels",
         "provider_connectors",
         "factory_build_test",
+        "live_face_runtime",
+        "live_voice_runtime",
     }
 
     second = client.post(
@@ -263,11 +267,16 @@ def test_mission_sync_persists_one_master_and_queues_ready_wave(
         for item in rows
         if item["input_data"].get("cognitive_mission_stage_id")
     ]
-    assert len(stages) == 6
-    assert not any(
-        item["input_data"].get("workstream") == "live_media"
-        for item in stages
-    )
+    assert len(stages) == 8
+    live_media_stages = [
+        item for item in stages if item["input_data"].get("workstream") == "live_media"
+    ]
+    assert {
+        item["input_data"]["cognitive_mission_stage_id"] for item in live_media_stages
+    } == {"live_face_runtime", "live_voice_runtime"}
+    assert {
+        item["input_data"]["execution_mode"] for item in live_media_stages
+    } == {"external-resource"}
 
     pdf_labels = next(
         item
@@ -304,6 +313,8 @@ def test_mission_queue_ready_is_idempotent(client: TestClient) -> None:
         "pdf_local_labels",
         "provider_connectors",
         "factory_build_test",
+        "live_face_runtime",
+        "live_voice_runtime",
     }
 
 
@@ -677,3 +688,4 @@ def test_one_go_auto_bootstraps_available_tools_before_execution(
         item["provider"] == "github"
         for item in tools.json()
     )
+

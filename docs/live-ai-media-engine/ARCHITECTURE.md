@@ -34,3 +34,13 @@ Separate control plane from GPU media plane. Keep existing Seldrune services ind
 5. Mobile/desktop clients.
 6. Autoscaling, regional routing, observability, load/latency tests.
 7. Supported conferencing integrations and production hardening.
+
+
+## GPU target profiles
+
+LiveShell uses the RTX 4090 as its baseline single-session target and the RTX
+5090 as a higher-headroom target. NVIDIA specifications list 24 GB VRAM and
+16,384 CUDA cores for the 4090, versus 32 GB VRAM and 21,760 CUDA cores for the
+5090. Those specifications do not prove LiveShell throughput. Keep 720p30 as
+the baseline target and enable 1080p30 only after measured phone-session
+benchmarks pass.
