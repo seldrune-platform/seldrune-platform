@@ -45,15 +45,16 @@ instance while session state is in memory.
 
 The WebRTC gateway sends raw media bytes through the authenticated worker protocol:
 
-- Video input/output: tightly packed RGB24, with width, height and measured frame-rate
-  metadata attached to each worker request.
+- Video input/output: JPEG encoded from RGB with width, height, pixel format and
+  frame-rate metadata attached to each worker request. This keeps 1080p traffic within
+  the bounded worker payload contract.
 - Audio input/output: packed little-endian signed 16-bit PCM at 48 kHz, mono or stereo;
   sample rate and channel count accompany each request.
 
 Face and voice adapter functions may accept `(payload, profile_id, metadata)` or a
 `metadata=`/`media_metadata=` keyword. Two-argument adapters remain supported, but
-cannot use orientation or channel metadata. Output buffers must use the same raw
-formats; video output dimensions must match the returned worker metadata.
+cannot use orientation or channel metadata. Output buffers must use the same wire formats; video output dimensions must match the
+returned worker metadata.
 
 Worker readiness requires strict realism evidence and reports the CUDA device profile
 read from PyTorch. The gateway rejects a worker if its reported accelerator differs
