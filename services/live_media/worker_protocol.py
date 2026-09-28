@@ -23,6 +23,7 @@ class InferenceRequest:
     fps: float = 30.0
     sample_rate_hz: int = 48000
     channels: int = 1
+    pixel_format: str | None = None
 
 
 @dataclass(frozen=True)
@@ -37,3 +38,4 @@ class InferenceResult:
     fps: float | None = None
     sample_rate_hz: int | None = None
     channels: int | None = None
+    pixel_format: str | None = None
