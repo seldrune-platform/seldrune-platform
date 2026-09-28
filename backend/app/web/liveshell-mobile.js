@@ -192,6 +192,7 @@
           !activeGrant('voice', q('#voice-profile').value.trim())) {
         throw new Error('Both profiles need a current owner/admin approval. Open Profile authorization to enroll or review them.');
       }
+      const stream = await ensureCapture();
       const iceConfiguration = await api(
         '/organizations/' + state.organizationId + '/liveshift/live/ice-servers'
       );
@@ -199,7 +200,6 @@
           !iceConfiguration.ice_servers.length) {
         throw new Error('The LiveShell gateway returned no ICE servers.');
       }
-      const stream = await ensureCapture();
       const peer = new RTCPeerConnection({
         iceServers: iceConfiguration.ice_servers,
       });
