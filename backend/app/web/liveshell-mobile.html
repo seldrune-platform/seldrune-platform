@@ -28,10 +28,10 @@
     </section>
 
     <section class="quality-strip" aria-label="Live output targets">
-      <div><small>VIDEO TARGET</small><strong>720p30 baseline</strong></div>
+      <div><small>VIDEO TARGET</small><strong>1080p30 target · 720p fallback</strong></div>
       <div><small>VOICE TARGET</small><strong>48 kHz</strong></div>
-      <div><small>GPU TARGETS</small><strong>RTX 4090 / 5090</strong></div>
-      <div><small>CLOUD GPU OPTION</small><strong>RTX PRO 6000 Blackwell</strong></div>
+      <div><small>GPU BASELINE</small><strong>RTX 4090 · 24 GB</strong></div>
+      <div><small>LOW-COST PILOT</small><strong>RTX PRO 4500 SE · 32 GB</strong></div>
     </section>
 
     <section class="studio-grid">
@@ -49,16 +49,17 @@
           <div>
             <label for="resolution">Output target</label>
             <select id="resolution" name="resolution">
-              <option value="720p">HD · 720p / 30 fps</option>
-              <option value="1080p">Full HD · 1080p / 30 fps</option>
+              <option value="1080p" selected>Full HD · 1080p / 30 fps · target</option>
+              <option value="720p">HD · 720p / 30 fps · fallback</option>
             </select>
           </div>
           <div>
             <label for="gpu-target">GPU target profile</label>
             <select id="gpu-target" name="gpu-target">
-              <option value="rtx-4090">RTX 4090 · baseline</option>
-              <option value="rtx-5090">RTX 5090 · more headroom</option>
-              <option value="rtx-pro-6000-blackwell">RTX PRO 6000 Blackwell · cloud</option>
+              <option value="rtx-4090">RTX 4090 · default · 24 GB</option>
+              <option value="rtx-pro-4500-se">RTX PRO 4500 SE · 32 GB · cost pilot</option>
+              <option value="rtx-5090">RTX 5090 · throughput headroom · 32 GB</option>
+              <option value="rtx-pro-6000-blackwell">RTX PRO 6000 Blackwell · 96 GB · large workloads</option>
             </select>
           </div>
         </div>
