@@ -151,15 +151,17 @@ def test_worker_round_trips_labeled_video_and_transformed_voice():
                 "profile_id": "face-test",
                 "timestamp_ms": 10,
                 "sequence": 1,
-                "width": 1280,
-                "height": 720,
-                "fps": 30,
+                "width": 1080,
+                "height": 1920,
+                "fps": 7500 / 253,
             },
             b"frame",
         )
         video = await read_message(reader)
         assert video.header["type"] == "result"
         assert video.header["synthetic_label_applied"] is True
+        assert (video.header["width"], video.header["height"]) == (1080, 1920)
+        assert video.header["fps"] == pytest.approx(7500 / 253)
         assert video.payload == b"AI-SYNTHETIC|frame:face-test"
 
         await write_message(
@@ -173,13 +175,14 @@ def test_worker_round_trips_labeled_video_and_transformed_voice():
                 "timestamp_ms": 11,
                 "sequence": 1,
                 "sample_rate_hz": 48000,
-                "channels": 1,
+                "channels": 2,
             },
             b"audio",
         )
         audio = await read_message(reader)
         assert audio.header["type"] == "result"
         assert audio.header["timestamp_ms"] == 11
+        assert (audio.header["sample_rate_hz"], audio.header["channels"]) == (48000, 2)
         assert audio.payload == b"audio:voice-test"
 
         writer.close()
@@ -323,8 +326,10 @@ def test_multiplexed_client_correlates_audio_and_video_results():
         )
         assert video.payload == b"AI-SYNTHETIC|frame-face"
         assert video.timestamp_ms == 20
+        assert (video.width, video.height, video.fps) == (1280, 720, 30.0)
         assert audio.payload == b"audio-voice"
         assert audio.timestamp_ms == 21
+        assert (audio.sample_rate_hz, audio.channels) == (48000, 1)
         await client.close()
         server.close()
         await server.wait_closed()
@@ -460,8 +465,10 @@ def test_strict_worker_requires_and_returns_realism_evidence():
         )
         assert video.quality_evidence["media_kind"] == "video"
         assert video.payload == b"AI-SYNTHETIC|frame-face"
+        assert (video.width, video.height, video.fps) == (1280, 720, 30.0)
         assert audio.quality_evidence["evaluator_id"] == "voice-eval"
         assert audio.payload == b"audio-voice"
+        assert (audio.sample_rate_hz, audio.channels) == (48000, 1)
         await client.close()
         server.close()
         await server.wait_closed()
