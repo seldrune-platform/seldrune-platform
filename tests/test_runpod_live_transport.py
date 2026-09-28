@@ -1,5 +1,6 @@
 import asyncio
 import json
+import ssl
 from time import time
 
 import pytest
@@ -594,5 +595,24 @@ def test_strict_worker_rejects_audio_video_drift_before_face_inference():
         await writer.wait_closed()
         server.close()
         await server.wait_closed()
+
+    asyncio.run(scenario())
+
+
+def test_client_rejects_tls_without_hostname_verification():
+    context = ssl.create_default_context()
+    context.check_hostname = False
+
+    async def scenario():
+        with pytest.raises(ValueError, match="verified TLS"):
+            await RunPodLiveWorkerClient.connect(
+                "worker.invalid",
+                8765,
+                service_token=SERVICE_TOKEN,
+                ticket="signed-session-ticket",
+                session_id="session-test",
+                ssl_context=context,
+                server_hostname="worker.invalid",
+            )
 
     asyncio.run(scenario())
