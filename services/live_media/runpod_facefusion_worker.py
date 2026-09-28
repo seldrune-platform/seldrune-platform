@@ -195,7 +195,8 @@ async def _runtime_ready() -> tuple[bool, str | None]:
             [
                 sys.executable,
                 "-c",
-                "import onnxruntime as ort; assert 'CUDAExecutionProvider' in ort.get_available_providers()",
+                "import onnxruntime as ort; "
+                "assert 'CUDAExecutionProvider' in ort.get_available_providers()",
             ],
             cwd=FACEFUSION_ROOT,
             timeout=10,
@@ -209,6 +210,11 @@ async def _runtime_ready() -> tuple[bool, str | None]:
 def _fraction(value: object) -> float | None:
     if not isinstance(value, str) or "/" not in value:
         return None
+    try:
+        numerator, denominator = value.split("/", maxsplit=1)
+        return float(numerator) / float(denominator)
+    except (ValueError, ZeroDivisionError):
+        return None
 
 
 def supports_video_dimensions(width: int, height: int) -> bool:
@@ -218,11 +224,6 @@ def supports_video_dimensions(width: int, height: int) -> bool:
         and max(width, height) <= MAX_VIDEO_DIMENSION
         and width * height <= MAX_VIDEO_PIXELS
     )
-    try:
-        numerator, denominator = value.split("/", maxsplit=1)
-        return float(numerator) / float(denominator)
-    except (ValueError, ZeroDivisionError):
-        return None
 
 
 async def _process_job(job_id: str) -> None:
@@ -281,7 +282,9 @@ async def _process_job(job_id: str) -> None:
             job["output_height"] = video_stream.get("height")
             job["output_fps"] = _fraction(video_stream.get("r_frame_rate"))
             job["audio_sample_rate_hz"] = (
-                int(audio_stream["sample_rate"]) if audio_stream and audio_stream.get("sample_rate") else None
+                int(audio_stream["sample_rate"])
+                if audio_stream and audio_stream.get("sample_rate")
+                else None
             )
             job["duration_seconds"] = duration
             job["actual_accelerator_profile"] = actual_accelerator
@@ -308,7 +311,8 @@ def _check_owner(job: dict[str, object], organization_id: str, user_id: str) -> 
 def _prune_expired_jobs() -> None:
     cutoff = time.time() - JOB_TTL_SECONDS
     for job_id, job in list(JOBS.items()):
-        if float(job.get("updated_at", 0)) >= cutoff or job.get("status") in {"queued", "processing"}:
+        active = job.get("status") in {"queued", "processing"}
+        if float(job.get("updated_at", 0)) >= cutoff or active:
             continue
         work_dir = Path(str(job.get("work_dir", "")))
         if work_dir.is_dir():
@@ -342,9 +346,19 @@ async def create_job(
     _authorize(authorization)
     org_id, owner_id = _owner_values(organization_id, user_id)
     if not consent_confirmed or not synthetic_media_indicator_enabled:
-        raise HTTPException(status_code=422, detail="Authorization and the synthetic label are required.")
-    if sum(job.get("status") in {"queued", "processing"} for job in JOBS.values()) >= MAX_ACTIVE_JOBS:
-        raise HTTPException(status_code=429, detail="The GPU queue is full. Try again after a job completes.")
+        raise HTTPException(
+            status_code=422,
+            detail="Authorization and the synthetic label are required.",
+        )
+    active_job_count = sum(
+        job.get("status") in {"queued", "processing"}
+        for job in JOBS.values()
+    )
+    if active_job_count >= MAX_ACTIVE_JOBS:
+        raise HTTPException(
+            status_code=429,
+            detail="The GPU queue is full. Try again after a job completes.",
+        )
     ready, _gpu_name = await _runtime_ready()
     if not ready:
         raise HTTPException(status_code=503, detail="The FaceSwap GPU worker is not ready.")

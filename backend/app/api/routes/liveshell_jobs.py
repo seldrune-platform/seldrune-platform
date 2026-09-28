@@ -108,7 +108,10 @@ async def _worker_error(response: httpx.Response, *, operation: str) -> None:
     if response.status_code == 413:
         raise HTTPException(status_code=413, detail="The worker rejected an oversized media file.")
     if response.status_code == 422:
-        raise HTTPException(status_code=422, detail="The worker rejected the media or consent fields.")
+        raise HTTPException(
+            status_code=422,
+            detail="The worker rejected the media or consent fields.",
+        )
     raise HTTPException(
         status_code=status.HTTP_502_BAD_GATEWAY,
         detail=f"The FaceSwap worker could not {operation} the job.",
@@ -132,7 +135,10 @@ async def liveshell_video_job_readiness(
         }
 
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=3.0), follow_redirects=False) as client:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(8.0, connect=3.0),
+            follow_redirects=False,
+        ) as client:
             response = await client.get(_readiness_url(base_url), headers=_worker_headers(token))
     except httpx.RequestError:
         return {
@@ -178,7 +184,10 @@ async def create_liveshell_video_job(
     if not consent_confirmed:
         raise HTTPException(status_code=422, detail="Authorization to use this face is required.")
     if not synthetic_media_indicator_enabled:
-        raise HTTPException(status_code=422, detail="The synthetic-media label must remain enabled.")
+        raise HTTPException(
+            status_code=422,
+            detail="The synthetic-media label must remain enabled.",
+        )
     face_suffix = (source_face.filename or "").rsplit(".", maxsplit=1)[-1].lower()
     video_suffix = (target_video.filename or "").rsplit(".", maxsplit=1)[-1].lower()
     if face_suffix not in {"jpg", "jpeg", "png", "webp"}:
@@ -216,24 +225,38 @@ async def create_liveshell_video_job(
                 headers=_worker_headers(token),
             )
     except httpx.TimeoutException as exc:
-        raise HTTPException(status_code=504, detail="The face-swap worker timed out while accepting the upload.") from exc
+        raise HTTPException(
+            status_code=504,
+            detail="The face-swap worker timed out while accepting the upload.",
+        ) from exc
     except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail="The face-swap worker could not be reached.") from exc
+        raise HTTPException(
+            status_code=502,
+            detail="The face-swap worker could not be reached.",
+        ) from exc
     if response.status_code != 202:
         await _worker_error(response, operation="accept")
     try:
         receipt = WorkerJobReceipt.model_validate(response.json())
     except (ValueError, ValidationError) as exc:
-        raise HTTPException(status_code=502, detail="The worker returned an invalid job receipt.") from exc
+        raise HTTPException(
+            status_code=502,
+            detail="The worker returned an invalid job receipt.",
+        ) from exc
     if not receipt.synthetic_media_indicator_enabled:
-        raise HTTPException(status_code=502, detail="The worker did not confirm the synthetic-media label.")
+        raise HTTPException(
+            status_code=502,
+            detail="The worker did not confirm the synthetic-media label.",
+        )
     return {
         "job_id": receipt.job_id,
         "status": receipt.status,
         "synthetic_media_indicator_enabled": True,
         "model": receipt.model,
         "model_license": receipt.model_license,
-        "audio_action": "source audio retained and re-encoded to AAC at 48 kHz; no voice conversion",
+        "audio_action": (
+            "source audio retained and re-encoded to AAC at 48 kHz; no voice conversion"
+        ),
     }
 
 
@@ -245,22 +268,37 @@ async def get_liveshell_video_job(
 ) -> dict[str, object]:
     base_url, token = _gateway_configuration()
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0), follow_redirects=False) as client:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(10.0, connect=3.0),
+            follow_redirects=False,
+        ) as client:
             response = await client.get(
                 _job_url(base_url, job_id),
-                params={"organization_id": str(organization_id), "user_id": str(membership.user_id)},
+                params={
+                    "organization_id": str(organization_id),
+                    "user_id": str(membership.user_id),
+                },
                 headers=_worker_headers(token),
             )
     except httpx.TimeoutException as exc:
-        raise HTTPException(status_code=504, detail="The face-swap worker timed out while checking the job.") from exc
+        raise HTTPException(
+            status_code=504,
+            detail="The face-swap worker timed out while checking the job.",
+        ) from exc
     except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail="The face-swap worker could not be reached.") from exc
+        raise HTTPException(
+            status_code=502,
+            detail="The face-swap worker could not be reached.",
+        ) from exc
     if response.status_code != 200:
         await _worker_error(response, operation="read")
     try:
         job = WorkerJobStatus.model_validate(response.json())
     except (ValueError, ValidationError) as exc:
-        raise HTTPException(status_code=502, detail="The worker returned an invalid job status.") from exc
+        raise HTTPException(
+            status_code=502,
+            detail="The worker returned an invalid job status.",
+        ) from exc
     if job.job_id != job_id:
         raise HTTPException(status_code=502, detail="The worker returned a different job.")
     return job.model_dump()
@@ -274,20 +312,35 @@ async def download_liveshell_video_job(
 ) -> Response:
     base_url, token = _gateway_configuration()
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=5.0), follow_redirects=False) as client:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(90.0, connect=5.0),
+            follow_redirects=False,
+        ) as client:
             response = await client.get(
                 _job_url(base_url, job_id, download=True),
-                params={"organization_id": str(organization_id), "user_id": str(membership.user_id)},
+                params={
+                    "organization_id": str(organization_id),
+                    "user_id": str(membership.user_id),
+                },
                 headers=_worker_headers(token),
             )
     except httpx.TimeoutException as exc:
-        raise HTTPException(status_code=504, detail="The face-swap worker timed out while preparing the download.") from exc
+        raise HTTPException(
+            status_code=504,
+            detail="The face-swap worker timed out while preparing the download.",
+        ) from exc
     except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail="The face-swap worker could not be reached.") from exc
+        raise HTTPException(
+            status_code=502,
+            detail="The face-swap worker could not be reached.",
+        ) from exc
     if response.status_code != 200:
         await _worker_error(response, operation="download")
     if len(response.content) > MAX_OUTPUT_BYTES:
-        raise HTTPException(status_code=413, detail="The processed video is too large to return through this app.")
+        raise HTTPException(
+            status_code=413,
+            detail="The processed video is too large to return through this app.",
+        )
     return Response(
         content=response.content,
         media_type="video/mp4",
@@ -306,16 +359,28 @@ async def delete_liveshell_video_job(
 ) -> dict[str, bool]:
     base_url, token = _gateway_configuration()
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0), follow_redirects=False) as client:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(10.0, connect=3.0),
+            follow_redirects=False,
+        ) as client:
             response = await client.delete(
                 _job_url(base_url, job_id),
-                params={"organization_id": str(organization_id), "user_id": str(membership.user_id)},
+                params={
+                    "organization_id": str(organization_id),
+                    "user_id": str(membership.user_id),
+                },
                 headers=_worker_headers(token),
             )
     except httpx.TimeoutException as exc:
-        raise HTTPException(status_code=504, detail="The face-swap worker timed out while deleting the job.") from exc
+        raise HTTPException(
+            status_code=504,
+            detail="The face-swap worker timed out while deleting the job.",
+        ) from exc
     except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail="The face-swap worker could not be reached.") from exc
+        raise HTTPException(
+            status_code=502,
+            detail="The face-swap worker could not be reached.",
+        ) from exc
     if response.status_code != 200:
         await _worker_error(response, operation="delete")
     return {"deleted": True}
