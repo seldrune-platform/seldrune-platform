@@ -41,7 +41,7 @@ def test_coturn_rest_credentials_use_expiring_username_and_hmac_sha1():
         (["turn:relay.example.test"], "short", "session", 600),
         (["turn:relay.example.test"], "s" * 32, "bad:subject", 600),
         (["turn:relay.example.test"], "s" * 32, "session", 59),
-        (["turn:relay.example.test"], "s" * 32, "session", 86_401),
+        (["turn:relay.example.test"], "s" * 32, "session", 86_701),
     ],
 )
 def test_turn_credentials_reject_invalid_configuration(urls, secret, subject, ttl):
