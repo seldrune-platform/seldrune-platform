@@ -108,7 +108,11 @@ class RunPodLiveSession:
             raise ValueError("valid RunPod worker host and port are required")
         if not service_token or not ticket or not server_hostname:
             raise ValueError("authenticated worker connection details are required")
-        if ssl_context is None or ssl_context.verify_mode == ssl.CERT_NONE:
+        if (
+            ssl_context is None
+            or ssl_context.verify_mode == ssl.CERT_NONE
+            or not ssl_context.check_hostname
+        ):
             raise ValueError("RunPod live media requires verified TLS")
         _validate_session_fields(
             session_id,
