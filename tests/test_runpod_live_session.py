@@ -134,3 +134,33 @@ def test_session_rejects_more_inflight_requests_than_worker_contract():
         assert called is False
 
     asyncio.run(scenario())
+
+
+def test_session_rejects_tls_without_hostname_verification():
+    async def scenario() -> None:
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        called = False
+
+        async def connect_client(*_args, **_kwargs):
+            nonlocal called
+            called = True
+            raise AssertionError("insecure TLS must fail before connecting")
+
+        with pytest.raises(ValueError, match="verified TLS"):
+            await RunPodLiveSession.connect(
+                host="worker.internal",
+                port=8765,
+                service_token="worker-token",
+                ticket="signed-session-ticket",
+                session_id="session-1",
+                face_profile_id="face-profile",
+                voice_profile_id="voice-profile",
+                region="us-east",
+                ssl_context=context,
+                server_hostname="worker.internal",
+                client_factory=connect_client,
+            )
+        assert called is False
+
+    asyncio.run(scenario())
