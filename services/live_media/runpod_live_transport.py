@@ -636,7 +636,11 @@ class RunPodLiveWorkerClient:
         server_hostname: str,
         max_inflight: int = 2,
     ) -> RunPodLiveWorkerClient:
-        if ssl_context is None or ssl_context.verify_mode == ssl.CERT_NONE:
+        if (
+            ssl_context is None
+            or ssl_context.verify_mode == ssl.CERT_NONE
+            or not ssl_context.check_hostname
+        ):
             raise ValueError("RunPod live media requires verified TLS")
         reader, writer = await asyncio.open_connection(
             host, port, ssl=ssl_context, server_hostname=server_hostname
