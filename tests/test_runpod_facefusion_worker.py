@@ -29,12 +29,12 @@ def test_worker_command_pins_the_permissive_face_model_and_uses_argument_list():
 
 
 def test_worker_authentication_fails_closed(monkeypatch):
-    monkeypatch.delenv("SELDRUNE_LIVESHIFT_WORKER_TOKEN", raising=False)
+    monkeypatch.delenv("SELDRUNE_FACESWAP_WORKER_TOKEN", raising=False)
     with pytest.raises(HTTPException) as not_configured:
         _authorize("Bearer anything")
     assert not_configured.value.status_code == 503
 
-    monkeypatch.setenv("SELDRUNE_LIVESHIFT_WORKER_TOKEN", "expected-worker-token")
+    monkeypatch.setenv("SELDRUNE_FACESWAP_WORKER_TOKEN", "expected-worker-token")
     with pytest.raises(HTTPException) as rejected:
         _authorize("Bearer wrong-token")
     assert rejected.value.status_code == 401
@@ -42,7 +42,7 @@ def test_worker_authentication_fails_closed(monkeypatch):
 
 
 def test_worker_job_endpoint_rejects_missing_auth_before_accepting_media(monkeypatch):
-    monkeypatch.setenv("SELDRUNE_LIVESHIFT_WORKER_TOKEN", "expected-worker-token")
+    monkeypatch.setenv("SELDRUNE_FACESWAP_WORKER_TOKEN", "expected-worker-token")
     client = TestClient(app)
     response = client.post(
         "/v1/jobs",
