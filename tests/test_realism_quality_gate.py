@@ -58,6 +58,23 @@ def test_face_gate_requires_windowed_hd_output_and_all_realism_metrics():
         {"p95_inference_ms": 151.0},
     ],
 )
+def test_face_gate_accepts_full_hd_portrait_orientation():
+    evidence = FaceRealismEvidence(
+        evaluator_id="face-eval",
+        evaluator_version="2.1",
+        window_frames=30,
+        output_width=1080,
+        output_height=1920,
+        output_fps=30.0,
+        identity_similarity=0.92,
+        temporal_consistency=0.91,
+        blend_quality=0.88,
+        p95_inference_ms=110.0,
+    )
+    report = validate_face_realism(evidence, policy())
+    assert (report["output_width"], report["output_height"]) == (1080, 1920)
+
+
 def test_face_gate_rejects_quality_or_format_below_policy(changes):
     values = {
         "evaluator_id": "face-eval",
