@@ -1,48 +1,43 @@
-# RunPod live-call bridge
+# LiveShell cloud face and voice calls
 
-## Status
+## Product target
 
-The deployed RTX 4090 FaceSwap worker is an authenticated **uploaded-video job** service. Its current routes are `/health` and `/v1/jobs`; it does not accept live sessions or camera frames. The Seldrune mobile LiveShell page already has a WebRTC offer flow, but it forwards to a separate `SELDRUNE_LIVESHIFT_WORKER_URL` / `SELDRUNE_LIVESHIFT_WORKER_TOKEN` gateway. The FaceSwap job worker settings do not provide that gateway.
+LiveShell provides one consent-gated live studio for face and voice transformation. A phone, tablet, or ordinary computer captures and plays media; a cloud GPU performs the face and voice transforms. The target is 720p at 30 fps with 48 kHz audio, with 1080p as an optional measured profile. Seldrune must report actual resolution, frame rate, audio sample rate, inference latency, end-to-end latency, and audio/video drift for each test session.
 
-The existing worker must therefore remain the batch-video path until a streaming worker is built, tested, and deliberately deployed. Do not advertise live calls as connected just because the batch worker reports ready.
+The existing mobile LiveShell page is a browser Live Room. A browser page cannot install a system camera or microphone into native Android Teams or Zoom. Desktop Teams/Zoom support needs the Seldrune desktop companion to expose normal virtual camera and microphone devices. The user selects those devices in the meeting app's own settings. The companion must keep the existing selected-window sharing rule and reject UI spoofing or capture bypass.
 
-## Target desktop call path (not implemented)
+## Media route
 
-For desktop Teams, Zoom, or another meeting client with normal camera selection:
+1. The signed-in owner console checks organization permission and face/voice profile authorization. It records the user's explicit consent and keeps the AI-synthetic disclosure visible.
+2. The trusted gateway issues a single-use session ticket bound to the organization, user, session, face profile, voice profile, consent states, disclosure state, and a maximum 15-minute lifetime. The browser or desktop companion never receives the long-lived worker token or ticket-signing secret.
+3. The client uses WebRTC to the configured Seldrune media gateway. The gateway sends bounded, timestamped audio/video packets to the separate RunPod live worker over authenticated TLS TCP. RunPod's HTTP port 8000 remains for short control and uploaded-video jobs; it is not the live media stream.
+4. The GPU worker checks each packet against the ticket, applies the face or voice profile, preserves timestamps, and returns transformed media. Every returned video frame must carry the persistent `AI-SYNTHETIC` mark. The browser studio also keeps its on-screen disclosure visible.
+5. The Seldrune gateway returns the tracks to the Live Room or the desktop companion. Stop, disconnect, ticket expiry, and worker restart close the session and discard queued stale media.
 
-1. The signed-in Seldrune owner console checks organization permission, face-use consent, and an authorized identity profile. It issues a short-lived session ticket bound to that user, organization, and profile. The long-lived worker token stays on the server.
-2. A Seldrune desktop companion captures camera frames and sends them to the live GPU worker over an authenticated, encrypted, long-lived TCP connection. Frame sequence numbers and a bounded latest-frame queue prevent stale frames from accumulating.
-3. The worker returns processed frames with a persistent, visible `AI-SYNTHETIC` label in the outgoing image. The companion exposes the returned image as a supported OS virtual camera. The user chooses that camera in Teams or Zoom's regular device settings.
-4. Meeting microphone audio stays local and unmodified for this face-only milestone. Do not upload microphone audio or apply voice conversion.
+## Implemented in this change
 
-A browser-only mobile page cannot register a system camera device for the native Android Teams or Zoom app. A disclosed Seldrune browser Live Room is a separate mobile target; it is not available until its own gateway is deployed and verified.
+- A bounded JSON-header/binary-payload TCP framing contract for audio and video.
+- HMAC-signed, single-use session tickets with organization, user, session, and profile bindings; explicit consent and synthetic-disclosure claims; and a 15-minute lifetime cap.
+- TLS-only server startup, constant-time worker-token checking, monotonic per-track sequence checks, HD video and 48 kHz audio metadata checks, bounded in-flight work, and a multiplexed worker client.
+- An injected face transform, injected voice transform, and required video-label callback. Missing model adapters cannot be presented as a successful transform.
+- Unit coverage for packet limits, ticket expiry/signature/consent, profile binding, output labeling, audio/video round trips, and the TLS startup requirement.
 
-## RunPod transport constraint
+This bridge is a transport foundation. It does not install or train a face or voice model, connect the production LiveShell gateway to the RunPod listener, configure TURN, or prove a real phone/desktop call. The existing RTX 4090 uploaded-video worker and its port configuration remain unchanged. No GPU output or HD quality claim is made by unit tests.
 
-RunPod documents a 100-second maximum connection time for HTTP proxy requests, no UDP connections for Pods, and recommends direct TCP exposure for long-lived WebSocket or non-HTTP traffic. The current port 8000 HTTPS proxy is suitable for the existing short control/job requests, not as the permanent media stream.
+## Required next integrations
 
-The live worker should use a separately configured TCP stream port with TLS, strict session authentication, per-session limits, and connection cleanup. Keep HTTPS port 8000 for control, job status, and health. Do not depend on WebRTC's usual UDP media path on a RunPod Pod.
+- Configure a distinct RunPod image and direct TCP port for the live worker; keep HTTP port 8000 and the current batch worker intact.
+- Connect the Seldrune gateway's verified session lifecycle to ticket issuance, one session-scoped worker client, and the existing `LivePipeline`/`WorkerPool` interfaces.
+- Load rights-cleared, authorized face and voice model adapters; fail readiness unless both adapters and the synthetic-video labeler are present.
+- Configure authenticated TURN credentials for clients whose networks cannot establish a direct WebRTC path.
+- Build the desktop companion's virtual camera and microphone path and validate the normal Teams/Zoom device selectors. Keep phone support in the browser Live Room unless a native mobile companion is built.
+- Measure sustained 720p30 and 1080p30 face output, 48 kHz voice output, p50/p95 inference and glass-to-glass latency, audio/video drift, reconnect behavior, and GPU utilization using a real authorized camera and voice profile.
 
-References:
+## Release gates
 
-- [RunPod: Expose ports](https://docs.runpod.io/pods/configuration/expose-ports)
-- [Zoom: System requirements](https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0060748)
-- [Microsoft Teams: Manage call settings](https://support.microsoft.com/en-us/teams/calls-devices/manage-your-call-settings-in-microsoft-teams)
-
-## Deployment boundary
-
-The active RTX 4090 Pod is currently serving the batch worker on HTTP port 8000. Adding a streaming service requires a new worker image and an exposed TCP port. Keep the existing running Pod and its current port/image configuration intact while that image, client, and network path are being built and tested. Schedule any Pod reconfiguration only after the replacement is ready; a port reset can change the assigned public TCP mapping.
-
-Do not set `SELDRUNE_LIVESHIFT_WORKER_URL` to the existing FaceSwap HTTP endpoint: the API shapes and transport are different, and that would report a configured gateway without providing live media.
-
-## Acceptance checks before enabling calls
-
-- Face-only flow does not request a voice profile or send microphone audio to the worker.
-- Missing consent, expired tickets, wrong organization/user/profile, or a disabled disclosure indicator reject session creation.
-- Frames are authenticated, encrypted in transit, bounded to supported dimensions/rate, timestamped, and processed with bounded backpressure.
-- Every returned frame carries the visible synthetic-media label; the client has a clear stop control and releases the camera promptly.
-- Disconnects, network loss, worker restart, and GPU overload recover without replaying stale frames or leaving sessions active.
-- GPU tests report sustained frame rate, end-to-end frame latency percentiles, resolution, and reconnect behavior from a real authorized camera stream. HD readiness is not claimed until those measurements pass.
-- The returned virtual camera appears in the desktop OS and can be selected in a Teams or Zoom preview/test call using the application's normal device selector.
-
-Unit tests with a mock transform can validate framing, consent, cleanup, and backpressure. They are not evidence of working GPU inference or a usable live meeting call.
+- Reject expired, replayed, cross-organization, cross-user, wrong-profile, or incomplete-consent tickets.
+- Keep face and voice input/output in encrypted transport and avoid writing raw media or secrets to logs.
+- Keep frame/audio queues bounded; drop stale video rather than accumulating latency.
+- Show a clear stop action and release camera, microphone, and worker resources after stop or disconnect.
+- Verify the `AI-SYNTHETIC` mark in the returned video frames, not only in a local UI overlay.
+- Claim HD readiness only after a real GPU-backed session produces a signed evidence receipt with returned frames, returned audio, resolution, frame rate, sample rate, p95 latency, and A/V drift.

@@ -1,5 +1,6 @@
 """Processors that dispatch authorized transforms to cloud GPU workers."""
-from dataclasses import dataclass
+
+from dataclasses import dataclass, field
 from uuid import uuid4
 
 from .processors import AudioProcessor, MediaFrame, VideoProcessor
@@ -13,6 +14,10 @@ class RemoteVideoProcessor(VideoProcessor):
     session_id: str
     profile_id: str
     region: str
+    width: int = 1280
+    height: int = 720
+    fps: int = 30
+    sequence: int = field(default=0, init=False)
 
     async def process(self, frame: MediaFrame) -> MediaFrame:
         request = InferenceRequest(
@@ -22,7 +27,12 @@ class RemoteVideoProcessor(VideoProcessor):
             profile_id=self.profile_id,
             timestamp_ms=frame.timestamp_ms,
             payload=frame.payload,
+            sequence=self.sequence,
+            width=self.width,
+            height=self.height,
+            fps=self.fps,
         )
+        self.sequence += 1
         result = await self.pool.infer(request, self.region)
         return MediaFrame(result.payload, result.timestamp_ms)
 
@@ -33,6 +43,9 @@ class RemoteAudioProcessor(AudioProcessor):
     session_id: str
     profile_id: str
     region: str
+    sample_rate_hz: int = 48000
+    channels: int = 1
+    sequence: int = field(default=0, init=False)
 
     async def process(self, frame: MediaFrame) -> MediaFrame:
         request = InferenceRequest(
@@ -42,6 +55,10 @@ class RemoteAudioProcessor(AudioProcessor):
             profile_id=self.profile_id,
             timestamp_ms=frame.timestamp_ms,
             payload=frame.payload,
+            sequence=self.sequence,
+            sample_rate_hz=self.sample_rate_hz,
+            channels=self.channels,
         )
+        self.sequence += 1
         result = await self.pool.infer(request, self.region)
         return MediaFrame(result.payload, result.timestamp_ms)

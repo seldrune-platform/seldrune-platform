@@ -1,4 +1,5 @@
-"""Messages exchanged between the media gateway and GPU workers."""
+"""Provider-neutral request and result contracts for cloud GPU workers."""
+
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -16,6 +17,12 @@ class InferenceRequest:
     profile_id: str
     timestamp_ms: int
     payload: bytes
+    sequence: int = 0
+    width: int = 1280
+    height: int = 720
+    fps: int = 30
+    sample_rate_hz: int = 48000
+    channels: int = 1
 
 
 @dataclass(frozen=True)
