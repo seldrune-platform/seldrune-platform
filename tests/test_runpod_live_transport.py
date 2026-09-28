@@ -316,6 +316,7 @@ def test_multiplexed_client_correlates_audio_and_video_results():
                     profile_id="face-test",
                     timestamp_ms=20,
                     payload=b"frame",
+                    pixel_format="jpeg",
                 )
             ),
             client.infer(
@@ -331,6 +332,7 @@ def test_multiplexed_client_correlates_audio_and_video_results():
         )
         assert video.payload == b"AI-SYNTHETIC|frame-face"
         assert video.timestamp_ms == 20
+        assert video.pixel_format == "jpeg"
         assert (video.width, video.height, video.fps) == (1280, 720, 30.0)
         assert audio.payload == b"audio-voice"
         assert audio.timestamp_ms == 21
