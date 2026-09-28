@@ -54,7 +54,7 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px #75f0c1
 video{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:#03050a}
 .output-wrap{position:relative}
 .output-wrap video{object-fit:contain}
-.synthetic-badge{display:none;position:absolute;left:10px;top:10px;padding:7px 9px;border-radius:8px;background:#081913ef;border:1px solid #75f0c1;color:#a9f6d7;font-size:.55rem;letter-spacing:.12em;font-weight:900;pointer-events:none}
+.synthetic-badge{display:none;position:absolute;left:10px;top:10px;padding:7px 9px;border-radius:8px;background:#081913ef;border:1px solid #75f0c1;color:#a9f6d7;font-size:.55rem;letter-spacing:.12em;font-weight:900;pointer-events:auto;touch-action:none;user-select:none;cursor:grab}.synthetic-badge:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .output-card.active .synthetic-badge{display:block}
 .video-placeholder{position:absolute;inset:0;display:grid;place-items:center;padding:18px;text-align:center;color:#8996aa;background:#050810ef;font-size:.78rem;line-height:1.5}
 .output-card.active .video-placeholder{display:none}
