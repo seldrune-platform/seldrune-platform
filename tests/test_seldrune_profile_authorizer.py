@@ -62,10 +62,18 @@ def test_authorizer_rejects_missing_or_unsafe_configuration(monkeypatch, url, to
         asyncio.run(authorizer.authorize_profiles("org", "user", "face", "voice"))
 
 
-def test_authorizer_rejects_malformed_service_response(monkeypatch):
+@pytest.mark.parametrize(
+    "body",
+    [
+        [],
+        "not-an-object",
+        {"face_profile_authorized": 1},
+    ],
+)
+def test_authorizer_rejects_malformed_service_response(monkeypatch, body):
     _env(monkeypatch)
     transport = httpx.MockTransport(
-        lambda _request: httpx.Response(200, json={"face_profile_authorized": 1})
+        lambda _request: httpx.Response(200, json=body)
     )
     monkeypatch.setattr(
         authorizer,

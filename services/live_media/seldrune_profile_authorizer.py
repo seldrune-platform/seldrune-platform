@@ -67,6 +67,8 @@ async def authorize_profiles(
     except (httpx.HTTPError, ValueError) as exc:
         raise RuntimeError("Seldrune profile authorization check failed") from exc
 
+    if not isinstance(result, dict):
+        raise RuntimeError("Seldrune returned an invalid profile authorization response")
     face = result.get("face_profile_authorized")
     voice = result.get("voice_profile_authorized")
     if type(face) is not bool or type(voice) is not bool:
