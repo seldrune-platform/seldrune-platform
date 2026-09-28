@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
+from services.live_media import webrtc_gateway as gateway_module
 from services.live_media.webrtc_gateway import (
     CreateSessionRequest,
     GatewaySettings,
@@ -146,6 +147,65 @@ def test_gateway_binds_authorized_profiles_to_ticket_and_two_webrtc_tracks():
             session_id, organization_id="org-1", user_id="user-1"
         ) is True
         assert worker.closed and peer.closed
+
+    asyncio.run(scenario())
+
+
+def test_gateway_closes_worker_after_sustained_disconnection(monkeypatch):
+    monkeypatch.setattr(gateway_module, "DISCONNECT_GRACE_SECONDS", 0.01)
+
+    async def scenario():
+        peer = FakePeer()
+        worker = FakeWorkerSession()
+        gateway, _ = gateway_for(peer, worker)
+        session_id = (await gateway.create(request())).session_id
+        peer.connectionState = "disconnected"
+        peer.handlers["connectionstatechange"]()
+
+        await asyncio.sleep(0.03)
+
+        assert worker.closed and peer.closed
+        assert session_id not in gateway._sessions
+
+    asyncio.run(scenario())
+
+
+def test_gateway_preserves_reconnected_session(monkeypatch):
+    monkeypatch.setattr(gateway_module, "DISCONNECT_GRACE_SECONDS", 0.1)
+
+    async def scenario():
+        peer = FakePeer()
+        worker = FakeWorkerSession()
+        gateway, _ = gateway_for(peer, worker)
+        session_id = (await gateway.create(request())).session_id
+        peer.connectionState = "disconnected"
+        peer.handlers["connectionstatechange"]()
+        await asyncio.sleep(0.01)
+        peer.connectionState = "connected"
+        peer.handlers["connectionstatechange"]()
+
+        await asyncio.sleep(0.12)
+
+        assert not worker.closed and not peer.closed
+        assert session_id in gateway._sessions
+        await gateway.close(session_id)
+
+    asyncio.run(scenario())
+
+
+def test_gateway_closes_failed_connection_immediately():
+    async def scenario():
+        peer = FakePeer()
+        worker = FakeWorkerSession()
+        gateway, _ = gateway_for(peer, worker)
+        session_id = (await gateway.create(request())).session_id
+        peer.connectionState = "failed"
+        peer.handlers["connectionstatechange"]()
+
+        await asyncio.sleep(0)
+
+        assert worker.closed and peer.closed
+        assert session_id not in gateway._sessions
 
     asyncio.run(scenario())
 
