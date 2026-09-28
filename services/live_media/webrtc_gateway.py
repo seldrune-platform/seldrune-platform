@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import io
 import importlib
 import json
 import math
@@ -207,6 +208,7 @@ class _VideoCodec:
 
     async def decode(self, frame: object) -> MediaFrame:
         import numpy as np
+        from PIL import Image
 
         rgb = await asyncio.to_thread(frame.to_ndarray, format="rgb24")
         height, width, channels = rgb.shape
@@ -222,20 +224,39 @@ class _VideoCodec:
                 fps = (len(self._times) - 1) / duration
         if not 24.0 <= fps <= 60.0:
             raise ValueError("camera frame rate is outside the supported 24-60 fps range")
-        payload = await asyncio.to_thread(lambda: np.ascontiguousarray(rgb).tobytes())
-        return MediaFrame(payload, timestamp_ms, int(width), int(height), fps=fps)
+        def encode_jpeg() -> bytes:
+            buffer = io.BytesIO()
+            Image.fromarray(np.ascontiguousarray(rgb)).save(
+                buffer, format="JPEG", quality=90, optimize=False, subsampling=1
+            )
+            return buffer.getvalue()
+
+        payload = await asyncio.to_thread(encode_jpeg)
+        return MediaFrame(
+            payload,
+            timestamp_ms,
+            int(width),
+            int(height),
+            fps=fps,
+            pixel_format="jpeg",
+        )
 
     async def encode(self, frame: MediaFrame, original: object) -> object:
         import numpy as np
+        from PIL import Image
         from av import VideoFrame
 
         width = frame.width or int(original.width)
         height = frame.height or int(original.height)
-        if len(frame.payload) != width * height * 3:
-            raise ValueError("RunPod video result is not packed RGB24 for its dimensions")
+        if frame.pixel_format != "jpeg":
+            raise ValueError("RunPod video result must use the JPEG worker contract")
 
         def build() -> object:
-            pixels = np.frombuffer(frame.payload, dtype=np.uint8).reshape((height, width, 3))
+            with Image.open(io.BytesIO(frame.payload)) as image:
+                image.load()
+                if image.size != (width, height):
+                    raise ValueError("RunPod JPEG dimensions do not match worker metadata")
+                pixels = np.asarray(image.convert("RGB"))
             returned = VideoFrame.from_ndarray(pixels, format="rgb24")
             returned.pts = getattr(original, "pts", None)
             returned.time_base = getattr(original, "time_base", None)
