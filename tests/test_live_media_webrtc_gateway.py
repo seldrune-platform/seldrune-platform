@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -97,7 +98,7 @@ def settings(**changes):
     return GatewaySettings(**values)
 
 
-def gateway_for(peer, worker, authorizer=None):
+def gateway_for(peer, worker, authorizer=None, **settings_changes):
     seen = {}
 
     async def connect_worker(**kwargs):
@@ -105,7 +106,7 @@ def gateway_for(peer, worker, authorizer=None):
         return worker
 
     return LiveMediaGateway(
-        settings(),
+        settings(**settings_changes),
         profile_authorizer=authorizer or (lambda *_: ProfileAuthorization(True, True)),
         worker_session_factory=connect_worker,
         peer_factory=lambda _ice: peer,
@@ -217,6 +218,38 @@ def test_gateway_rejects_unattested_quality_or_wrong_accelerator(worker):
         assert peer.closed is False
 
     asyncio.run(scenario())
+
+
+def test_gateway_ice_endpoint_authenticates_and_returns_expiring_credentials():
+    gateway, _ = gateway_for(
+        FakePeer(),
+        FakeWorkerSession(),
+        turn_urls=["turn:relay.example.test:3478?transport=udp"],
+        turn_shared_secret="t" * 48,
+        turn_credential_ttl_seconds=3600,
+    )
+    with TestClient(create_app(gateway)) as client:
+        denied = client.get("/v1/ice-servers")
+        accepted = client.get(
+            "/v1/ice-servers",
+            headers={"Authorization": f"Bearer {HTTP_TOKEN}"},
+        )
+
+    assert denied.status_code == 401
+    assert accepted.status_code == 200
+    assert accepted.headers["cache-control"] == "no-store"
+    servers = accepted.json()["ice_servers"]
+    assert servers[0]["urls"] == ["stun:stun.example.test:3478"]
+    turn = servers[1]
+    assert turn["urls"] == ["turn:relay.example.test:3478?transport=udp"]
+    session_turn = gateway._ice_servers_for_session()[1]
+    assert session_turn.username and session_turn.credential
+    assert session_turn.username != turn["username"]
+    expiry, subject = turn["username"].split(":", 1)
+    assert int(expiry) >= int(time.time()) + 3590
+    assert subject
+    assert turn["credential"]
+    assert "t" * 48 not in accepted.text
 
 
 def test_gateway_http_token_protects_create_and_delete():
