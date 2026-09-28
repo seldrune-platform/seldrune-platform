@@ -224,12 +224,13 @@ class DesktopLiveCallOutput:
         )
 
     async def close(self) -> DesktopCallReceipt:
+        delivered_receipt = self.receipt
         try:
             await self.microphone.close()
         finally:
             self.camera.close()
             self.started = False
-        return self.receipt
+        return delivered_receipt
 
 
 def create_desktop_live_call_output(*, virtual_microphone_device: str,
@@ -251,3 +252,40 @@ def create_desktop_live_call_output(*, virtual_microphone_device: str,
         sample_rate_hz=sample_rate_hz, audio_channels=audio_channels,
     )
 
+
+
+async def relay_returned_track(track: object, output: DesktopLiveCallOutput) -> None:
+    """Relay one returned aiortc track to the selected OS devices until it ends."""
+    import numpy as np
+
+    kind = getattr(track, "kind", None)
+    if kind not in ("video", "audio"):
+        raise ValueError("returned track must be audio or video")
+    while True:
+        try:
+            frame = await track.recv()
+        except StopAsyncIteration:
+            return
+        pts, time_base = getattr(frame, "pts", None), getattr(frame, "time_base", None)
+        if pts is None or time_base is None:
+            raise ValueError("returned media frame must include pts and time_base")
+        timestamp_ms = round(float(pts * time_base) * 1000)
+        if kind == "video":
+            pixels = frame.to_ndarray(format="rgb24")
+            expected_shape = (output.height, output.width, 3)
+            if tuple(pixels.shape) != expected_shape:
+                raise ValueError(
+                    f"returned video must have shape {expected_shape}, got {tuple(pixels.shape)}"
+                )
+            await output.publish_video(pixels.tobytes(), timestamp_ms)
+            continue
+
+        sample_rate = getattr(frame, "sample_rate", None)
+        layout = getattr(frame, "layout", None)
+        channels = len(getattr(layout, "channels", ()))
+        if sample_rate != output.sample_rate_hz or channels != output.channels:
+            raise ValueError("returned audio sample rate or channel count does not match output")
+        samples = np.asarray(frame.to_ndarray(format="s16"), dtype=np.int16)
+        if samples.size == 0:
+            raise ValueError("returned audio frame is empty")
+        await output.publish_audio(samples.tobytes(), timestamp_ms)
