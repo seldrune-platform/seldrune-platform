@@ -6,13 +6,17 @@ on:
       - main
     paths:
       - services/live_media/**
-      - .github/workflows/runpod-live-worker-image.yml
+      - '!services/live_media/webrtc_gateway.py'
+      - '!services/live_media/turn_credentials.py'
+      - '!services/live_media/README.md'
   push:
     branches:
       - main
     paths:
       - services/live_media/**
-      - .github/workflows/runpod-live-worker-image.yml
+      - '!services/live_media/webrtc_gateway.py'
+      - '!services/live_media/turn_credentials.py'
+      - '!services/live_media/README.md'
   workflow_dispatch:
 
 permissions:
