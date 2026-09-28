@@ -17,7 +17,7 @@
     outputs: "Browse and download files Seldrune created in this browser.",
     coding: "Build source with connected coding agents, CI, and preview tools.",
     operations: "Track Seldrune self-development, agent work, and verified execution.",
-    media: "Create and inspect Seldrune Face and LiveShift workspaces.",
+    media: "Seldrune Media camera, microphone, face and voice transformation workspace.",
     intelligence: "Agents, owner decisions, budgets, execution evidence, and system policies.",
     connections: "Connect verified AI, code, email, and deployment services; manage creation tools in one place.",
     sense: "Always-on internal health signals and owner-controlled continuity preferences.",
@@ -245,6 +245,45 @@
     move("#face-v01-mission", "media");
     move("#liveshift-mission", "media");
     move("#face-external-test", "media");
+
+    const mediaStudio = document.createElement("section");
+    mediaStudio.id = "seldrune-media-live-studio";
+    mediaStudio.className = "panel media-live-studio";
+    mediaStudio.setAttribute("aria-labelledby", "media-live-studio-title");
+    mediaStudio.style.gridColumn = "1 / -1";
+    mediaStudio.innerHTML = `
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">SELDRUNE MEDIA · LIVE TRANSFORMATION</p>
+          <h2 id="media-live-studio-title">Camera &amp; microphone studio</h2>
+          <p>Capture from a phone camera and microphone, then route authorized profiles through the configured LiveShell GPU session.</p>
+        </div>
+        <a class="ghost" href="/liveshell/mobile">Open full studio ↗</a>
+      </div>
+      <p class="media-live-studio-note">Face and voice profile approval, a connected GPU worker, and the persistent AI transformed indicator are required for a live session.</p>
+      <div class="media-live-studio-frame"></div>`;
+    const mediaStudioFrame = document.createElement("iframe");
+    mediaStudioFrame.title = "Seldrune LiveShell camera and microphone transformation studio";
+    mediaStudioFrame.src = "/liveshell/mobile";
+    mediaStudioFrame.loading = "lazy";
+    mediaStudioFrame.allow = "camera; microphone; autoplay";
+    mediaStudioFrame.referrerPolicy = "same-origin";
+    mediaStudioFrame.style.cssText =
+      "display:block;width:100%;height:1420px;border:0;background:#080b14;";
+    const mediaStudioFrameWrap = mediaStudio.querySelector(".media-live-studio-frame");
+    if (mediaStudioFrameWrap) {
+      mediaStudioFrameWrap.style.cssText =
+        "overflow:hidden;border:1px solid rgba(84,220,255,.24);border-radius:16px;background:#080b14;";
+      mediaStudioFrameWrap.append(mediaStudioFrame);
+    }
+    const resizeMediaStudioFrame = () => {
+      mediaStudioFrame.style.height =
+        window.matchMedia("(max-width: 920px)").matches ? "2180px" : "1420px";
+    };
+    resizeMediaStudioFrame();
+    window.addEventListener("resize", resizeMediaStudioFrame, {passive: true});
+    grid("media")?.prepend(mediaStudio);
+
 
     move(".agent-observatory", "intelligence");
     move(".incident-center", "intelligence");
