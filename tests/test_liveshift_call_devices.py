@@ -176,7 +176,7 @@ class Track:
         try:
             return next(self.frames)
         except StopIteration:
-            raise StopAsyncIteration
+            raise StopAsyncIteration from None
 
 
 def test_relay_returned_webrtc_video_track():
