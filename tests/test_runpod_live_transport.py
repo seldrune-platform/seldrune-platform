@@ -1,4 +1,5 @@
 import asyncio
+import json
 from time import time
 
 import pytest
@@ -65,18 +66,21 @@ def test_ticket_cannot_be_issued_without_face_voice_and_disclosure_gates(claims)
 
 
 def test_video_payload_limit_is_checked_before_network_read():
-    header = {
-        "type": "request",
-        "media_kind": "video",
-        "payload_bytes": MAX_VIDEO_PAYLOAD_BYTES + 1,
-    }
-    encoded_header = __import__("json").dumps(header).encode()
-    reader = asyncio.StreamReader()
-    reader.feed_data(len(encoded_header).to_bytes(4, "big") + encoded_header)
-    reader.feed_eof()
+    async def scenario():
+        header = {
+            "type": "request",
+            "media_kind": "video",
+            "payload_bytes": MAX_VIDEO_PAYLOAD_BYTES + 1,
+        }
+        encoded_header = json.dumps(header).encode()
+        reader = asyncio.StreamReader()
+        reader.feed_data(len(encoded_header).to_bytes(4, "big") + encoded_header)
+        reader.feed_eof()
 
-    with pytest.raises(StreamProtocolError, match="size"):
-        asyncio.run(read_message(reader))
+        with pytest.raises(StreamProtocolError, match="size"):
+            await read_message(reader)
+
+    asyncio.run(scenario())
 
 
 def test_control_messages_round_trip_with_binary_video_payload():
