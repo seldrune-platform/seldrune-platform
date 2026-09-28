@@ -5,6 +5,7 @@ from backend.app.models.email_verification_token import EmailVerificationToken
 from backend.app.models.governance_policy import GovernancePolicy
 from backend.app.models.knowledge import KnowledgeEntry
 from backend.app.models.life_lease import LifeLease
+from backend.app.models.live_profile_authorization import LiveProfileAuthorization
 from backend.app.models.life_worker_heartbeat import LifeWorkerHeartbeat
 from backend.app.models.login_failure import LoginFailure
 from backend.app.models.mailbox_access import MailboxAccess
@@ -58,6 +59,7 @@ __all__ = [
     "GovernancePolicy",
     "KnowledgeEntry",
     "LifeLease",
+    "LiveProfileAuthorization",
     "LoginFailure",
     "Mailbox",
     "MailboxAccess",

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#080b14">
+  <title>LiveShell Profiles · Seldrune</title>
+  <link rel="stylesheet" href="/console-assets/liveshell-profiles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/console"><span class="mark">S</span><span>SELDRUNE</span></a>
+    <span class="product-mark">LIVESHELL · PROFILE AUTHORIZATION</span>
+    <a class="top-link" href="/liveshell/mobile">Live Studio</a>
+    <a class="top-link" href="/web/products.html">Products</a>
+  </header>
+  <main class="shell">
+    <section class="intro panel">
+      <div>
+        <p class="eyebrow">ENROLLMENT + REVIEW</p>
+        <h1>Profile authorization</h1>
+        <p class="intro-copy">Register an opaque face or voice profile ID with a reference to its consent evidence. An organization owner or admin must independently review that evidence before the profile can be used in a live session.</p>
+      </div>
+      <div class="notice" role="status">Seldrune stores the evidence reference and SHA-256 only. Keep consent documents and biometric media in your approved secure store.</div>
+    </section>
+    <section class="panel controls">
+      <div class="section-heading">
+        <div><p class="eyebrow">ORGANIZATION</p><h2>Choose a workspace</h2></div>
+        <a class="button secondary" href="/liveshell/mobile">Open Live Studio</a>
+      </div>
+      <label for="organization">Seldrune organization</label>
+      <select id="organization"></select>
+      <p id="page-status" class="status-message" role="status" aria-live="polite">Sign in through the Seldrune console to manage profile grants.</p>
+    </section>
+    <section class="panel controls">
+      <div class="section-heading">
+        <div><p class="eyebrow">NEW REQUEST</p><h2>Enroll a profile</h2></div>
+        <span class="secure-pill">OWNER / ADMIN REVIEW REQUIRED</span>
+      </div>
+      <form id="request-form">
+        <div class="two-col">
+          <div>
+            <label for="profile-kind">Profile type</label>
+            <select id="profile-kind" required>
+              <option value="face">Face</option>
+              <option value="voice">Voice</option>
+            </select>
+          </div>
+          <div>
+            <label for="profile-id">Enrolled profile ID</label>
+            <input id="profile-id" required maxlength="100" pattern="[A-Za-z0-9][A-Za-z0-9._:-]*" autocomplete="off" placeholder="face-profile-id">
+          </div>
+        </div>
+        <label for="evidence-reference">Secure consent evidence reference</label>
+        <input id="evidence-reference" required maxlength="240" pattern="[A-Za-z0-9][A-Za-z0-9._:/-]*" autocomplete="off" placeholder="vault://consent/receipt-2026-001">
+        <label for="evidence-sha256">Evidence SHA-256</label>
+        <input id="evidence-sha256" required minlength="64" maxlength="64" pattern="[a-fA-F0-9]{64}" autocomplete="off" placeholder="64-character SHA-256">
+        <label for="expires-at">Authorization expiry</label>
+        <input id="expires-at" type="date" required>
+        <p class="form-note">The reference must resolve to the original consent record in your secure evidence store. The hash lets reviewers check that the record has not changed. Grants expire within one year and can be revoked at any time.</p>
+        <button class="button primary" type="submit">Submit for review</button>
+      </form>
+    </section>
+    <section class="panel controls">
+      <div class="section-heading">
+        <div><p class="eyebrow">GOVERNED RECORDS</p><h2>Profile requests and grants</h2></div>
+        <button id="refresh-button" class="button secondary" type="button">Refresh</button>
+      </div>
+      <div id="grant-list" class="grant-list"></div>
+    </section>
+    <footer class="footer-note">Approval is a recorded human review. The reviewer must be a different account from the person who submitted the request. Profile IDs are scoped to the organization and user; revocation immediately prevents new live sessions.</footer>
+  </main>
+  <script src="/console-assets/liveshell-profiles.js"></script>
+</body>
+</html>

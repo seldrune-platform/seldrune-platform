@@ -1,0 +1,45 @@
+:root{color-scheme:dark;--bg:#080b14;--panel:#111725;--line:#263249;--text:#edf2ff;--muted:#9aa8bf;--accent:#75f0c1;--danger:#ff788d;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 20% 0%,#132741 0,transparent 48%),var(--bg);color:var(--text)}
+a{color:inherit;text-decoration:none}
+button,input,select{font:inherit}
+.topbar{height:64px;padding:0 clamp(16px,4vw,56px);display:flex;align-items:center;gap:22px;border-bottom:1px solid #ffffff12;background:#080b14dd;position:sticky;top:0;z-index:10;backdrop-filter:blur(18px)}
+.brand{display:flex;align-items:center;gap:10px;font-size:.82rem;font-weight:800;letter-spacing:.16em}
+.mark{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:linear-gradient(140deg,var(--accent),#4ca8e5);color:#06111c;font-weight:900}
+.product-mark{color:var(--muted);font-size:.72rem;letter-spacing:.12em}
+.top-link{margin-left:auto;color:#c2cde1;font-size:.86rem}
+.shell{width:min(1040px,100%);margin:auto;padding:28px clamp(14px,3vw,42px) 48px}
+.panel{margin-bottom:16px;padding:22px;background:linear-gradient(145deg,#131b2b,#0d1320);border:1px solid var(--line);border-radius:22px;box-shadow:0 22px 70px #0003}
+.intro{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:28px}
+.eyebrow{margin:0 0 9px;color:var(--accent);font-size:.69rem;font-weight:800;letter-spacing:.19em}
+h1{font-size:clamp(1.8rem,4vw,3rem);line-height:1.08;letter-spacing:-.045em;margin:0}
+h2{font-size:1.18rem;letter-spacing:-.025em;margin:0}
+h3{margin:0;font-size:1rem}
+.intro-copy{color:#aab7cb;max-width:680px;line-height:1.55;margin:12px 0 0}
+.notice{max-width:300px;padding:14px 16px;border:1px solid #675a33;background:#302817;color:#f0d693;border-radius:14px;font-size:.82rem;line-height:1.45}
+.section-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}
+.secure-pill,.status-pill{font-size:.64rem;letter-spacing:.08em;font-weight:800;border:1px solid #355644;color:#a8efd2;border-radius:999px;padding:8px 10px;white-space:nowrap}
+.status-pill.pending{border-color:#675a33;color:#f0d693}
+.status-pill.rejected,.status-pill.revoked,.status-pill.expired{border-color:#743a4a;color:#ffb2be}
+label{display:block;font-size:.78rem;color:#c7d2e5;margin:13px 0 7px}
+input,select{width:100%;height:44px;padding:0 12px;border:1px solid #344158;border-radius:11px;background:#090e18;color:var(--text);outline:none}
+input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px #75f0c122}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-note,.footer-note,.grant-detail{color:var(--muted);font-size:.78rem;line-height:1.5}
+.button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 13px;border:0;border-radius:10px;font-weight:750;font-size:.78rem;cursor:pointer}
+.button:disabled{opacity:.42;cursor:not-allowed}
+.primary{background:linear-gradient(135deg,var(--accent),#83caff);color:#07121c}
+.secondary{background:#1d293a;color:#e2e9f5;border:1px solid #344158}
+.danger{background:#381a24;color:#ffc1cc;border:1px solid #743a4a}
+.action-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.status-message{margin:12px 0 0;color:#aab7cb;font-size:.82rem;line-height:1.5}
+.status-message.error{color:#ffb2be}
+.status-message.success{color:#a7f7d8}
+.grant-list{display:grid;gap:10px}
+.grant-card{padding:16px;border:1px solid var(--line);border-radius:14px;background:#0b111d}
+.grant-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.grant-detail{margin:8px 0 0;overflow-wrap:anywhere}
+.mono{font-family:ui-monospace,SFMono-Regular,monospace}
+.empty-state{color:var(--muted);text-align:center;padding:25px}
+.footer-note{padding:6px 10px 20px}
+@media(max-width:740px){.intro{display:block}.notice{max-width:none;margin-top:18px}.topbar{gap:12px}.product-mark{display:none}.two-col{grid-template-columns:1fr}.section-heading{align-items:flex-start;flex-direction:column}}

@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     enable_docs: bool = True
     release_sha: str | None = None
     database_url: str = "sqlite+pysqlite:///./seldrune.db"
+    live_profile_authorizer_token: str | None = None
     auth_secret_key: str = "development-only-change-this-secret"
     auth_access_token_minutes: int = 30
     auth_refresh_token_days: int = 30
@@ -88,6 +89,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_settings(self) -> "Settings":
+        if self.live_profile_authorizer_token and len(self.live_profile_authorizer_token.encode("utf-8")) < 32:
+            raise ValueError("SELDRUNE_LIVE_PROFILE_AUTHORIZER_TOKEN must be at least 32 bytes")
         if self.environment.lower() in {"prod", "production"}:
             if self.auth_secret_key == "development-only-change-this-secret":
                 raise ValueError("SELDRUNE_AUTH_SECRET_KEY must be set in production")

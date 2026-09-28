@@ -3,6 +3,7 @@
   const token = sessionStorage.getItem('seldruneToken') || '';
   const state = {
     organizationId: '',
+    userId: '',
     gatewayConfigured: false,
     localStream: null,
     peer: null,
@@ -182,6 +183,15 @@
     showStatus('Requesting camera and microphone…');
     setConnection('CONNECTING');
     try {
+      const grants = await api('/organizations/' + state.organizationId + '/liveshift/profile-authorizations');
+      const activeGrant = (kind, profileId) => grants.some(item =>
+        item.user_id === state.userId && item.profile_kind === kind &&
+        item.profile_id === profileId && item.status === 'approved'
+      );
+      if (!activeGrant('face', q('#face-profile').value.trim()) ||
+          !activeGrant('voice', q('#voice-profile').value.trim())) {
+        throw new Error('Both profiles need a current owner/admin approval. Open Profile authorization to enroll or review them.');
+      }
       const stream = await ensureCapture();
       const peer = new RTCPeerConnection({
         iceServers: [{urls: 'stun:stun.l.google.com:19302'}],
@@ -359,6 +369,7 @@
       const membership = me.memberships.find(item => item.role === 'owner') || me.memberships[0];
       if (!membership) throw new Error('No Seldrune organization is available for this account.');
       state.organizationId = membership.organization.id;
+      state.userId = me.user.id;
       const readiness = await api('/organizations/' + state.organizationId + '/liveshift/live/readiness');
       state.gatewayConfigured = Boolean(readiness.gateway_configured);
       if (state.gatewayConfigured) {

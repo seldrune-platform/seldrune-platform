@@ -19,7 +19,9 @@ Configure these gateway environment variables:
 | Variable | Purpose |
 | --- | --- |
 | `SELDRUNE_LIVESHIFT_WORKER_TOKEN` | Shared secret with the Seldrune API's gateway client; use at least 32 random bytes. |
-| `SELDRUNE_PROFILE_AUTHORIZER` | Trusted `module:function` adapter returning `ProfileAuthorization(face_profile_authorized=True, voice_profile_authorized=True)` only when both IDs belong to the user and organization. |
+| `SELDRUNE_PROFILE_AUTHORIZER` | Use `services.live_media.seldrune_profile_authorizer:authorize_profiles` to check Seldrune's reviewed registry, or inject another trusted adapter. |
+| `SELDRUNE_PROFILE_AUTHORIZATION_URL` | HTTPS or private-network base URL for the Seldrune API. |
+| `SELDRUNE_PROFILE_AUTHORIZATION_TOKEN` | At least 32 random bytes; must match the backend's `SELDRUNE_LIVE_PROFILE_AUTHORIZER_TOKEN`. |
 | `SELDRUNE_LIVE_WORKER_TOKEN` | Separate service secret shared with the RunPod live worker. |
 | `SELDRUNE_LIVE_TICKET_SECRET` | At least 32 random bytes shared with the RunPod worker for single-session tickets. |
 | `SELDRUNE_LIVE_WORKER_HOST` | Private or public DNS name for the worker's TLS TCP listener. |
@@ -31,9 +33,13 @@ Configure these gateway environment variables:
 | `SELDRUNE_LIVE_MAX_INFLIGHT` | Shared audio/video worker requests (1 or 2; default 2). |
 | `SELDRUNE_LIVE_SESSION_TTL_SECONDS` | Session cleanup lifetime (default 3600). |
 
-The profile authorizer is deliberately mandatory. This repository does not provide a
-profile database adapter, so the gateway remains unready until the deployment supplies
-one. Do not set an allow-all authorizer.
+The gateway profile check remains mandatory. This repository provides a Seldrune-backed
+registry at `/liveshell/profiles`: users submit an opaque profile ID, an evidence reference,
+a SHA-256 digest, and an expiry. An organization owner or admin must review the referenced
+consent record and approve from a different account than the requester. The registry stores
+only the reference and digest, not raw face or voice media. Configure the built-in adapter
+and matching service tokens in the gateway and backend. The per-session consent and
+synthetic-media disclosure checks remain separate. Do not set an allow-all authorizer.
 
 Run this service on a host that supports WebRTC ICE media traffic and outbound
 connectivity to the configured STUN/TURN servers. The browser currently supplies a
