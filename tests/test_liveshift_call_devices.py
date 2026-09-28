@@ -5,7 +5,7 @@ import types
 import pytest
 
 from clients.desktop.liveshift_call_devices import (
-    DesktopLiveCallOutput, SoundDeviceVirtualMicrophoneSink,
+    DesktopLiveCallOutput, SoundDeviceVirtualMicrophoneSink, relay_returned_track,
 )
 
 
@@ -78,7 +78,7 @@ class FakeStream:
 
 
 def test_audio_sink_selects_exact_virtual_device(monkeypatch):
-    stream = FakeStream()
+    streams = []
     devices = [
         {"name": "Speakers", "max_output_channels": 2},
         {"name": "Cable Input", "max_output_channels": 2},
@@ -86,12 +86,43 @@ def test_audio_sink_selects_exact_virtual_device(monkeypatch):
     monkeypatch.setitem(
         sys.modules, "sounddevice",
         types.SimpleNamespace(query_devices=lambda: devices,
-                              RawOutputStream=lambda **kwargs: stream),
+                              RawOutputStream=lambda **kwargs: streams.append(FakeStream(**kwargs)) or streams[-1]),
     )
     sink = SoundDeviceVirtualMicrophoneSink("Cable Input")
     sink.open()
     asyncio.run(sink.send(b"\0\0" * 480))
     asyncio.run(sink.close())
+    stream = streams[0]
     assert stream.kwargs["device"] == 1
     assert stream.writes == [b"\0\0" * 480]
 
+
+
+class Frame:
+    def __init__(self, array, *, sample_rate=None, channels=1):
+        self.array = array
+        self.sample_rate = sample_rate
+        self.layout = types.SimpleNamespace(channels=[object()] * channels)
+        self.pts, self.time_base = 480, 1 / 48_000
+
+    def to_ndarray(self, format):
+        return self.array
+
+
+class Track:
+    kind = "video"
+    def __init__(self, frames): self.frames = iter(frames)
+    async def recv(self):
+        try: return next(self.frames)
+        except StopIteration: raise StopAsyncIteration
+
+
+def test_relay_returned_webrtc_video_track():
+    import numpy as np
+    output, camera, _ = build(width=320, height=240)
+    output.start()
+    frame = Frame(np.zeros((240, 320, 3), dtype=np.uint8))
+    asyncio.run(relay_returned_track(Track([frame]), output))
+    assert len(camera.frames) == 1
+    assert camera.frames[0].shape == (240, 320, 3)
+    assert output.receipt.video_frames == 1
