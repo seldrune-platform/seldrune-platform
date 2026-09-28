@@ -93,10 +93,10 @@ class GatewaySession(BaseModel):
     actual_accelerator_profile: Literal[
         "rtx-4090", "rtx-pro-4500-se", "rtx-5090", "rtx-pro-6000-blackwell"
     ]
-    output_width: int = Field(ge=1, le=7680)
-    output_height: int = Field(ge=1, le=4320)
-    audio_sample_rate_hz: int = Field(ge=1, le=192_000)
-    output_fps: float = Field(ge=1, le=120)
+    output_width: int | None = Field(default=None, ge=1, le=7680)
+    output_height: int | None = Field(default=None, ge=1, le=4320)
+    audio_sample_rate_hz: int | None = Field(default=None, ge=1, le=192_000)
+    output_fps: float | None = Field(default=None, ge=1, le=120)
 
 
 def _effective_video_resolution(
@@ -175,16 +175,34 @@ def _parse_gateway_session(
             ),
         )
 
-    if (
-        _effective_video_resolution(result.output_width, result.output_height) is None
-        or result.audio_sample_rate_hz != 48_000
-        or result.output_fps < 29
-        or result.output_fps > 60
+    output_metadata = (
+        result.output_width,
+        result.output_height,
+        result.audio_sample_rate_hz,
+        result.output_fps,
+    )
+    if any(value is not None for value in output_metadata) and not all(
+        value is not None for value in output_metadata
     ):
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="The live gateway returned media metadata below the supported profile.",
+            detail="The live gateway returned incomplete output metadata.",
         )
+    if all(value is not None for value in output_metadata):
+        assert result.output_width is not None
+        assert result.output_height is not None
+        assert result.audio_sample_rate_hz is not None
+        assert result.output_fps is not None
+        if (
+            _effective_video_resolution(result.output_width, result.output_height) is None
+            or result.audio_sample_rate_hz != 48_000
+            or result.output_fps < 29
+            or result.output_fps > 60
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="The live gateway returned media metadata below the supported profile.",
+            )
     return result
 
 
@@ -328,8 +346,10 @@ async def create_liveshell_live_session(
                 )
         raise
 
-    effective_resolution = _effective_video_resolution(
-        gateway_session.output_width, gateway_session.output_height
+    reported_resolution = (
+        _effective_video_resolution(gateway_session.output_width, gateway_session.output_height)
+        if gateway_session.output_width is not None and gateway_session.output_height is not None
+        else None
     )
     return {
         "session_id": gateway_session.session_id,
@@ -342,13 +362,11 @@ async def create_liveshell_live_session(
         "session_ticket_validated": gateway_session.session_ticket_validated,
         "realism_evidence_required": gateway_session.realism_evidence_required,
         "output": {
+            "requested_resolution": payload.video_resolution,
+            "gateway_reported_resolution": reported_resolution,
+            "measurement_status": "pending_first_frame",
             "width": gateway_session.output_width,
             "height": gateway_session.output_height,
-            "resolution": effective_resolution,
-            "fallback_applied": (
-                payload.video_resolution == "1080p"
-                and effective_resolution == "720p"
-            ),
             "audio_sample_rate_hz": gateway_session.audio_sample_rate_hz,
             "fps": gateway_session.output_fps,
         },
