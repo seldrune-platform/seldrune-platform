@@ -42,6 +42,8 @@ def valid_gateway_response(**changes):
         "face_profile_authorized": True,
         "voice_profile_authorized": True,
         "synthetic_media_indicator_enabled": True,
+        "marker_x": 1.0,
+        "marker_y": 0.0,
         "runpod_session_connected": True,
         "session_ticket_validated": True,
         "realism_evidence_required": True,
@@ -95,6 +97,12 @@ def test_gateway_session_requires_matching_authorized_profiles():
     assert result.face_profile_authorized
     assert result.voice_profile_authorized
     assert result.synthetic_media_indicator_enabled
+
+
+def test_gateway_rejects_unmatched_marker_position():
+    with pytest.raises(HTTPException) as error:
+        _parse_gateway_session(valid_offer(marker_x=0.25), valid_gateway_response())
+    assert error.value.status_code == 502
     assert result.runpod_session_connected
     assert result.session_ticket_validated
     assert result.realism_evidence_required
