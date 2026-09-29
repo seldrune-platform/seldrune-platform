@@ -244,14 +244,14 @@ def test_mobile_page_product_hub_and_assets_are_served():
         faceswap_javascript = client.get("/console-assets/liveshell-face-swap-mobile.js")
 
     assert page.status_code == 200
-    assert "LIVESHELL · MOBILE STUDIO" in page.text
+    assert "MEDIA CONSOLE" in page.text
     assert 'value="rtx-pro-4500-se"' in page.text
     assert 'value="rtx-pro-6000-blackwell"' in page.text
     assert 'value="1080p" selected' in page.text
     assert faceswap_page.status_code == 200
     assert "Mobile FaceSwap" in faceswap_page.text
     assert products.status_code == 200
-    assert 'href="/liveshell/mobile"' in products.text
+    assert 'href="/media"' in products.text
     assert javascript.status_code == 200
     assert "output.measurement_status === 'measured'" in javascript.text
     assert "liveshift/live/ice-servers" in javascript.text
