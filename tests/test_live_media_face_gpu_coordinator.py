@@ -58,8 +58,8 @@ def test_coordinate_gpu_training_uses_paired_reference_runtime(monkeypatch) -> N
     )
     coordinated = coordinate_gpu_training(execution, [object()], batch_size=4)
     assert calls == [
-        ("runtime", "rtx-pro-6000-blackwell"),
         ("pairs", 4),
+        ("runtime", "rtx-pro-6000-blackwell"),
         ("train", "cuda"),
     ]
     assert coordinated.receipt.state is GpuExecutionState.SUCCEEDED
@@ -123,3 +123,26 @@ def test_receipt_timestamps_are_timezone_aware(monkeypatch) -> None:
     receipt = coordinate_gpu_training(execution, [object()], batch_size=1).receipt
     assert receipt.started_at.tzinfo is UTC and receipt.completed_at.tzinfo is UTC
     assert isinstance(receipt.started_at, datetime)
+
+
+def test_reconstruction_dataset_rejected_before_cuda_allocation(monkeypatch) -> None:
+    from services.live_media.face_dataset import DatasetSplit, IdentityRecord
+    from services.live_media.face_tensor_batches import FaceTrainingSample
+
+    identity = IdentityRecord(
+        subject_id="fictional-subject",
+        consent_record="synthetic-fixture",
+        rights_basis="synthetic",
+        capture_ids=("fictional-capture-1", "fictional-capture-2"),
+        allowed_purposes=("training",),
+        provenance="synthetic-test-only",
+        split=DatasetSplit.TRAIN,
+    )
+    image = object()
+    sample = FaceTrainingSample(identity, "fictional-capture-1", image, object(), image)
+    monkeypatch.setattr(
+        "services.live_media.face_gpu_coordinator.build_paired_gpu_runtime",
+        lambda execution: pytest.fail("CUDA runtime must not start"),
+    )
+    with pytest.raises(ValueError, match="cross-identity target"):
+        coordinate_gpu_training(_execution(), [sample], batch_size=1)
