@@ -241,7 +241,9 @@
       }
       session.local = await nativeGetUserMedia(captureConstraints(constraints, config));
       session.peer = new RTCPeerConnection({iceServers: ice.ice_servers});
-      for (const track of local.getTracks()) session.peer.addTrack(track, local);
+      for (const track of session.local.getTracks()) {
+        session.peer.addTrack(track, session.local);
+      }
       session.peer.addEventListener('track', event => {
         if (!session.output.getTracks().includes(event.track)) session.output.addTrack(event.track);
       });
