@@ -10,6 +10,8 @@ services:
         generateValue: true
       - key: SELDRUNE_ENABLE_DOCS
         value: false
+      - key: SELDRUNE_PUBLIC_APP_URL
+        value: https://seldrune-platform.onrender.com
       - key: SELDRUNE_DATABASE_URL
         fromDatabase:
           name: seldrune-db

@@ -39,6 +39,7 @@ from backend.app.api.routes.model_provider_connections import (
     router as model_provider_connections_router,
 )
 from backend.app.api.routes.mfa import router as mfa_router
+from backend.app.api.routes.mcp_bridge import router as mcp_bridge_router
 from backend.app.api.routes.orchestrations import router as orchestrations_router
 from backend.app.api.routes.organization_kernel import router as organization_kernel_router
 from backend.app.api.routes.organizations import router as organizations_router
@@ -117,6 +118,7 @@ def create_app() -> FastAPI:
         development_mission_router,
     ):
         app.include_router(item, prefix=settings.api_v1_prefix)
+    app.include_router(mcp_bridge_router)
     return app
 
 

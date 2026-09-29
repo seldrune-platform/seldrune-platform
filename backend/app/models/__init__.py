@@ -19,6 +19,11 @@ from backend.app.models.seldrune_mail import (
 from backend.app.models.membership import Membership
 from backend.app.models.memory import MemoryItem
 from backend.app.models.mfa_recovery_code import MfaRecoveryCode
+from backend.app.models.mcp_oauth import (
+    MCPAuthorizationCode,
+    MCPOAuthClient,
+    MCPRefreshToken,
+)
 from backend.app.models.model_invocation import ModelInvocation
 from backend.app.models.orchestration import (
     OrchestrationApproval,
@@ -69,6 +74,9 @@ __all__ = [
     "ZohoMailOAuthState",
     "Membership",
     "MemoryItem",
+    "MCPAuthorizationCode",
+    "MCPOAuthClient",
+    "MCPRefreshToken",
     "MfaRecoveryCode",
     "ModelInvocation",
     "OrchestrationApproval",
