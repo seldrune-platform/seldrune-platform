@@ -19,8 +19,8 @@ Do not treat VRAM or a GPU model name as evidence of output quality. Compare the
 1. The signed-in Seldrune API enforces organization run permission. The client sends the selected profile IDs and per-session consent/disclosure acknowledgements. Before issuing a worker ticket, the gateway's required `SELDRUNE_PROFILE_AUTHORIZER` checks both IDs against Seldrune's reviewed profile registry; client-supplied IDs and checkboxes alone do not authorize transformation.
 2. After both profiles pass authorization, the gateway issues a single-use session ticket bound to the organization, user, session, face profile, voice profile, consent states, disclosure state, and a maximum 15-minute lifetime. The browser or desktop companion never receives the long-lived worker token or ticket-signing secret.
 3. The client uses WebRTC to the configured Seldrune media gateway. The gateway sends bounded, timestamped audio/video packets to the separate RunPod live worker over authenticated TLS TCP. RunPod's HTTP port 8000 remains for short control and uploaded-video jobs; it is not the live media stream.
-4. The GPU worker checks each packet against the ticket, applies the face or voice profile, preserves timestamps, and returns transformed media. Every returned video frame must carry the persistent `AI-SYNTHETIC` mark. The browser studio also keeps its on-screen disclosure visible.
-5. The Seldrune gateway returns the tracks to the Live Room or the desktop companion. Stop, disconnect, ticket expiry, and worker restart close the session and discard queued stale media.
+4. The GPU worker checks each packet against the ticket, applies the face or voice profile, preserves timestamps, validates the transformed JPEG and runs the configured quality evaluator, then returns transformed media.
+5. The Seldrune gateway burns the required participant-visible disclosure marker into the final outbound WebRTC pixels at the session-fixed position selected before connection, then returns the tracks to the Live Room or desktop companion. Stop, disconnect, ticket expiry, and worker restart close the session and discard queued stale media.
 
 ## Implemented in this change
 
@@ -28,7 +28,7 @@ Do not treat VRAM or a GPU model name as evidence of output quality. Compare the
 - HMAC-signed, single-use session tickets with organization, user, session, and profile bindings; explicit consent and synthetic-disclosure claims; and a 15-minute lifetime cap.
 - TLS-only server startup, constant-time worker-token checking, monotonic per-track sequence checks, HD video and 48 kHz audio metadata checks, bounded in-flight work, and a multiplexed worker client.
 - A dedicated RunPod worker entrypoint that refuses to start without TLS files, strong service/ticket secrets, and async face, voice, and labeling adapters.
-- An injected face transform, injected voice transform, and required video-label callback. Missing model adapters cannot be presented as a successful transform.
+- An injected face transform, injected voice transform, and required fail-closed disclosure-validation callback. The single participant-visible marker is applied at the gateway's final outbound video boundary. Missing model adapters cannot be presented as a successful transform.
 - Unit coverage for packet limits, ticket expiry/signature/consent, profile binding, output labeling, audio/video round trips, and the TLS startup requirement.
 - A strict production quality contract: the face adapter must return decoded HD dimensions, 30 fps windowed identity/temporal/blend metrics, and p95 inference evidence; the voice adapter must return decoded 48 kHz windowed speaker/content/naturalness, clipping/dropout, and p95 processing evidence.
 - The production entrypoint requires explicit evaluator-calibrated pass thresholds in `SELDRUNE_LIVE_REALISM_POLICY_JSON`. It rejects byte-only adapters, missing evidence, evidence below threshold, and per-request latency over budget. The worker client carries measured evidence with each result.
@@ -60,5 +60,5 @@ The dedicated live worker entrypoint is `python -m services.live_media.runpod_li
 - Keep face and voice input/output in encrypted transport and avoid writing raw media or secrets to logs.
 - Keep frame/audio queues bounded; drop stale video rather than accumulating latency.
 - Show a clear stop action and release camera, microphone, and worker resources after stop or disconnect.
-- Verify the `AI-SYNTHETIC` mark in the returned video frames, not only in a local UI overlay.
+- Verify the configured disclosure marker in the returned WebRTC video pixels, not only in a local UI overlay.
 - Claim realistic HD readiness only after a real GPU-backed session passes the configured face and voice evidence gates and produces a signed receipt with returned frames, returned audio, decoded resolution/frame rate/sample rate, evaluator versions and scores, p95 latency, and paired A/V drift.
