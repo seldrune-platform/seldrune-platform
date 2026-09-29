@@ -47,7 +47,7 @@ configuration:
 | `SELDRUNE_LIVE_TICKET_SECRET` | Strong ticket-signing secret shared with the gateway |
 | `SELDRUNE_FACE_TRANSFORM_ADAPTER` | Import path in `module:async_callable` form |
 | `SELDRUNE_VOICE_TRANSFORM_ADAPTER` | Import path in `module:async_callable` form |
-| `SELDRUNE_SYNTHETIC_VIDEO_LABELER` | Import path in `module:async_callable` form |
+| `SELDRUNE_SYNTHETIC_VIDEO_LABELER` | Compatibility-named fail-closed disclosure validator in `module:async_callable` form; it must not alter pixels |
 | `SELDRUNE_FACE_QUALITY_EVALUATOR` | Post-label face evaluator in `module:async_callable` form |
 | `SELDRUNE_VOICE_QUALITY_EVALUATOR` | Final-audio evaluator in `module:async_callable` form |
 | `SELDRUNE_LIVE_REALISM_POLICY_JSON` | Calibrated evaluator policy with pass thresholds |
