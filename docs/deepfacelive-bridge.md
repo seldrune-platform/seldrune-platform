@@ -22,5 +22,5 @@ This bridge exposes only local app status and start/stop controls. It does not u
 - The agent accepts only `start` and `stop`; no remote shell, arbitrary path, model, camera, or media-upload inputs are exposed.
 - `start` launches the local `DeepFaceLive.bat`. Select cameras, source files, models, and output devices in the app itself.
 - `stop` terminates only the process tree launched by this companion. If the companion exits, it leaves the app running.
-- Pairing again replaces the previous agent token. Revoke access by removing the DeepFaceLive agent from the Seldrune owner console or rotating it with a new pairing code.
+- Pairing again replaces the previous agent token. Revoke access with `unpair_deepfacelive_agent` or pair a new companion.
 - Use only your own likeness or media you have permission to transform, and disclose altered output to viewers.
