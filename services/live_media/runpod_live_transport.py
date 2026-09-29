@@ -557,9 +557,12 @@ class RunPodLiveWorkerServer:
                         # marker is rendered exactly once by the WebRTC gateway after this
                         # worker result returns, so this stage must not add a second badge.
                         validated_video = await self.label_synthetic_video(transformed)
-                        if validated_video != transformed:
+                        if (
+                            not isinstance(validated_video, bytes)
+                            or validated_video != transformed
+                        ):
                             raise RuntimeError(
-                                "worker disclosure stage must not modify video pixels"
+                                "worker disclosure stage must return the original video bytes"
                             )
                         transform_ms = max(
                             (perf_counter() - transform_started) * 1000, 0.001
