@@ -1,6 +1,7 @@
 """Marker placement and pixel checks for the outbound WebRTC video boundary."""
 
 import unittest
+from dataclasses import FrozenInstanceError
 
 from PIL import Image
 
@@ -17,7 +18,7 @@ class OutputMarkerTests(unittest.TestCase):
             MarkerPosition(1.01, 0)
         with self.assertRaises(ValueError):
             MarkerPosition(float("nan"), 0)
-        with self.assertRaises(Exception):
+        with self.assertRaises(FrozenInstanceError):
             top_right.x = 0
 
     def test_marker_is_in_returned_pixels_and_source_stays_unmodified(self):
