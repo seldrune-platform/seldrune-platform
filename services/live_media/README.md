@@ -75,9 +75,11 @@ returned worker metadata.
 
 Worker readiness requires strict realism evidence and reports the CUDA device profile
 read from PyTorch. The gateway rejects a worker if its reported accelerator differs
-from the requested profile. Realism evidence must come from an actual output evaluator;
-this service does not claim HD quality, FPS, voice similarity, latency or production
-readiness from signaling alone.
+from the requested profile. Realism evidence must come from an actual output evaluator.
+The worker disclosure stage validates the transformed JPEG and disclosure configuration,
+while the participant-visible marker is rendered exactly once at the WebRTC gateway's
+final outbound video boundary. This service does not claim HD quality, FPS, voice
+similarity, latency or production readiness from signaling alone.
 
 Install only the media dependencies with the gateway Dockerfile. The normal Seldrune
 API image remains independent of aiortc.
@@ -85,9 +87,11 @@ API image remains independent of aiortc.
 
 ## Change the visible disclosure wording
 
-The label renderer is in `synthetic_video_labeler.py`; its wording is kept in
-`synthetic_disclosure.py`. To change the wording, edit
-`VISIBLE_DISCLOSURE_LABEL` in that file and choose one of these clear labels:
+The final participant-visible marker is rendered by `output_marker.py`; its wording
+is kept in `synthetic_disclosure.py`. The worker-side
+`synthetic_video_labeler.py` validates the transformed JPEG and disclosure
+configuration without adding a second badge. To change the wording, edit
+`VISIBLE_DISCLOSURE_LABEL` and choose one of these clear labels:
 `AI MODIFIED`, `AI-ALTERED VIDEO`, or `SYNTHETIC MEDIA`.
 
 Blank text and wording that does not identify altered or synthetic media are
