@@ -97,8 +97,8 @@ def _agent_post(client, path: str, token: str, body: dict):
 
 
 def test_deepfacelive_endpoint_is_scoped_and_pairs_a_local_agent(
-    _client, monkeypatch
-) -> None:  # noqa: F811
+    _client, monkeypatch  # noqa: F811
+) -> None:
     client = _client
     monkeypatch.setattr(settings, "public_app_url", "http://testserver")
     access_token = _connect_deepfacelive(client)
