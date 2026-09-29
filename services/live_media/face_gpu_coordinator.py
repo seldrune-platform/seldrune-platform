@@ -28,13 +28,15 @@ def coordinate_gpu_training(
     *,
     batch_size: int,
 ) -> CoordinatedGpuTraining:
-    """Run the Seldrune-owned reference-conditioned paired path on admitted CUDA work."""
+    """Admit supervised batches before allocating a CUDA training runtime."""
     execution.validate()
     if execution.accelerator != RTX_PRO_6000_PROFILE:
         raise ValueError("paired Face v0.1 training requires the RTX PRO 6000 profile")
+    # The batch constructor rejects today's reconstruction-only data contract.
+    # Keep this admission gate ahead of CUDA allocation and any paid work.
+    batches = build_paired_batches(samples, batch_size=batch_size)
     started_at = datetime.now(UTC)
     runtime = build_paired_gpu_runtime(execution)
-    batches = build_paired_batches(samples, batch_size=batch_size)
     result = execute_admitted_paired_training(
         execution, runtime.model, runtime.optimizer, batches, device=runtime.device
     )
