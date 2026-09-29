@@ -556,7 +556,11 @@ class RunPodLiveWorkerServer:
                         # and fails closed on bad configuration. The participant-visible
                         # marker is rendered exactly once by the WebRTC gateway after this
                         # worker result returns, so this stage must not add a second badge.
-                        transformed = await self.label_synthetic_video(transformed)
+                        validated_video = await self.label_synthetic_video(transformed)
+                        if validated_video != transformed:
+                            raise RuntimeError(
+                                "worker disclosure stage must not modify video pixels"
+                            )
                         transform_ms = max(
                             (perf_counter() - transform_started) * 1000, 0.001
                         )
@@ -661,7 +665,7 @@ class RunPodLiveWorkerServer:
                         "timestamp_ms": timestamp_ms,
                         "sequence": header["sequence"],
                         "inference_ms": inference_ms,
-                        "synthetic_label_applied": kind == MediaKind.VIDEO,
+                        "synthetic_disclosure_validated": kind == MediaKind.VIDEO,
                         "sample_rate_hz": header.get("sample_rate_hz"),
                         "channels": header.get("channels"),
                         "width": header.get("width"),
@@ -893,7 +897,7 @@ class RunPodLiveWorkerClient:
                     or header.get("timestamp_ms") != expected_timestamp
                     or header.get("pixel_format") != expected_pixel_format
                     or (
-                        header.get("synthetic_label_applied") is not True
+                        header.get("synthetic_disclosure_validated") is not True
                         and header.get("media_kind") == MediaKind.VIDEO
                     )
                 ):
