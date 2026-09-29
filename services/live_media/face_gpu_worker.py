@@ -74,7 +74,7 @@ def main() -> int:
             "accelerator": execution.accelerator,
             "execution_digest": execution.digest(),
             "max_steps": execution.max_steps,
-            "training_bridge": "paired-reference-ready",
+            "training_bridge": "blocked-cross-identity-target-required",
         }, sort_keys=True))
         return 0
 
