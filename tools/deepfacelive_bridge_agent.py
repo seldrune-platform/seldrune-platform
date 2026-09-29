@@ -98,7 +98,9 @@ def _request(url: str, *, method: str, body: dict[str, Any], token: str | None =
             value = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         if exc.code == 401:
-            raise RuntimeError("Companion token expired or was revoked; pair this computer again.") from None
+            raise RuntimeError(
+                "Companion token expired or was revoked; pair this computer again."
+            ) from None
         raise RuntimeError(f"Bridge returned HTTP {exc.code}.") from None
     except (URLError, TimeoutError, json.JSONDecodeError) as exc:
         raise RuntimeError(f"Could not reach the bridge: {exc.__class__.__name__}.") from None
@@ -121,7 +123,10 @@ def pair(server: str, install_dir: Path) -> None:
     reply = _request(
         f"{server}{PAIR_PATH}",
         method="POST",
-        body={"pairing_code": pairing_code, "agent_name": f"{os.environ.get('COMPUTERNAME', 'Windows')} DeepFaceLive"},
+        body={
+            "pairing_code": pairing_code,
+            "agent_name": f"{os.environ.get('COMPUTERNAME', 'Windows')} DeepFaceLive",
+        },
     )
     agent_token = reply.get("agent_token")
     if not isinstance(agent_token, str) or len(agent_token) < 40:
@@ -164,7 +169,10 @@ def _load_tracked_process(install_dir: Path) -> psutil.Process | None:
         if abs(process.create_time() - float(state["created_at"])) > 0.5:
             return None
         command_line = " ".join(process.cmdline()).casefold()
-        if str(install_dir).casefold() not in command_line or "deepfacelive.bat" not in command_line:
+        if (
+            str(install_dir).casefold() not in command_line
+            or "deepfacelive.bat" not in command_line
+        ):
             return None
         return process if process.is_running() else None
     except (FileNotFoundError, KeyError, TypeError, ValueError, psutil.Error, json.JSONDecodeError):
@@ -221,15 +229,35 @@ def _execute(action: str, install_dir: Path) -> tuple[str, bool, int | None, str
                 process = _launch(install_dir)
                 time.sleep(1)
                 if not process.is_running():
-                    return "failed", False, None, "DeepFaceLive did not stay open. Check the local app window."
+                    return (
+                        "failed",
+                        False,
+                        None,
+                        "DeepFaceLive did not stay open. Check the local app window.",
+                    )
             return "completed", True, process.pid, "DeepFaceLive is running on this computer."
         if action == "stop":
             if process is not None:
                 _stop_tracked_process(process)
-            return "completed", False, None, "Stopped the DeepFaceLive process launched by this companion."
+            return (
+                "completed",
+                False,
+                None,
+                "Stopped the DeepFaceLive process launched by this companion.",
+            )
     except (OSError, psutil.Error, subprocess.SubprocessError):
-        return "failed", bool(process and process.is_running()), process.pid if process else None, "The local app action failed. Check the computer."
-    return "failed", bool(process and process.is_running()), process.pid if process else None, "Unsupported command."
+        return (
+            "failed",
+            bool(process and process.is_running()),
+            process.pid if process else None,
+            "The local app action failed. Check the computer.",
+        )
+    return (
+        "failed",
+        bool(process and process.is_running()),
+        process.pid if process else None,
+        "Unsupported command.",
+    )
 
 
 def run() -> None:
@@ -250,12 +278,19 @@ def run() -> None:
             command = response.get("command")
             if isinstance(command, dict):
                 command_id = str(command.get("id", ""))
-                status, app_running, app_pid, message = _execute(str(command.get("action", "")), install_dir)
+                status, app_running, app_pid, message = _execute(
+                    str(command.get("action", "")), install_dir
+                )
                 _request(
                     f"{server}{RESULT_PATH.format(command_id=command_id)}",
                     method="POST",
                     token=token,
-                    body={"status": status, "app_running": app_running, "app_pid": app_pid, "message": message},
+                    body={
+                        "status": status,
+                        "app_running": app_running,
+                        "app_pid": app_pid,
+                        "message": message,
+                    },
                 )
             else:
                 time.sleep(2)
@@ -268,11 +303,24 @@ def run() -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Authenticated local DeepFaceLive companion for Seldrune")
+    parser = argparse.ArgumentParser(
+        description="Authenticated local DeepFaceLive companion for Seldrune"
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    pair_parser = subparsers.add_parser("pair", help="Pair this computer using a one-time plugin code")
-    pair_parser.add_argument("--server", required=True, help="Seldrune service origin, for example https://seldrune-platform.onrender.com")
-    pair_parser.add_argument("--install-dir", required=True, type=Path, help="Folder containing DeepFaceLive.bat")
+    pair_parser = subparsers.add_parser(
+        "pair", help="Pair this computer using a one-time plugin code"
+    )
+    pair_parser.add_argument(
+        "--server",
+        required=True,
+        help="Seldrune service origin, for example https://seldrune-platform.onrender.com",
+    )
+    pair_parser.add_argument(
+        "--install-dir",
+        required=True,
+        type=Path,
+        help="Folder containing DeepFaceLive.bat",
+    )
     subparsers.add_parser("run", help="Keep the authenticated companion connected")
     args = parser.parse_args()
     try:
