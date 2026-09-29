@@ -74,7 +74,9 @@ def _connect_deepfacelive(client) -> str:
     return token.json()["access_token"]
 
 
-def _tool_call(client, access_token: str, request_id: int, name: str, arguments: dict | None = None):
+def _tool_call(
+    client, access_token: str, request_id: int, name: str, arguments: dict | None = None
+):
     return client.post(
         "/mcp/deepfacelive",
         headers={
@@ -94,7 +96,9 @@ def _agent_post(client, path: str, token: str, body: dict):
     return client.post(path, headers={"Authorization": f"Bearer {token}"}, json=body)
 
 
-def test_deepfacelive_endpoint_is_scoped_and_pairs_a_local_agent(_client, monkeypatch) -> None:  # noqa: F811
+def test_deepfacelive_endpoint_is_scoped_and_pairs_a_local_agent(
+    _client, monkeypatch
+) -> None:  # noqa: F811
     client = _client
     monkeypatch.setattr(settings, "public_app_url", "http://testserver")
     access_token = _connect_deepfacelive(client)
