@@ -119,6 +119,7 @@
     });
 
     badge.addEventListener('pointermove', event => {
+      if (markerLocked) return;
       if (!markerDrag || markerDrag.pointerId !== event.pointerId) return;
       const rect = wrap.getBoundingClientRect();
       setMarkerPosition(
@@ -349,6 +350,7 @@
     state.browserDecodedVideo = null;
     state.outputProfile = null;
     markerLocked = true;
+    markerDrag = null;
     q('#synthetic-badge').setAttribute('aria-disabled', 'true');
     q('#connect-button').disabled = true;
     q('#preview-button').disabled = true;
