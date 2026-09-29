@@ -173,7 +173,7 @@
     connect.dataset.integrationConnect = provider.provider;
     const vaultManaged = kind === "model"
       ? provider.source === "vault"
-      : Boolean(provider.reference_id);
+      : Boolean(provider.reference_id) && provider.reference_status === "active";
     connect.textContent = vaultManaged
       ? "Replace key"
       : configured
