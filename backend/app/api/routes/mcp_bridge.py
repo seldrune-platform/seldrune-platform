@@ -29,6 +29,11 @@ from backend.app.core.rbac import Role
 from backend.app.core.security import access_token_fingerprint
 from backend.app.models.membership import Membership
 from backend.app.models.mcp_oauth import MCPAuthorizationCode, MCPOAuthClient, MCPRefreshToken
+from backend.app.models.deepfacelive_bridge import (
+    DeepFaceLiveAgent,
+    DeepFaceLiveCommand,
+    DeepFaceLivePairingCode,
+)
 from backend.app.models.organization import Organization
 from backend.app.models.revoked_access_token import RevokedAccessToken
 from backend.app.models.user import User
@@ -45,8 +50,9 @@ router = APIRouter(tags=["owner-console-mcp"])
 LOGIN_COOKIE = "seldrune_mcp_login"
 CSRF_COOKIE = "seldrune_mcp_csrf"
 OWNER_SCOPE = "seldrune.owner"
+DEEPFACELIVE_SCOPE = "seldrune.deepfacelive"
 OFFLINE_SCOPE = "offline_access"
-SUPPORTED_SCOPES = {OWNER_SCOPE, OFFLINE_SCOPE}
+SUPPORTED_SCOPES = {OWNER_SCOPE, DEEPFACELIVE_SCOPE, OFFLINE_SCOPE}
 SUPPORTED_PROTOCOLS = {"2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_REQUEST_BYTES = 1_000_000
 TOKEN_LIFETIME_SECONDS = 15 * 60
@@ -239,8 +245,9 @@ def _parse_authorization_request(values: Any) -> AuthorizationRequest:
         raise OAuthRequestError("PKCE with S256 is required.")
     if resource != _resource_url():
         raise OAuthRequestError("The requested resource does not match this server.")
-    if OWNER_SCOPE not in scopes or len(scopes) != len(set(scopes)):
-        raise OAuthRequestError("The requested scope is not supported.")
+    permission_scopes = set(scopes) & {OWNER_SCOPE, DEEPFACELIVE_SCOPE}
+    if len(permission_scopes) != 1 or len(scopes) != len(set(scopes)):
+        raise OAuthRequestError("Request exactly one supported Seldrune permission scope.")
     if set(scopes) - SUPPORTED_SCOPES:
         raise OAuthRequestError("The requested scope is not supported.")
     return AuthorizationRequest(
@@ -343,14 +350,22 @@ def _consent_form(
     client_name: str,
     user: User,
 ) -> HTMLResponse:
-    scope_html = (
-        '<div class="scope"><strong>Owner Console access</strong><br>'
-        "Read owner dashboard, audit events, and command status; change governance "
-        "policy; create commands, approve them, execute them, promote outcomes, and "
-        "create recovery commands as separate actions. Seldrune checks your Owner "
-        "role on every call."
-        "</div>"
-    )
+    if DEEPFACELIVE_SCOPE in params.scope.split():
+        scope_html = (
+            '<div class="scope"><strong>DeepFaceLive companion access</strong><br>'
+            "Read the paired computer's app status and queue DeepFaceLive start or stop "
+            "commands. Camera frames, audio, models, and video are not uploaded or relayed."
+            "</div>"
+        )
+    else:
+        scope_html = (
+            '<div class="scope"><strong>Owner Console access</strong><br>'
+            "Read owner dashboard, audit events, and command status; change governance "
+            "policy; create commands, approve them, execute them, promote outcomes, and "
+            "create recovery commands as separate actions. Seldrune checks your Owner "
+            "role on every call."
+            "</div>"
+        )
     if OFFLINE_SCOPE in params.scope.split():
         scope_html += (
             '<p class="scope"><strong>Stay connected</strong><br>'
@@ -420,7 +435,7 @@ def protected_resource_metadata() -> dict[str, Any]:
     return {
         "resource": _resource_url(),
         "authorization_servers": [_issuer()],
-        "scopes_supported": [OWNER_SCOPE],
+        "scopes_supported": [OWNER_SCOPE, DEEPFACELIVE_SCOPE],
         "bearer_methods_supported": ["header"],
     }
 
@@ -944,22 +959,26 @@ async def revoke_oauth_token(request: Request, session: SessionDep) -> Response:
     return JSONResponse({}, status_code=200, headers={"Cache-Control": "no-store"})
 
 
-def _bearer_challenge() -> str:
+def _bearer_challenge(required_scope: str = OWNER_SCOPE) -> str:
     metadata_url = _oauth_url("/.well-known/oauth-protected-resource/mcp")
     return (
         'Bearer error="invalid_token", error_description="Authentication required", '
-        f'resource_metadata="{metadata_url}"'
+        f'resource_metadata="{metadata_url}", scope="{required_scope}"'
     )
 
 
-def _authenticate_mcp_request(request: Request, session: Session) -> tuple[User, dict[str, Any]]:
+def _authenticate_mcp_request(
+    request: Request,
+    session: Session,
+    required_scope: str = OWNER_SCOPE,
+) -> tuple[User, dict[str, Any]]:
     authorization = request.headers.get("authorization", "")
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or not token or len(token) > 4096:
         raise HTTPException(
             status_code=401,
             detail="Bearer authentication required",
-            headers={"WWW-Authenticate": _bearer_challenge()},
+            headers={"WWW-Authenticate": _bearer_challenge(required_scope)},
         )
     try:
         claims = jwt.decode(
@@ -972,7 +991,7 @@ def _authenticate_mcp_request(request: Request, session: Session) -> tuple[User,
         )
         if (
             claims.get("type") != "mcp_access"
-            or OWNER_SCOPE not in str(claims.get("scope", "")).split()
+            or required_scope not in str(claims.get("scope", "")).split()
         ):
             raise jwt.InvalidTokenError("Insufficient MCP access")
         user_id = UUID(str(claims["sub"]))
@@ -980,7 +999,7 @@ def _authenticate_mcp_request(request: Request, session: Session) -> tuple[User,
         raise HTTPException(
             status_code=401,
             detail="Invalid or expired bearer token",
-            headers={"WWW-Authenticate": _bearer_challenge()},
+            headers={"WWW-Authenticate": _bearer_challenge(required_scope)},
         ) from None
 
     fingerprint = access_token_fingerprint(token)
@@ -994,7 +1013,7 @@ def _authenticate_mcp_request(request: Request, session: Session) -> tuple[User,
         raise HTTPException(
             status_code=401,
             detail="Invalid or expired bearer token",
-            headers={"WWW-Authenticate": _bearer_challenge()},
+            headers={"WWW-Authenticate": _bearer_challenge(required_scope)},
         )
     return user, claims
 
@@ -1243,12 +1262,229 @@ TOOLS = [
 ]
 
 
+def _deepfacelive_tool(
+    name: str,
+    description: str,
+    properties: dict[str, Any] | None = None,
+    required: list[str] | None = None,
+    *,
+    read_only: bool,
+    idempotent: bool = False,
+) -> dict[str, Any]:
+    value = _tool(name, description, properties, required, read_only=read_only, idempotent=idempotent)
+    value["securitySchemes"] = [{"type": "oauth2", "scopes": [DEEPFACELIVE_SCOPE]}]
+    return value
+
+
+DEEPFACELIVE_TOOLS = [
+    _deepfacelive_tool(
+        "pair_deepfacelive_agent",
+        "Create a one-time 10-minute code to pair the user's Windows DeepFaceLive computer.",
+        read_only=False,
+    ),
+    _deepfacelive_tool(
+        "deepfacelive_status",
+        "Read the paired Windows companion heartbeat and whether its DeepFaceLive process is running.",
+        read_only=True,
+        idempotent=True,
+    ),
+    _deepfacelive_tool(
+        "deepfacelive_start",
+        "Queue a request for the paired companion to launch its configured DeepFaceLive.bat.",
+        read_only=False,
+        idempotent=True,
+    ),
+    _deepfacelive_tool(
+        "deepfacelive_stop",
+        "Queue a request for the paired companion to stop the process tree it launched.",
+        read_only=False,
+        idempotent=True,
+    ),
+    _deepfacelive_tool(
+        "deepfacelive_command_status",
+        "Read the result of a queued DeepFaceLive start or stop request.",
+        {"command_id": _field("command_id", "Queued DeepFaceLive command UUID.")},
+        ["command_id"],
+        read_only=True,
+        idempotent=True,
+    ),
+    _deepfacelive_tool(
+        "unpair_deepfacelive_agent",
+        "Revoke the paired Windows companion token and expire its queued commands.",
+        read_only=False,
+        idempotent=True,
+    ),
+]
+
+
+def _dispatch_deepfacelive_tool(
+    name: str,
+    arguments: dict[str, Any],
+    user: User,
+    session: Session,
+) -> Any:
+    now = _now()
+    agent = session.scalar(
+        select(DeepFaceLiveAgent).where(
+            DeepFaceLiveAgent.user_id == user.id,
+            DeepFaceLiveAgent.revoked_at.is_(None),
+        )
+    )
+    if name == "pair_deepfacelive_agent":
+        for old in session.scalars(
+            select(DeepFaceLivePairingCode).where(
+                DeepFaceLivePairingCode.user_id == user.id,
+                DeepFaceLivePairingCode.consumed_at.is_(None),
+            )
+        ):
+            old.consumed_at = now
+        code = secrets.token_urlsafe(32)
+        session.add(
+            DeepFaceLivePairingCode(
+                code_sha256=_sha256(code),
+                user_id=user.id,
+                expires_at=now + timedelta(minutes=10),
+            )
+        )
+        record_audit(
+            session,
+            actor_user_id=user.id,
+            action="deepfacelive.agent_pairing_code_issued",
+            resource_type="deepfacelive_agent",
+            resource_id=str(user.id),
+            details={"expires_in_seconds": 600},
+        )
+        session.commit()
+        return {
+            "pairing_code": code,
+            "expires_in_seconds": 600,
+            "instructions": "Run the Windows companion pair command and paste this code.",
+        }
+
+    if name == "deepfacelive_status":
+        if agent is None:
+            return {"paired": False, "online": False, "app_running": False}
+        last_seen = _aware(agent.last_seen_at) if agent.last_seen_at else None
+        online = bool(
+            last_seen
+            and now - last_seen <= timedelta(seconds=90)
+            and _aware(agent.token_expires_at) > now
+        )
+        return {
+            "paired": True,
+            "online": online,
+            "agent_name": agent.agent_name,
+            "last_seen_at": last_seen.isoformat() if last_seen else None,
+            "app_running": bool(agent.app_running) if online else False,
+            "app_pid": agent.app_pid if online and agent.app_running else None,
+            "agent_version": agent.agent_version,
+        }
+
+    if name == "unpair_deepfacelive_agent":
+        if agent is None:
+            return {"paired": False}
+        agent.revoked_at = now
+        for command in session.scalars(
+            select(DeepFaceLiveCommand).where(
+                DeepFaceLiveCommand.agent_id == agent.id,
+                DeepFaceLiveCommand.status.in_(["pending", "claimed"]),
+            )
+        ):
+            command.status = "expired"
+            command.completed_at = now
+        record_audit(
+            session,
+            actor_user_id=user.id,
+            action="deepfacelive.agent_unpaired",
+            resource_type="deepfacelive_agent",
+            resource_id=str(agent.id),
+            details={},
+        )
+        session.commit()
+        return {"paired": False, "revoked": True}
+
+    if name in {"deepfacelive_start", "deepfacelive_stop"}:
+        if agent is None:
+            raise ValueError("Pair a Windows DeepFaceLive companion first.")
+        last_seen = _aware(agent.last_seen_at) if agent.last_seen_at else None
+        if not last_seen or now - last_seen > timedelta(seconds=90):
+            raise ValueError("The paired Windows companion is offline.")
+        action = "start" if name.endswith("_start") else "stop"
+        queued = session.scalar(
+            select(DeepFaceLiveCommand)
+            .where(
+                DeepFaceLiveCommand.agent_id == agent.id,
+                DeepFaceLiveCommand.status.in_(["pending", "claimed"]),
+                DeepFaceLiveCommand.expires_at > now,
+            )
+            .order_by(DeepFaceLiveCommand.created_at)
+            .limit(1)
+        )
+        if queued:
+            if queued.action != action:
+                raise ValueError("A different DeepFaceLive command is still in progress.")
+            return {"id": str(queued.id), "action": queued.action, "status": queued.status}
+        command = DeepFaceLiveCommand(
+            agent_id=agent.id,
+            user_id=user.id,
+            action=action,
+            status="pending",
+            expires_at=now + timedelta(seconds=180),
+        )
+        session.add(command)
+        session.flush()
+        record_audit(
+            session,
+            actor_user_id=user.id,
+            action=f"deepfacelive.{action}_queued",
+            resource_type="deepfacelive_command",
+            resource_id=str(command.id),
+            details={"action": action},
+        )
+        session.commit()
+        return {"id": str(command.id), "action": action, "status": "pending"}
+
+    if name == "deepfacelive_command_status":
+        try:
+            command_id = UUID(str(arguments.get("command_id") or ""))
+        except ValueError:
+            raise ValueError("command_id must be a UUID.") from None
+        command = session.scalar(
+            select(DeepFaceLiveCommand).where(
+                DeepFaceLiveCommand.id == command_id,
+                DeepFaceLiveCommand.user_id == user.id,
+            )
+        )
+        if command is None:
+            raise ValueError("DeepFaceLive command not found.")
+        if command.status in {"pending", "claimed"} and _aware(command.expires_at) <= now:
+            command.status = "expired"
+            command.completed_at = now
+            session.commit()
+        return {
+            "id": str(command.id),
+            "action": command.action,
+            "status": command.status,
+            "result": command.result,
+        }
+    raise ValueError(f"Unknown DeepFaceLive tool: {name}")
+
+
 def _dispatch_tool(
     name: str,
     arguments: dict[str, Any],
     user: User,
     session: Session,
 ) -> Any:
+    if name in {
+        "pair_deepfacelive_agent",
+        "deepfacelive_status",
+        "deepfacelive_start",
+        "deepfacelive_stop",
+        "deepfacelive_command_status",
+        "unpair_deepfacelive_agent",
+    }:
+        return _dispatch_deepfacelive_tool(name, arguments, user, session)
     if name == "list_owner_organizations":
         rows = session.execute(
             select(Organization, Membership)
@@ -1366,22 +1602,25 @@ def _rpc_result(request_id: Any, result: dict[str, Any]) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
 
 
-def _handle_message(message: Any, user: User, session: Session) -> dict[str, Any] | None:
+def _handle_message(
+    message: Any,
+    user: User,
+    session: Session,
+    *,
+    deepfacelive: bool = False,
+) -> dict[str, Any] | None:
     if not isinstance(message, dict):
         return _rpc_error(None, -32600, "Invalid Request")
     request_id = message.get("id")
     is_notification = "id" not in message
     if message.get("jsonrpc") != "2.0" or not isinstance(message.get("method"), str):
         return None if is_notification else _rpc_error(request_id, -32600, "Invalid Request")
-
     method = message["method"]
     params = message.get("params") or {}
     if not isinstance(params, dict):
         return None if is_notification else _rpc_error(request_id, -32602, "Invalid params")
-
     if is_notification:
         return None
-
     if method == "initialize":
         requested = str(params.get("protocolVersion") or "2025-03-26")
         protocol_version = requested if requested in SUPPORTED_PROTOCOLS else "2025-11-25"
@@ -1390,27 +1629,31 @@ def _handle_message(message: Any, user: User, session: Session) -> dict[str, Any
             {
                 "protocolVersion": protocol_version,
                 "capabilities": {"tools": {"listChanged": False}},
-                "serverInfo": {"name": "Seldrune Owner Console", "version": settings.app_version},
+                "serverInfo": {
+                    "name": "Seldrune DeepFaceLive Bridge" if deepfacelive else "Seldrune Owner Console",
+                    "version": settings.app_version,
+                },
             },
         )
     if method == "ping":
         return _rpc_result(request_id, {})
     if method == "tools/list":
-        return _rpc_result(request_id, {"tools": TOOLS})
+        return _rpc_result(request_id, {"tools": DEEPFACELIVE_TOOLS if deepfacelive else TOOLS})
     if method == "tools/call":
         name = params.get("name")
         if not isinstance(name, str):
             return _rpc_error(request_id, -32602, "Tool name is required")
-        tool = next((item for item in TOOLS if item["name"] == name), None)
-        if tool is None:
+        tool_list = DEEPFACELIVE_TOOLS if deepfacelive else TOOLS
+        if not any(item["name"] == name for item in tool_list):
             return _rpc_error(request_id, -32602, "Unknown tool")
-        result = _mcp_tool_result(name, params.get("arguments", {}), user, session)
-        return _rpc_result(request_id, result)
+        return _rpc_result(
+            request_id,
+            _mcp_tool_result(name, params.get("arguments", {}), user, session),
+        )
     return _rpc_error(request_id, -32601, "Method not found")
 
 
-@router.post("/mcp")
-async def mcp_endpoint(request: Request, session: SessionDep) -> Response:
+async def _serve_mcp(request: Request, session: Session, *, deepfacelive: bool) -> Response:
     accept = request.headers.get("accept", "application/json")
     if "application/json" not in accept and "text/event-stream" not in accept:
         return Response(status_code=406)
@@ -1423,8 +1666,8 @@ async def mcp_endpoint(request: Request, session: SessionDep) -> Response:
         length = MAX_REQUEST_BYTES + 1
     if length > MAX_REQUEST_BYTES:
         return Response(status_code=413)
-
-    user, _claims = _authenticate_mcp_request(request, session)
+    required_scope = DEEPFACELIVE_SCOPE if deepfacelive else OWNER_SCOPE
+    user, _claims = _authenticate_mcp_request(request, session, required_scope=required_scope)
     chunks: list[bytes] = []
     size = 0
     async for chunk in request.stream():
@@ -1436,26 +1679,40 @@ async def mcp_endpoint(request: Request, session: SessionDep) -> Response:
         message = json.loads(b"".join(chunks))
     except (json.JSONDecodeError, UnicodeDecodeError):
         return JSONResponse(_rpc_error(None, -32700, "Parse error"), status_code=400)
-
     if isinstance(message, list):
         if not message:
             return JSONResponse(_rpc_error(None, -32600, "Invalid Request"), status_code=400)
         replies = [
             reply
             for item in message
-            if (reply := _handle_message(item, user, session)) is not None
+            if (reply := _handle_message(item, user, session, deepfacelive=deepfacelive)) is not None
         ]
         if not replies:
             return Response(status_code=202)
         return JSONResponse(replies)
-
-    reply = _handle_message(message, user, session)
+    reply = _handle_message(message, user, session, deepfacelive=deepfacelive)
     if reply is None:
         return Response(status_code=202)
     return JSONResponse(reply)
 
 
+@router.post("/mcp")
+async def mcp_endpoint(request: Request, session: SessionDep) -> Response:
+    return await _serve_mcp(request, session, deepfacelive=False)
+
+
+@router.post("/mcp/deepfacelive")
+async def deepfacelive_mcp_endpoint(request: Request, session: SessionDep) -> Response:
+    return await _serve_mcp(request, session, deepfacelive=True)
+
+
 @router.get("/mcp")
 def mcp_get_not_supported(request: Request, session: SessionDep) -> Response:
     _authenticate_mcp_request(request, session)
+    return Response(status_code=405, headers={"Allow": "POST"})
+
+
+@router.get("/mcp/deepfacelive")
+def deepfacelive_mcp_get_not_supported(request: Request, session: SessionDep) -> Response:
+    _authenticate_mcp_request(request, session, required_scope=DEEPFACELIVE_SCOPE)
     return Response(status_code=405, headers={"Allow": "POST"})
