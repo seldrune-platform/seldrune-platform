@@ -17,6 +17,11 @@ from backend.app.models.seldrune_mail import (
     ZohoMailOAuthState,
 )
 from backend.app.models.membership import Membership
+from backend.app.models.deepfacelive_bridge import (
+    DeepFaceLiveAgent,
+    DeepFaceLiveCommand,
+    DeepFaceLivePairingCode,
+)
 from backend.app.models.memory import MemoryItem
 from backend.app.models.mfa_recovery_code import MfaRecoveryCode
 from backend.app.models.mcp_oauth import (
@@ -60,6 +65,9 @@ __all__ = [
     "AuditLog",
     "Department",
     "DepartmentDelegation",
+    "DeepFaceLiveAgent",
+    "DeepFaceLiveCommand",
+    "DeepFaceLivePairingCode",
     "EmailVerificationToken",
     "GovernancePolicy",
     "KnowledgeEntry",
