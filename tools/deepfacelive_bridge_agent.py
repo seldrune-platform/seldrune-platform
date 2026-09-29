@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import base64
 import ctypes
+from getpass import getpass
 import json
 import os
 import subprocess
@@ -113,7 +114,7 @@ def pair(server: str, install_dir: Path) -> None:
     launcher = install_dir / "DeepFaceLive.bat"
     if not install_dir.is_dir() or not launcher.is_file():
         raise RuntimeError("Select the folder that contains DeepFaceLive.bat.")
-    pairing_code = input("Paste the one-time pairing code from the plugin: ").strip()
+    pairing_code = getpass("Paste the one-time pairing code from the plugin: ").strip()
     if not pairing_code:
         raise RuntimeError("A pairing code is required.")
     server = server.rstrip("/")
