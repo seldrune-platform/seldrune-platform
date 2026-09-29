@@ -1136,6 +1136,149 @@ def render_deploy_status(
         },
     }
 
+_RUNPOD_API_BASE = "https://api.runpod.io/v2"
+_RUNPOD_SAFE_POD_FIELDS = (
+    "id", "name", "image", "status", "cloud", "dataCenterId",
+    "cudaVersion", "createdAt", "startedAt", "cost",
+)
+
+
+def _runpod_headers(credential: str) -> dict[str, str]:
+    return {"Accept": "application/json", "Authorization": f"Bearer {credential}"}
+
+
+def _runpod_public_pod(
+    data: dict[str, Any],
+    *,
+    fallback_id: str | None = None,
+) -> dict[str, Any]:
+    pod = {
+        key: data[key]
+        for key in _RUNPOD_SAFE_POD_FIELDS
+        if data.get(key) is not None
+    }
+    pod_id = pod.get("id") or fallback_id
+    if not isinstance(pod_id, str) or not pod_id.strip():
+        raise ToolGatewayError("Runpod Pod response did not include an id")
+    pod["id"] = pod_id
+    gpu = data.get("gpu")
+    if isinstance(gpu, dict):
+        safe_gpu = {
+            key: gpu[key]
+            for key in ("id", "count", "memory", "vcpuCount")
+            if gpu.get(key) is not None
+        }
+        if safe_gpu:
+            pod["gpu"] = safe_gpu
+    return pod
+
+
+def runpod_list_pods(
+    payload: dict[str, Any],
+    credential: str | None,
+) -> dict[str, Any]:
+    token = _credential(credential, "Runpod")
+    limit = payload.get("limit", 100)
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:
+        raise ToolGatewayError("limit must be an integer between 1 and 1000")
+    params: dict[str, Any] = {"limit": limit}
+    cursor = payload.get("cursor")
+    if cursor is not None:
+        if not isinstance(cursor, str) or not cursor.strip():
+            raise ToolGatewayError("cursor must be a non-empty string")
+        params["cursor"] = cursor.strip()
+    response = httpx.get(
+        f"{_RUNPOD_API_BASE}/pods",
+        headers=_runpod_headers(token),
+        params=params,
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    data = _json_response(response, "Runpod")
+    raw_pods = data.get("pods")
+    if not isinstance(raw_pods, list):
+        raise ToolGatewayError("Runpod Pod list response did not include a pods list")
+    pods = [_runpod_public_pod(item) for item in raw_pods if isinstance(item, dict)]
+    pagination = data.get("pagination")
+    pagination = pagination if isinstance(pagination, dict) else {}
+    next_cursor = pagination.get("nextCursor")
+    state = [{"id": pod["id"], "status": pod.get("status")} for pod in pods]
+    digest = hashlib.sha256(
+        json.dumps(state, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:16]
+    return {
+        "pods": pods,
+        "pagination": {
+            "next_cursor": next_cursor if isinstance(next_cursor, str) else None,
+            "has_next_page": bool(pagination.get("hasNextPage")),
+        },
+        "evidence": {
+            "receipt_id": f"runpod-pods:{digest}",
+            "provider": "runpod",
+        },
+    }
+
+
+def runpod_get_pod(
+    payload: dict[str, Any],
+    credential: str | None,
+) -> dict[str, Any]:
+    token = _credential(credential, "Runpod")
+    pod_id = _text(payload, "pod_id")
+    response = httpx.get(
+        f"{_RUNPOD_API_BASE}/pods/{quote(pod_id, safe='')}",
+        headers=_runpod_headers(token),
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    data = _json_response(response, "Runpod")
+    pod = _runpod_public_pod(data, fallback_id=pod_id)
+    return {
+        "pod": pod,
+        "evidence": {
+            "receipt_id": f"runpod-pod:{pod['id']}:{pod.get('status') or 'unknown'}",
+            "provider": "runpod",
+        },
+    }
+
+
+def _runpod_pod_action(
+    payload: dict[str, Any],
+    credential: str | None,
+    *,
+    action: str,
+) -> dict[str, Any]:
+    token = _credential(credential, "Runpod")
+    pod_id = _text(payload, "pod_id")
+    response = httpx.post(
+        f"{_RUNPOD_API_BASE}/pods/{quote(pod_id, safe='')}/action",
+        headers={**_runpod_headers(token), "Content-Type": "application/json"},
+        json={"action": action},
+        timeout=_REQUEST_TIMEOUT_SECONDS,
+    )
+    data = _json_response(response, "Runpod")
+    pod = _runpod_public_pod(data, fallback_id=pod_id)
+    return {
+        "pod_id": pod_id,
+        "action": action,
+        "accepted": True,
+        "observed_status": pod.get("status"),
+        "evidence": {
+            "receipt_id": (
+                f"runpod-pod-action:{pod_id}:{action}:"
+                f"{pod.get('status') or 'accepted'}"
+            ),
+            "provider": "runpod",
+        },
+    }
+
+
+def runpod_start_pod(payload: dict[str, Any], credential: str | None) -> dict[str, Any]:
+    return _runpod_pod_action(payload, credential, action="start")
+
+
+def runpod_stop_pod(payload: dict[str, Any], credential: str | None) -> dict[str, Any]:
+    return _runpod_pod_action(payload, credential, action="stop")
+
+
 DEFAULT_EXTERNAL_ACTION_CATALOG: tuple[dict[str, Any], ...] = (
     {
         "provider": "gmail",
@@ -1409,6 +1552,61 @@ DEFAULT_EXTERNAL_ACTION_CATALOG: tuple[dict[str, Any], ...] = (
         },
     },
     {
+        "provider": "runpod", "action_name": "list-pods",
+        "name": "Runpod · List Pods", "default_tool_slug": "runpod-list-pods",
+        "credential_slug": "runpod-api-key", "credential_name": "Runpod API key",
+        "credential_env_locator": "SELDRUNE_RUNPOD_API_KEY",
+        "description": "List Runpod Pods without returning environment values or SSH credentials.",
+        "risk_level": "low",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "cursor": {"type": "string"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 1000},
+            },
+            "required": [],
+        },
+    },
+    {
+        "provider": "runpod", "action_name": "get-pod",
+        "name": "Runpod · Get Pod", "default_tool_slug": "runpod-get-pod",
+        "credential_slug": "runpod-api-key", "credential_name": "Runpod API key",
+        "credential_env_locator": "SELDRUNE_RUNPOD_API_KEY",
+        "description": "Read safe Pod metadata without returning environment values or SSH credentials.",
+        "risk_level": "low",
+        "input_schema": {
+            "type": "object",
+            "properties": {"pod_id": {"type": "string"}},
+            "required": ["pod_id"],
+        },
+    },
+    {
+        "provider": "runpod", "action_name": "start-pod",
+        "name": "Runpod · Start Pod", "default_tool_slug": "runpod-start-pod",
+        "credential_slug": "runpod-api-key", "credential_name": "Runpod API key",
+        "credential_env_locator": "SELDRUNE_RUNPOD_API_KEY",
+        "description": "Start a Runpod Pod. This can incur GPU charges and always requires owner approval.",
+        "risk_level": "high",
+        "input_schema": {
+            "type": "object",
+            "properties": {"pod_id": {"type": "string"}},
+            "required": ["pod_id"],
+        },
+    },
+    {
+        "provider": "runpod", "action_name": "stop-pod",
+        "name": "Runpod · Stop Pod", "default_tool_slug": "runpod-stop-pod",
+        "credential_slug": "runpod-api-key", "credential_name": "Runpod API key",
+        "credential_env_locator": "SELDRUNE_RUNPOD_API_KEY",
+        "description": "Stop a Runpod Pod and interrupt its work. This always requires owner approval.",
+        "risk_level": "high",
+        "input_schema": {
+            "type": "object",
+            "properties": {"pod_id": {"type": "string"}},
+            "required": ["pod_id"],
+        },
+    },
+    {
         "provider": "portable-ci",
         "action_name": "verify-receipt",
         "name": "Portable CI · Verify signed receipt",
@@ -1496,6 +1694,10 @@ def register_default_external_actions() -> None:
     )
     register_external_action("render", "deploy-status", render_deploy_status)
     register_external_action("render", "deploy-service", render_deploy_service)
+    register_external_action("runpod", "list-pods", runpod_list_pods)
+    register_external_action("runpod", "get-pod", runpod_get_pod)
+    register_external_action("runpod", "start-pod", runpod_start_pod)
+    register_external_action("runpod", "stop-pod", runpod_stop_pod)
 
 
 def default_external_action_catalog() -> list[dict[str, Any]]:

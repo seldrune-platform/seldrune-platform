@@ -14,6 +14,7 @@
     'gmail-tool-credential': 'gmail',
     'github-tool-token': 'github',
     'render-api-key': 'render',
+    'runpod-api-key': 'runpod',
   };
 
   function setStatus(message) {

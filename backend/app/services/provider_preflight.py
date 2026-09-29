@@ -349,7 +349,50 @@ def _render_preflight(credential: str) -> dict[str, Any]:
     )
 
 
+def _runpod_preflight(credential: str) -> dict[str, Any]:
+    response = httpx.get(
+        "https://api.runpod.io/v2/pods",
+        headers={"Accept": "application/json", "Authorization": f"Bearer {credential}"},
+        params={"limit": 1},
+        timeout=_TIMEOUT_SECONDS,
+    )
+    data = _response_json(response)
+    if response.status_code == 200:
+        pods = data.get("pods") if isinstance(data, dict) else None
+        if not isinstance(pods, list):
+            return _result(
+                "runpod", status="provider_error", verified=False,
+                detail="Runpod Pod-list preflight returned an invalid response.",
+                http_status=200,
+            )
+        return _result(
+            "runpod", status="verified", verified=True,
+            detail="Runpod API key can list Pods.",
+            identity={"pod_count": len(pods)}, http_status=200,
+        )
+    if response.status_code == 401:
+        return _result(
+            "runpod", status="credential_invalid", verified=False,
+            detail="Runpod rejected the configured API key.", http_status=401,
+        )
+    if response.status_code in {403, 429}:
+        return _result(
+            "runpod", status="scope_limited", verified=False,
+            detail=(
+                "Runpod received the authenticated request but access was limited. "
+                "Check API-key permissions and current rate limits."
+            ),
+            http_status=response.status_code,
+        )
+    return _result(
+        "runpod", status="provider_error", verified=False,
+        detail=f"Runpod preflight returned HTTP {response.status_code}.",
+        http_status=response.status_code,
+    )
+
+
 def _model_list_preflight(
+
     provider: str,
     *,
     url: str,
@@ -432,6 +475,7 @@ _PREFLIGHT_HANDLERS = {
     "gmail": _gmail_preflight,
     "github": _github_preflight,
     "render": _render_preflight,
+    "runpod": _runpod_preflight,
     "openai": _openai_preflight,
     "gemini": _gemini_preflight,
     "anthropic": _anthropic_preflight,

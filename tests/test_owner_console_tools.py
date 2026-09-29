@@ -51,6 +51,9 @@ def test_tools_workspace_exposes_action_controls() -> None:
     assert 'id="integration-provider"' in connections
     assert 'id="integration-list"' in connections
     assert "/tool-bootstrap/credentials/verified" in connections
+    assert 'option value="runpod">Runpod</option>' in connections
+    assert "Runpod API key" in connections
+    assert "runpod-api-key" in script
     assert "/tool-bootstrap/credentials/cleanup-invalid" in script
     assert "invalidCredentialCleanupAttempted" in script
     assert "cleanupInvalidCredentials({silent: true})" in script

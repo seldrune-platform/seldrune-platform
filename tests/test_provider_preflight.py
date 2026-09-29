@@ -26,6 +26,8 @@ def test_provider_preflight_is_non_destructive_and_redacts_credentials(
     monkeypatch,
 ) -> None:
     monkeypatch.delenv("SELDRUNE_CI_RECEIPT_HMAC_KEY", raising=False)
+    monkeypatch.delenv("SELDRUNE_RUNPOD_API_KEY", raising=False)
+    monkeypatch.delenv("RUNPOD_API_KEY", raising=False)
     monkeypatch.setenv("SELDRUNE_GMAIL_TOOL_CREDENTIAL", "gmail-secret-token")
     monkeypatch.setenv("SELDRUNE_GITHUB_TOOL_TOKEN", "github-secret-token")
     monkeypatch.setenv("SELDRUNE_RENDER_API_KEY", "render-secret-token")
@@ -83,7 +85,7 @@ def test_provider_preflight_is_non_destructive_and_redacts_credentials(
     assert response.status_code == 200
     body = response.json()
     assert body["verified"] == 2
-    assert body["total"] == 4
+    assert body["total"] == 5
 
     providers = {item["provider"]: item for item in body["providers"]}
     assert providers["gmail"]["status"] == "scope_limited"
@@ -96,6 +98,7 @@ def test_provider_preflight_is_non_destructive_and_redacts_credentials(
     assert providers["render"]["status"] == "verified"
     assert providers["render"]["identity"]["id"] == "usr-c123"
     assert providers["portable-ci"]["status"] == "not_configured"
+    assert providers["runpod"]["status"] == "not_configured"
 
     assert {
         url
@@ -274,3 +277,86 @@ def test_provider_preflight_handles_network_failure_without_leaking_secret(
     )
     assert render["status"] == "network_error"
     assert "render-network-secret" not in str(response.json())
+
+def test_runpod_preflight_checks_pods_read_only_and_redacts_key(monkeypatch) -> None:
+    observed = {}
+
+    def fake_get(url, *, headers, params, timeout):
+        observed.update(
+            url=url,
+            authorization=headers.get("Authorization"),
+            params=params,
+            timeout=timeout,
+        )
+        return _response(
+            200,
+            json_data={
+                "pods": [{"id": "pod-123", "env": {"PRIVATE_VALUE": "must-not-appear"}}],
+                "pagination": {"nextCursor": None, "hasNextPage": False},
+            },
+        )
+
+    monkeypatch.setattr(provider_preflight.httpx, "get", fake_get)
+    result = provider_preflight.preflight_provider_credential("runpod", "runpod-secret-key")
+
+    assert result["status"] == "verified"
+    assert result["verified"] is True
+    assert result["identity"] == {"pod_count": 1}
+    assert observed == {
+        "url": "https://api.runpod.io/v2/pods",
+        "authorization": "Bearer runpod-secret-key",
+        "params": {"limit": 1},
+        "timeout": provider_preflight._TIMEOUT_SECONDS,
+    }
+    assert "runpod-secret-key" not in str(result)
+    assert "must-not-appear" not in str(result)
+
+
+def test_runpod_verified_credential_is_stored_without_starting_a_pod(
+    client,
+    monkeypatch,
+) -> None:
+    observed = []
+
+    def fake_get(url, *, headers, params, timeout):
+        observed.append((url, headers.get("Authorization"), params))
+        return _response(
+            200,
+            json_data={"pods": [], "pagination": {"nextCursor": None, "hasNextPage": False}},
+        )
+
+    monkeypatch.setattr(provider_preflight.httpx, "get", fake_get)
+    token, organization_id = register_owner(client)
+    response = client.post(
+        f"/api/v1/organizations/{organization_id}/tool-bootstrap/credentials/verified",
+        headers=_headers(token),
+        json={"provider": "runpod", "secret_value": "runpod-secret-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider"] == "runpod"
+    assert body["configured"] is True
+    assert body["tool_count"] == 4
+    assert body["verification"]["status"] == "verified"
+    assert observed == [
+        (
+            "https://api.runpod.io/v2/pods",
+            "Bearer runpod-secret-key",
+            {"limit": 1},
+        )
+    ]
+    assert "runpod-secret-key" not in str(body)
+
+    tools_response = client.get(
+        f"/api/v1/organizations/{organization_id}/tools",
+        headers=_headers(token),
+    )
+    assert tools_response.status_code == 200
+    runpod_tools = {
+        item["action_name"]: item
+        for item in tools_response.json()
+        if item["provider"] == "runpod"
+    }
+    assert runpod_tools["start-pod"]["approval_mode"] == "always"
+    assert runpod_tools["stop-pod"]["approval_mode"] == "always"

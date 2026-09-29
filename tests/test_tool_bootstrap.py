@@ -14,6 +14,8 @@ _BOOTSTRAP_ENV_VARS = (
     "GITHUB_TOKEN",
     "SELDRUNE_RENDER_API_KEY",
     "RENDER_API_KEY",
+    "SELDRUNE_RUNPOD_API_KEY",
+    "RUNPOD_API_KEY",
     "SELDRUNE_CI_RECEIPT_HMAC_KEY",
 )
 
@@ -47,6 +49,7 @@ def test_tool_bootstrap_status_reports_missing_provider_secrets(
         "github",
         "portable-ci",
         "render",
+        "runpod",
     }
     assert providers["gmail"]["credential_env_locator"] == (
         "SELDRUNE_GMAIL_TOOL_CREDENTIAL"
@@ -55,6 +58,7 @@ def test_tool_bootstrap_status_reports_missing_provider_secrets(
         "SELDRUNE_GITHUB_TOOL_TOKEN"
     )
     assert providers["render"]["credential_env_locator"] == "SELDRUNE_RENDER_API_KEY"
+    assert providers["runpod"]["credential_env_locator"] == "SELDRUNE_RUNPOD_API_KEY"
     assert providers["portable-ci"]["credential_env_locator"] == (
         "SELDRUNE_CI_RECEIPT_HMAC_KEY"
     )
@@ -253,3 +257,45 @@ def test_tool_bootstrap_rejects_incomplete_github_app_bundle(
     )
     assert github["ready"] is False
     assert github["secret_available"] is False
+
+def test_runpod_environment_bootstraps_approval_gated_tools(client, monkeypatch) -> None:
+    _clear_bootstrap_env(monkeypatch)
+    monkeypatch.setenv("SELDRUNE_RUNPOD_API_KEY", "runpod-test-token")
+    token, organization_id = register_owner(client)
+
+    response = client.post(
+        f"/api/v1/organizations/{organization_id}/tool-bootstrap",
+        headers=_headers(token),
+        json={},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["created_references"] == ["runpod-api-key"]
+    runpod_tools_created = [
+        item for item in body["created_tools"] if item.startswith("runpod-")
+    ]
+    assert set(runpod_tools_created) == {
+        "runpod-list-pods",
+        "runpod-get-pod",
+        "runpod-start-pod",
+        "runpod-stop-pod",
+    }
+    assert "runpod-test-token" not in str(body)
+
+    tools_response = client.get(
+        f"/api/v1/organizations/{organization_id}/tools",
+        headers=_headers(token),
+    )
+    assert tools_response.status_code == 200
+    tools = {
+        item["action_name"]: item
+        for item in tools_response.json()
+        if item["provider"] == "runpod"
+    }
+    assert tools["list-pods"]["risk_level"] == "low"
+    assert tools["get-pod"]["risk_level"] == "low"
+    assert tools["start-pod"]["risk_level"] == "high"
+    assert tools["start-pod"]["approval_mode"] == "always"
+    assert tools["stop-pod"]["risk_level"] == "high"
+    assert tools["stop-pod"]["approval_mode"] == "always"

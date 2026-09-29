@@ -38,6 +38,7 @@ _CREDENTIAL_ENV_ALIASES: dict[str, tuple[str, ...]] = {
         "GITHUB_TOKEN",
     ),
     "render": ("SELDRUNE_RENDER_API_KEY", "RENDER_API_KEY"),
+    "runpod": ("SELDRUNE_RUNPOD_API_KEY", "RUNPOD_API_KEY"),
 }
 
 

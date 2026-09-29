@@ -37,6 +37,11 @@
       kind: "external",
       help: "Use a Render API key with the smallest access scope required.",
     },
+    runpod: {
+      label: "Runpod",
+      kind: "external",
+      help: "Use a Runpod API key. Verification only lists one Pod; start actions require Owner approval and can incur GPU charges.",
+    },
   };
 
   function isConnectionsActive() {
@@ -60,7 +65,7 @@
         '<div><p class="eyebrow">ONE SECURE ADAPTOR</p><h3>Connect or rotate a credential</h3></div>' +
         '<label>Service<select id="integration-provider" required>' +
           '<optgroup label="AI model providers"><option value="openai">OpenAI API</option><option value="gemini">Google Gemini API</option><option value="anthropic">Anthropic API</option></optgroup>' +
-          '<optgroup label="Code, email, and deploy"><option value="github">GitHub</option><option value="gmail">Gmail</option><option value="render">Render</option></optgroup>' +
+          '<optgroup label="Code, email, and deploy"><option value="github">GitHub</option><option value="gmail">Gmail</option><option value="render">Render</option></optgroup><optgroup label="GPU compute"><option value="runpod">Runpod</option></optgroup>' +
         '</select></label>' +
         '<label>Credential<input id="integration-key" type="password" required minlength="8" maxlength="20000" autocomplete="new-password" spellcheck="false" placeholder="Paste a provider API key or token"></label>' +
         '<div class="integration-form-actions"><button id="integration-save" type="submit">Verify and connect</button><button id="integration-toggle" type="button" class="ghost">Show</button></div>' +

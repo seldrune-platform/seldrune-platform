@@ -502,3 +502,148 @@ def test_github_app_private_key_requires_installation_metadata(
             },
             "-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----",
         )
+
+def test_runpod_list_pods_sanitizes_environment_and_ssh_fields(monkeypatch) -> None:
+    observed = {}
+
+    def fake_get(url, *, headers, params, timeout):
+        observed.update(url=url, authorization=headers.get("Authorization"), params=params)
+        return _response(
+            200,
+            json_data={
+                "pods": [
+                    {
+                        "id": "pod-123",
+                        "name": "deepface-test",
+                        "status": "RUNNING",
+                        "image": "runpod/pytorch:test",
+                        "env": {"RUNPOD_PRIVATE": "hidden-secret"},
+                        "ssh": {"direct": {"command": "ssh user@host"}},
+                        "gpu": {
+                            "id": "NVIDIA GeForce RTX 4090",
+                            "count": 1,
+                            "memory": 24,
+                            "vcpuCount": 8,
+                            "privateKey": "hidden-private-key",
+                        },
+                        "cost": 0.44,
+                    }
+                ],
+                "pagination": {"nextCursor": "next-page", "hasNextPage": True},
+            },
+        )
+
+    monkeypatch.setattr(external_actions.httpx, "get", fake_get)
+    output = external_actions.runpod_list_pods({"limit": 10}, "runpod-secret-token")
+
+    assert observed == {
+        "url": "https://api.runpod.io/v2/pods",
+        "authorization": "Bearer runpod-secret-token",
+        "params": {"limit": 10},
+    }
+    assert output["pods"] == [
+        {
+            "id": "pod-123",
+            "name": "deepface-test",
+            "image": "runpod/pytorch:test",
+            "status": "RUNNING",
+            "cost": 0.44,
+            "gpu": {
+                "id": "NVIDIA GeForce RTX 4090",
+                "count": 1,
+                "memory": 24,
+                "vcpuCount": 8,
+            },
+        }
+    ]
+    assert output["pagination"] == {"next_cursor": "next-page", "has_next_page": True}
+    assert "hidden-secret" not in str(output)
+    assert "hidden-private-key" not in str(output)
+    assert "ssh user@host" not in str(output)
+    assert "runpod-secret-token" not in str(output)
+
+
+def test_runpod_get_and_lifecycle_use_v2_routes(monkeypatch) -> None:
+    observed = {"gets": [], "posts": []}
+
+    def fake_get(url, *, headers, timeout, params=None):
+        observed["gets"].append((url, headers.get("Authorization")))
+        return _response(
+            200,
+            json_data={
+                "id": "pod/with space",
+                "status": "EXITED",
+                "env": {"SECRET": "hide-me"},
+                "ssh": {"direct": {"command": "ssh user@host"}},
+            },
+        )
+
+    def fake_post(url, *, headers, json, timeout):
+        observed["posts"].append((url, headers.get("Authorization"), json))
+        status = "STARTING" if json["action"] == "start" else "EXITED"
+        return _response(
+            200,
+            json_data={
+                "id": "pod/with space",
+                "status": status,
+                "env": {"SECRET": "hide-me"},
+                "ssh": {"direct": {"command": "ssh user@host"}},
+            },
+        )
+
+    monkeypatch.setattr(external_actions.httpx, "get", fake_get)
+    monkeypatch.setattr(external_actions.httpx, "post", fake_post)
+
+    details = external_actions.runpod_get_pod(
+        {"pod_id": "pod/with space"}, "runpod-secret-token"
+    )
+    started = external_actions.runpod_start_pod(
+        {"pod_id": "pod/with space"}, "runpod-secret-token"
+    )
+    stopped = external_actions.runpod_stop_pod(
+        {"pod_id": "pod/with space"}, "runpod-secret-token"
+    )
+
+    encoded_path = "pod%2Fwith%20space"
+    assert observed["gets"] == [
+        (f"https://api.runpod.io/v2/pods/{encoded_path}", "Bearer runpod-secret-token")
+    ]
+    assert observed["posts"] == [
+        (
+            f"https://api.runpod.io/v2/pods/{encoded_path}/action",
+            "Bearer runpod-secret-token",
+            {"action": "start"},
+        ),
+        (
+            f"https://api.runpod.io/v2/pods/{encoded_path}/action",
+            "Bearer runpod-secret-token",
+            {"action": "stop"},
+        ),
+    ]
+    assert details["pod"] == {"id": "pod/with space", "status": "EXITED"}
+    assert started["action"] == "start"
+    assert started["accepted"] is True
+    assert started["observed_status"] == "STARTING"
+    assert stopped["action"] == "stop"
+    assert stopped["observed_status"] == "EXITED"
+    assert "hide-me" not in str([details, started, stopped])
+    assert "ssh user@host" not in str([details, started, stopped])
+
+
+def test_runpod_catalog_requires_owner_approval_for_lifecycle_actions() -> None:
+    entries = {
+        item["action_name"]: item
+        for item in external_actions.default_external_action_catalog()
+        if item["provider"] == "runpod"
+    }
+
+    assert set(entries) == {"list-pods", "get-pod", "start-pod", "stop-pod"}
+    assert all(
+        item["credential_slug"] == "runpod-api-key"
+        and item["credential_env_locator"] == "SELDRUNE_RUNPOD_API_KEY"
+        for item in entries.values()
+    )
+    assert entries["list-pods"]["risk_level"] == "low"
+    assert entries["get-pod"]["risk_level"] == "low"
+    assert entries["start-pod"]["risk_level"] == "high"
+    assert entries["stop-pod"]["risk_level"] == "high"
