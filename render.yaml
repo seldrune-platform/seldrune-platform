@@ -96,6 +96,14 @@ services:
         value: true
       - key: SELDRUNE_OWNER_PUSH_VAPID_PUBLIC_KEY
         sync: false
+      - key: SELDRUNE_LIVESHIFT_WORKER_URL
+        sync: false
+      - key: SELDRUNE_LIVESHIFT_WORKER_TOKEN
+        sync: false
+      - key: SELDRUNE_FACESWAP_WORKER_URL
+        sync: false
+      - key: SELDRUNE_FACESWAP_WORKER_TOKEN
+        sync: false
   - type: worker
     name: seldrune-life-worker
     runtime: docker
