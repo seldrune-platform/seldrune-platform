@@ -57,6 +57,8 @@ class LiveSessionOffer(BaseModel):
     )
     consent_confirmed: bool = False
     synthetic_media_indicator_enabled: bool = False
+    marker_x: float = Field(default=1.0, ge=0.0, le=1.0, allow_inf_nan=False)
+    marker_y: float = Field(default=0.0, ge=0.0, le=1.0, allow_inf_nan=False)
     video_resolution: Literal["720p", "1080p"] = "1080p"
     target_accelerator_profile: Literal[
         "rtx-4090",
@@ -87,6 +89,8 @@ class GatewaySession(BaseModel):
     face_profile_authorized: StrictBool
     voice_profile_authorized: StrictBool
     synthetic_media_indicator_enabled: StrictBool
+    marker_x: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
+    marker_y: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
     runpod_session_connected: StrictBool
     session_ticket_validated: StrictBool
     realism_evidence_required: StrictBool
@@ -230,6 +234,8 @@ def _parse_gateway_session(
         or not result.face_profile_authorized
         or not result.voice_profile_authorized
         or not result.synthetic_media_indicator_enabled
+        or result.marker_x != payload.marker_x
+        or result.marker_y != payload.marker_y
         or not result.runpod_session_connected
         or not result.session_ticket_validated
         or not result.realism_evidence_required
@@ -402,6 +408,8 @@ async def create_liveshell_live_session(
         "voice_profile_id": payload.voice_profile_id,
         "consent_confirmed": True,
         "synthetic_media_indicator_enabled": True,
+        "marker_x": payload.marker_x,
+        "marker_y": payload.marker_y,
         "video_resolution": payload.video_resolution,
         "audio_sample_rate_hz": 48_000,
         "target_accelerator_profile": payload.target_accelerator_profile,
