@@ -7,7 +7,7 @@ from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
 from backend.app.core.config import settings
-from tests.test_autonomous_execution import client as _client
+from tests.test_autonomous_execution import client as _client  # noqa: F401
 from tests.test_autonomous_execution import register_owner
 
 
@@ -100,9 +100,7 @@ def _mcp_call(client, access_token: str, request_id: int, tool_name: str, argume
     )
 
 
-def test_oauth_pkce_and_owner_actions_keep_approval_separate(
-    _client, monkeypatch
-) -> None:  # noqa: F811
+def test_oauth_keeps_command_approval_separate(_client, monkeypatch) -> None:  # noqa: F811
     client = _client
     monkeypatch.setattr(settings, "public_app_url", "http://testserver")
     access_token, organization_id, _client_id = _connect_owner(client)
@@ -170,9 +168,7 @@ def test_oauth_pkce_and_owner_actions_keep_approval_separate(
     assert "Owner role required" in denied_org.json()["result"]["content"][0]["text"]
 
 
-def test_oauth_code_is_pkce_bound_single_use_and_refresh_replay_revokes_family(
-    _client, monkeypatch
-) -> None:  # noqa: F811
+def test_oauth_pkce_and_refresh_replay_controls(_client, monkeypatch) -> None:  # noqa: F811
     client = _client
     monkeypatch.setattr(settings, "public_app_url", "http://testserver")
     register_owner(client)
