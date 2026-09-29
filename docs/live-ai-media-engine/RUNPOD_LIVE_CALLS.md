@@ -27,9 +27,9 @@ Do not treat VRAM or a GPU model name as evidence of output quality. Compare the
 - A bounded JSON-header/binary-payload TCP framing contract for audio and video.
 - HMAC-signed, single-use session tickets with organization, user, session, and profile bindings; explicit consent and synthetic-disclosure claims; and a 15-minute lifetime cap.
 - TLS-only server startup, constant-time worker-token checking, monotonic per-track sequence checks, HD video and 48 kHz audio metadata checks, bounded in-flight work, and a multiplexed worker client.
-- A dedicated RunPod worker entrypoint that refuses to start without TLS files, strong service/ticket secrets, and async face, voice, and labeling adapters.
+- A dedicated RunPod worker entrypoint that refuses to start without TLS files, strong service/ticket secrets, and async face, voice, and disclosure-validation adapters.
 - An injected face transform, injected voice transform, and required fail-closed disclosure-validation callback. The single participant-visible marker is applied at the gateway's final outbound video boundary. Missing model adapters cannot be presented as a successful transform.
-- Unit coverage for packet limits, ticket expiry/signature/consent, profile binding, output labeling, audio/video round trips, and the TLS startup requirement.
+- Unit coverage for packet limits, ticket expiry/signature/consent, profile binding, disclosure validation plus final marker rendering, audio/video round trips, and the TLS startup requirement.
 - A strict production quality contract: the face adapter must return decoded HD dimensions, 30 fps windowed identity/temporal/blend metrics, and p95 inference evidence; the voice adapter must return decoded 48 kHz windowed speaker/content/naturalness, clipping/dropout, and p95 processing evidence.
 - The production entrypoint requires explicit evaluator-calibrated pass thresholds in `SELDRUNE_LIVE_REALISM_POLICY_JSON`. It rejects byte-only adapters, missing evidence, evidence below threshold, and per-request latency over budget. The worker client carries measured evidence with each result.
 - The strict live worker checks paired audio/video timestamps against the configured drift limit before inference and returns paired sync evidence with quality reports. `AVSyncState.validate_realism` is available to the gateway for client-side output measurements.
@@ -49,7 +49,7 @@ The dedicated live worker entrypoint is `python -m services.live_media.runpod_li
 
 - Configure a distinct RunPod image and direct TCP port for the live worker; keep HTTP port 8000 and the current batch worker intact.
 - Configure `SELDRUNE_PROFILE_AUTHORIZER=services.live_media.seldrune_profile_authorizer:authorize_profiles` plus the gateway authorization URL/token and matching backend service token. Deploy the WebRTC gateway and a distinct RunPod live-worker image with a direct TLS TCP port; keep HTTP port 8000 and the current batch worker intact. A reachable GPU worker, production transform/evaluator adapters, and authenticated TURN credentials are not configured or verified.
-- Load rights-cleared, authorized face and voice model adapters; fail readiness unless both adapters and the synthetic-video labeler are present.
+- Load rights-cleared, authorized face and voice model adapters; fail readiness unless both adapters and the disclosure validator are present.
 - Configure authenticated TURN credentials for clients whose networks cannot establish a direct WebRTC path.
 - Build the desktop companion's virtual camera and microphone path and validate the normal Teams/Zoom device selectors. Keep phone support in the browser Live Room unless a native mobile companion is built.
 - Measure sustained 720p30 and 1080p30 face output, 48 kHz voice output, p50/p95 inference and glass-to-glass latency, audio/video drift, reconnect behavior, and GPU utilization using a real authorized camera and voice profile.
