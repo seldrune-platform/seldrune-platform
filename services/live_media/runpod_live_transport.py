@@ -97,7 +97,7 @@ async def _invoke_quality_evaluator(
     media_metadata: dict[str, Any],
     processing_ms: float,
 ) -> object:
-    """Evaluate the final outbound payload after disclosure labeling."""
+    """Evaluate the transformed worker payload before the final gateway marker."""
     return await adapter(
         output_payload,
         profile_id,
@@ -552,8 +552,10 @@ class RunPodLiveWorkerServer:
                         if not isinstance(transformed, bytes) or not transformed:
                             raise RuntimeError("face transform returned no output")
 
-                        # Disclosure is part of the final outbound image, so production
-                        # quality evaluation runs after the label has been rendered.
+                        # The configured disclosure stage validates the transformed JPEG
+                        # and fails closed on bad configuration. The participant-visible
+                        # marker is rendered exactly once by the WebRTC gateway after this
+                        # worker result returns, so this stage must not add a second badge.
                         transformed = await self.label_synthetic_video(transformed)
                         transform_ms = max(
                             (perf_counter() - transform_started) * 1000, 0.001
