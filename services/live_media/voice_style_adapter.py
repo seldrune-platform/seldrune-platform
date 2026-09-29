@@ -15,8 +15,6 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from threading import Lock
 
-import numpy as np
-
 from .live_profile_store import load_voice_style
 from .openvoicechanger_pitch import PitchShifter
 
@@ -47,7 +45,7 @@ def _state_for(
             state = _FilterState(
                 previous_input=[0.0] * channels,
                 previous_low=[0.0] * channels,
-                pitch_shifters=[PitchShifter(sample_rate_hz) for _ in range(channels)],
+                pitch_shifters=[],
             )
             _STATES[key] = state
         _STATES.move_to_end(key)
@@ -93,30 +91,43 @@ def _transform_sync(
     gain = 10.0 ** (style.gain_db / 20.0)
     normalizer = math.tanh(1.1)
     output = array("h")
-    channel_audio = [
-        np.asarray(samples[channel::channels], dtype=np.float32) / 32768.0
-        for channel in range(channels)
-    ]
 
     with state.lock:
-        shifted = [
-            state.pitch_shifters[channel].process(
-                channel_audio[channel], style.pitch_semitones
+        shifted = None
+        if abs(style.pitch_semitones) >= 1e-3:
+            import numpy as np
+
+            if not state.pitch_shifters:
+                state.pitch_shifters = [
+                    PitchShifter(sample_rate_hz) for _ in range(channels)
+                ]
+            channel_audio = [
+                np.asarray(samples[channel::channels], dtype=np.float32) / 32768.0
+                for channel in range(channels)
+            ]
+            shifted = [
+                state.pitch_shifters[channel].process(
+                    channel_audio[channel], style.pitch_semitones
+                )
+                for channel in range(channels)
+            ]
+
+        for index, sample in enumerate(samples):
+            channel = index % channels
+            x = (
+                float(sample) / 32768.0
+                if shifted is None
+                else float(shifted[channel][index // channels])
             )
-            for channel in range(channels)
-        ]
-        for frame in range(len(samples) // channels):
-            for channel in range(channels):
-                x = float(shifted[channel][frame])
-                previous = state.previous_input[channel]
-                low = 0.92 * state.previous_low[channel] + 0.08 * x
-                high = x - previous
-                shaped = x + style.presence * 0.22 * high + style.warmth * 0.16 * low
-                shaped = math.tanh(shaped * gain * 1.1) / normalizer
-                shaped = max(-1.0, min(0.999969, shaped))
-                output.append(int(round(shaped * 32767.0)))
-                state.previous_input[channel] = x
-                state.previous_low[channel] = low
+            previous = state.previous_input[channel]
+            low = 0.92 * state.previous_low[channel] + 0.08 * x
+            high = x - previous
+            shaped = x + style.presence * 0.22 * high + style.warmth * 0.16 * low
+            shaped = math.tanh(shaped * gain * 1.1) / normalizer
+            shaped = max(-1.0, min(0.999969, shaped))
+            output.append(int(round(shaped * 32767.0)))
+            state.previous_input[channel] = x
+            state.previous_low[channel] = low
 
     result = _encode_pcm16(output)
     if len(result) != len(payload):

@@ -4,7 +4,15 @@ Copyright (c) 2024 Sioaeko. Licensed under the MIT License; see
 OPENVOICECHANGER-LICENSE in this directory.
 """
 
-import numpy as np
+from typing import Any
+
+
+def _numpy() -> Any:
+    try:
+        import numpy
+    except ImportError as exc:
+        raise RuntimeError("Live voice pitch shifting requires NumPy on the media worker") from exc
+    return numpy
 
 
 class PitchShifter:
@@ -18,12 +26,14 @@ class PitchShifter:
     WINDOW_SECONDS = 0.032
 
     def __init__(self, sample_rate: int) -> None:
+        self._np = _numpy()
         self.sr = int(sample_rate)
         self.win = max(64, int(self.WINDOW_SECONDS * self.sr))
-        self._hist = np.zeros(self.win + 2, dtype=np.float32)
+        self._hist = self._np.zeros(self.win + 2, dtype=self._np.float32)
         self._phase = 0.0
 
-    def process(self, audio: np.ndarray, semitones: float) -> np.ndarray:
+    def process(self, audio: Any, semitones: float) -> Any:
+        np = self._np
         if abs(semitones) < 1e-3 or len(audio) == 0:
             self._push_history(audio)
             return audio
@@ -47,7 +57,8 @@ class PitchShifter:
         self._hist = full[-(self.win + 2):]
         return (gain_a * tap_a + gain_b * tap_b).astype(np.float32)
 
-    def _push_history(self, audio: np.ndarray) -> None:
+    def _push_history(self, audio: Any) -> None:
+        np = self._np
         if len(audio) == 0:
             return
         full = np.concatenate([self._hist, audio.astype(np.float32)])
