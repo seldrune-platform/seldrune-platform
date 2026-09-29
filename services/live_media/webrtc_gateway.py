@@ -29,6 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from .aiortc_audio_track import attach_audio_track
 from .aiortc_video_track import attach_video_track
+from .output_marker import MarkerPosition, burn_marker
 from .processors import MediaFrame
 from .runpod_live_session import RunPodLiveSession
 from .runpod_live_transport import (
@@ -150,6 +151,8 @@ class CreateSessionRequest(BaseModel):
     )
     consent_confirmed: StrictBool = False
     synthetic_media_indicator_enabled: StrictBool = False
+    marker_x: float = Field(default=1.0, ge=0.0, le=1.0, allow_inf_nan=False)
+    marker_y: float = Field(default=0.0, ge=0.0, le=1.0, allow_inf_nan=False)
     video_resolution: Literal["720p", "1080p"] = "1080p"
     target_accelerator_profile: Literal[
         "rtx-4090", "rtx-pro-4500-se", "rtx-5090", "rtx-pro-6000-blackwell"
@@ -169,6 +172,8 @@ class GatewaySessionResponse(BaseModel):
     face_profile_authorized: StrictBool
     voice_profile_authorized: StrictBool
     synthetic_media_indicator_enabled: StrictBool
+    marker_x: float
+    marker_y: float
     runpod_session_connected: StrictBool
     session_ticket_validated: StrictBool
     realism_evidence_required: StrictBool
@@ -231,10 +236,11 @@ class _MediaClock:
 
 
 class _VideoCodec:
-    def __init__(self, metrics: _OutputMetrics) -> None:
+    def __init__(self, metrics: _OutputMetrics, marker_position: MarkerPosition) -> None:
         self._clock = _MediaClock()
         self._times: deque[float] = deque(maxlen=15)
         self._metrics = metrics
+        self._marker_position = marker_position
 
     async def decode(self, frame: object) -> MediaFrame:
         import numpy as np
@@ -286,7 +292,9 @@ class _VideoCodec:
                 image.load()
                 if image.size != (width, height):
                     raise ValueError("RunPod JPEG dimensions do not match worker metadata")
-                pixels = np.asarray(image.convert("RGB"))
+                # The label is applied after transformation, immediately before the
+                # encoded WebRTC sender. A client preview overlay is insufficient.
+                pixels = np.asarray(burn_marker(image, self._marker_position))
             returned = VideoFrame.from_ndarray(pixels, format="rgb24")
             returned.pts = getattr(original, "pts", None)
             returned.time_base = getattr(original, "time_base", None)
@@ -529,7 +537,9 @@ class LiveMediaGateway:
             metrics = _OutputMetrics()
             seen_tracks: set[str] = set()
             track_error: list[str] = []
-            video_codec = _VideoCodec(metrics)
+            video_codec = _VideoCodec(
+                metrics, MarkerPosition(request.marker_x, request.marker_y)
+            )
             audio_codec = _AudioCodec()
 
             def on_track(track: object) -> None:
@@ -610,6 +620,8 @@ class LiveMediaGateway:
                 face_profile_authorized=True,
                 voice_profile_authorized=True,
                 synthetic_media_indicator_enabled=True,
+                marker_x=request.marker_x,
+                marker_y=request.marker_y,
                 runpod_session_connected=True,
                 session_ticket_validated=True,
                 realism_evidence_required=True,
