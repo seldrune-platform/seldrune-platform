@@ -320,7 +320,7 @@ def test_worker_rejects_disclosure_adapter_that_mutates_video_pixels():
         )
         error = await read_message(reader)
         assert error.header["type"] == "error"
-        assert error.header["code"] == "worker_processing_failed"
+        assert error.header["code"] == "media_processing_failed"
         writer.close()
         await writer.wait_closed()
         server.close()
