@@ -27,11 +27,15 @@ def upgrade() -> None:
         sa.Column("app_pid", sa.Integer(), nullable=True),
         sa.Column("agent_version", sa.String(length=32), nullable=False),
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("uq_deepfacelive_agents_user_id", "deepfacelive_agents", ["user_id"], unique=True)
+    op.create_index(
+        "uq_deepfacelive_agents_user_id", "deepfacelive_agents", ["user_id"], unique=True
+    )
     op.create_index(
         "uq_deepfacelive_agents_token_sha256", "deepfacelive_agents", ["token_sha256"], unique=True
     )
@@ -42,12 +46,20 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Uuid(), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("consumed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("code_sha256"),
     )
-    op.create_index("ix_deepfacelive_pairing_codes_user_id", "deepfacelive_pairing_codes", ["user_id"])
-    op.create_index("ix_deepfacelive_pairing_codes_expires_at", "deepfacelive_pairing_codes", ["expires_at"])
+    op.create_index(
+        "ix_deepfacelive_pairing_codes_user_id", "deepfacelive_pairing_codes", ["user_id"]
+    )
+    op.create_index(
+        "ix_deepfacelive_pairing_codes_expires_at",
+        "deepfacelive_pairing_codes",
+        ["expires_at"],
+    )
 
     op.create_table(
         "deepfacelive_commands",
@@ -61,7 +73,9 @@ def upgrade() -> None:
         sa.Column("claimed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("lease_expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.CheckConstraint("action IN ('start', 'stop')", name="ck_deepfacelive_commands_action"),
         sa.CheckConstraint(
             "status IN ('pending', 'claimed', 'completed', 'failed', 'expired')",
@@ -71,7 +85,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_deepfacelive_commands_agent_status", "deepfacelive_commands", ["agent_id", "status", "created_at"])
+    op.create_index(
+        "ix_deepfacelive_commands_agent_status",
+        "deepfacelive_commands",
+        ["agent_id", "status", "created_at"],
+    )
     op.create_index("ix_deepfacelive_commands_user_id", "deepfacelive_commands", ["user_id"])
     op.create_index("ix_deepfacelive_commands_status", "deepfacelive_commands", ["status"])
     op.create_index("ix_deepfacelive_commands_expires_at", "deepfacelive_commands", ["expires_at"])
@@ -83,7 +101,10 @@ def downgrade() -> None:
     op.drop_index("ix_deepfacelive_commands_user_id", table_name="deepfacelive_commands")
     op.drop_index("ix_deepfacelive_commands_agent_status", table_name="deepfacelive_commands")
     op.drop_table("deepfacelive_commands")
-    op.drop_index("ix_deepfacelive_pairing_codes_expires_at", table_name="deepfacelive_pairing_codes")
+    op.drop_index(
+        "ix_deepfacelive_pairing_codes_expires_at",
+        table_name="deepfacelive_pairing_codes",
+    )
     op.drop_index("ix_deepfacelive_pairing_codes_user_id", table_name="deepfacelive_pairing_codes")
     op.drop_table("deepfacelive_pairing_codes")
     op.drop_index("uq_deepfacelive_agents_token_sha256", table_name="deepfacelive_agents")
