@@ -45,11 +45,11 @@ def _jpeg(width=1280, height=720) -> bytes:
     return buffer.getvalue()
 
 
-def test_synthetic_video_labeler_preserves_hd_geometry_and_changes_pixels():
+def test_worker_disclosure_stage_preserves_hd_geometry_without_duplicate_marker():
     source = _jpeg()
-    labeled = asyncio.run(label_jpeg(source))
-    assert labeled != source
-    with Image.open(io.BytesIO(labeled)) as image:
+    validated = asyncio.run(label_jpeg(source))
+    assert validated == source
+    with Image.open(io.BytesIO(validated)) as image:
         assert image.size == (1280, 720)
         assert image.mode == "RGB"
 
