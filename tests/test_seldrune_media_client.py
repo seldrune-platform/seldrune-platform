@@ -20,6 +20,8 @@ def test_media_client_is_available_to_seldrune_web_apps():
     assert "synthetic_media_indicator_enabled: true" in response.text
     assert "Turn on “Use Seldrune Media by default”" in response.text
     assert "This Seldrune Media default belongs to another signed-in account" in response.text
+    assert "for (const track of session.local.getTracks())" in response.text
+    assert "for (const track of local.getTracks())" not in response.text
 
 
 def test_product_studio_links_to_the_separate_media_console():
