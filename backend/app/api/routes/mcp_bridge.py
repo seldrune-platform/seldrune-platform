@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 15513)
-Total output lines: 1730
-
 from __future__ import annotations
 
 import base64
@@ -669,7 +666,425 @@ async def authorize_consent(request: Request, session: SessionDep) -> Response:
         return response
 
     raw_code = secrets.token_urlsafe(48)
-    s…3513 tokens truncated…ructive,
+    session.add(
+        MCPAuthorizationCode(
+            code_sha256=_sha256(raw_code),
+            client_id=client.client_id,
+            user_id=user.id,
+            redirect_uri=params.redirect_uri,
+            resource=params.resource,
+            scope=params.scope,
+            code_challenge=params.code_challenge,
+            code_challenge_method="S256",
+            expires_at=_now() + timedelta(seconds=AUTHORIZATION_CODE_LIFETIME_SECONDS),
+        )
+    )
+    record_audit(
+        session,
+        actor_user_id=user.id,
+        action="mcp.oauth_authorized",
+        resource_type="oauth_client",
+        resource_id=client.client_id,
+        details={"client_name": client.client_name, "scope": params.scope},
+    )
+    session.commit()
+    response = _authorization_redirect(params, code=raw_code)
+    _clear_oauth_cookies(response)
+    return response
+
+
+def _invalid_oauth(error: str) -> JSONResponse:
+    return JSONResponse(
+        {"error": error},
+        status_code=400,
+        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+    )
+
+
+def _new_refresh_token(
+    session: Session,
+    *,
+    user_id: UUID,
+    client_id: str,
+    resource: str,
+    scope: str,
+    family_id: UUID | None = None,
+) -> str:
+    token = secrets.token_urlsafe(48)
+    session.add(
+        MCPRefreshToken(
+            token_sha256=_sha256(token),
+            family_id=family_id or uuid4(),
+            user_id=user_id,
+            client_id=client_id,
+            resource=resource,
+            scope=scope,
+            expires_at=_now() + timedelta(days=settings.auth_refresh_token_days),
+        )
+    )
+    session.flush()
+    return token
+
+
+def _new_access_token(
+    *,
+    user_id: UUID,
+    client_id: str,
+    resource: str,
+    scope: str,
+) -> str:
+    now = _now()
+    return jwt.encode(
+        {
+            "sub": str(user_id),
+            "type": "mcp_access",
+            "client_id": client_id,
+            "scope": scope,
+            "aud": resource,
+            "iss": _issuer(),
+            "jti": str(uuid4()),
+            "iat": now,
+            "exp": now + timedelta(seconds=TOKEN_LIFETIME_SECONDS),
+        },
+        settings.auth_secret_key,
+        algorithm="HS256",
+    )
+
+
+def _token_response(
+    *,
+    user_id: UUID,
+    client_id: str,
+    resource: str,
+    scope: str,
+    refresh_token: str,
+) -> JSONResponse:
+    access_token = _new_access_token(
+        user_id=user_id,
+        client_id=client_id,
+        resource=resource,
+        scope=scope,
+    )
+    return JSONResponse(
+        {
+            "access_token": access_token,
+            "token_type": "Bearer",
+            "expires_in": TOKEN_LIFETIME_SECONDS,
+            "refresh_token": refresh_token,
+            "scope": scope,
+        },
+        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+    )
+
+
+@router.post("/oauth/token")
+async def exchange_oauth_token(request: Request, session: SessionDep) -> Response:
+    if request.headers.get("authorization"):
+        return _invalid_oauth("invalid_client")
+    form = await request.form()
+    values = dict(form)
+    grant_type = str(values.get("grant_type") or "")
+    client_id = str(values.get("client_id") or "")
+    if not client_id or len(client_id) > 96:
+        return _invalid_oauth("invalid_client")
+    client = session.get(MCPOAuthClient, client_id)
+    if client is None or client.token_endpoint_auth_method != "none":
+        return _invalid_oauth("invalid_client")
+
+    if grant_type == "authorization_code":
+        raw_code = str(values.get("code") or "")
+        redirect_uri = str(values.get("redirect_uri") or "")
+        verifier = str(values.get("code_verifier") or "")
+        if (
+            not raw_code
+            or len(raw_code) > 512
+            or not re.fullmatch(r"[A-Za-z0-9._~-]{43,128}", verifier)
+        ):
+            return _invalid_oauth("invalid_grant")
+        statement = select(MCPAuthorizationCode).where(
+            MCPAuthorizationCode.code_sha256 == _sha256(raw_code)
+        )
+        if session.get_bind().dialect.name != "sqlite":
+            statement = statement.with_for_update()
+        grant = session.scalar(statement)
+        if (
+            grant is None
+            or grant.consumed_at is not None
+            or _aware(grant.expires_at) <= _now()
+            or grant.client_id != client_id
+            or grant.redirect_uri != redirect_uri
+            or (
+                values.get("resource") is not None
+                and str(values.get("resource")) != grant.resource
+            )
+        ):
+            return _invalid_oauth("invalid_grant")
+        verifier_challenge = _b64url(hashlib.sha256(verifier.encode("ascii")).digest())
+        if not secrets.compare_digest(verifier_challenge, grant.code_challenge):
+            return _invalid_oauth("invalid_grant")
+        user = session.get(User, grant.user_id)
+        if user is None or not user.is_active:
+            return _invalid_oauth("invalid_grant")
+
+        grant.consumed_at = _now()
+        refresh_token = _new_refresh_token(
+            session,
+            user_id=user.id,
+            client_id=client_id,
+            resource=grant.resource,
+            scope=grant.scope,
+        )
+        result = _token_response(
+            user_id=user.id,
+            client_id=client_id,
+            resource=grant.resource,
+            scope=grant.scope,
+            refresh_token=refresh_token,
+        )
+        session.commit()
+        return result
+
+    if grant_type == "refresh_token":
+        raw_refresh = str(values.get("refresh_token") or "")
+        if (
+            not raw_refresh
+            or len(raw_refresh) > 512
+            or (
+                values.get("resource") is not None
+                and str(values.get("resource")) != _resource_url()
+            )
+        ):
+            return _invalid_oauth("invalid_grant")
+        statement = select(MCPRefreshToken).where(
+            MCPRefreshToken.token_sha256 == _sha256(raw_refresh)
+        )
+        if session.get_bind().dialect.name != "sqlite":
+            statement = statement.with_for_update()
+        grant = session.scalar(statement)
+        if grant is None or grant.client_id != client_id:
+            return _invalid_oauth("invalid_grant")
+        if grant.consumed_at is not None:
+            session.execute(
+                update(MCPRefreshToken)
+                .where(
+                    MCPRefreshToken.family_id == grant.family_id,
+                    MCPRefreshToken.revoked_at.is_(None),
+                )
+                .values(revoked_at=_now())
+            )
+            session.commit()
+            return _invalid_oauth("invalid_grant")
+        if grant.revoked_at is not None or _aware(grant.expires_at) <= _now():
+            return _invalid_oauth("invalid_grant")
+        user = session.get(User, grant.user_id)
+        if user is None or not user.is_active:
+            return _invalid_oauth("invalid_grant")
+
+        grant.consumed_at = _now()
+        refresh_token = _new_refresh_token(
+            session,
+            user_id=user.id,
+            client_id=grant.client_id,
+            resource=grant.resource,
+            scope=grant.scope,
+            family_id=grant.family_id,
+        )
+        result = _token_response(
+            user_id=user.id,
+            client_id=grant.client_id,
+            resource=grant.resource,
+            scope=grant.scope,
+            refresh_token=refresh_token,
+        )
+        session.commit()
+        return result
+
+    return _invalid_oauth("unsupported_grant_type")
+
+
+@router.post("/oauth/revoke")
+async def revoke_oauth_token(request: Request, session: SessionDep) -> Response:
+    if request.headers.get("authorization"):
+        return _invalid_oauth("invalid_client")
+    form = await request.form()
+    values = dict(form)
+    raw_token = str(values.get("token") or "")
+    client_id = str(values.get("client_id") or "")
+    if not raw_token or len(raw_token) > 4096:
+        return JSONResponse({}, status_code=200, headers={"Cache-Control": "no-store"})
+
+    refresh = session.get(MCPRefreshToken, _sha256(raw_token))
+    if refresh is not None and (not client_id or refresh.client_id == client_id):
+        session.execute(
+            update(MCPRefreshToken)
+            .where(
+                MCPRefreshToken.family_id == refresh.family_id,
+                MCPRefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=_now())
+        )
+        session.commit()
+        return JSONResponse({}, status_code=200, headers={"Cache-Control": "no-store"})
+
+    try:
+        claims = jwt.decode(
+            raw_token,
+            settings.auth_secret_key,
+            algorithms=["HS256"],
+            audience=_resource_url(),
+            issuer=_issuer(),
+        )
+        if claims.get("type") == "mcp_access" and (
+            not client_id or claims.get("client_id") == client_id
+        ):
+            user_id = UUID(str(claims["sub"]))
+            expires_at = datetime.fromtimestamp(float(claims["exp"]), tz=UTC)
+            fingerprint = access_token_fingerprint(raw_token)
+            existing = session.scalar(
+                select(RevokedAccessToken.id).where(
+                    RevokedAccessToken.token_sha256 == fingerprint
+                )
+            )
+            if existing is None:
+                session.add(
+                    RevokedAccessToken(
+                        user_id=user_id,
+                        token_sha256=fingerprint,
+                        expires_at=expires_at,
+                    )
+                )
+                session.commit()
+    except (jwt.InvalidTokenError, KeyError, TypeError, ValueError, OverflowError):
+        pass
+    return JSONResponse({}, status_code=200, headers={"Cache-Control": "no-store"})
+
+
+def _bearer_challenge(required_scope: str = OWNER_SCOPE) -> str:
+    metadata_url = _oauth_url("/.well-known/oauth-protected-resource/mcp")
+    return (
+        'Bearer error="invalid_token", error_description="Authentication required", '
+        f'resource_metadata="{metadata_url}", scope="{required_scope}"'
+    )
+
+
+def _authenticate_mcp_request(
+    request: Request,
+    session: Session,
+    required_scope: str = OWNER_SCOPE,
+) -> tuple[User, dict[str, Any]]:
+    authorization = request.headers.get("authorization", "")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token or len(token) > 4096:
+        raise HTTPException(
+            status_code=401,
+            detail="Bearer authentication required",
+            headers={"WWW-Authenticate": _bearer_challenge(required_scope)},
+        )
+    try:
+        claims = jwt.decode(
+            token,
+            settings.auth_secret_key,
+            algorithms=["HS256"],
+            audience=_resource_url(),
+            issuer=_issuer(),
+            options={"require": ["sub", "exp", "iat", "jti", "aud", "iss"]},
+        )
+        if (
+            claims.get("type") != "mcp_access"
+            or required_scope not in str(claims.get("scope", "")).split()
+        ):
+            raise jwt.InvalidTokenError("Insufficient MCP access")
+        user_id = UUID(str(claims["sub"]))
+    except (jwt.InvalidTokenError, KeyError, TypeError, ValueError):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired bearer token",
+            headers={"WWW-Authenticate": _bearer_challenge(required_scope)},
+        ) from None
+
+    fingerprint = access_token_fingerprint(token)
+    revoked = session.scalar(
+        select(RevokedAccessToken.id).where(
+            RevokedAccessToken.token_sha256 == fingerprint
+        )
+    )
+    user = session.get(User, user_id)
+    if revoked is not None or user is None or not user.is_active:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired bearer token",
+            headers={"WWW-Authenticate": _bearer_challenge(required_scope)},
+        )
+    return user, claims
+
+
+def _owner_membership(
+    session: Session,
+    user: User,
+    organization_id: str,
+) -> Membership:
+    try:
+        org_id = UUID(organization_id)
+    except (TypeError, ValueError):
+        raise ValueError("organization_id must be a UUID") from None
+    membership = session.get(Membership, (org_id, user.id))
+    if membership is None or membership.role != Role.OWNER.value:
+        raise HTTPException(status_code=403, detail="Seldrune Owner role required")
+    return membership
+
+
+def _safe_payload(value: Any) -> Any:
+    sensitive_keys = ("secret", "token", "password", "api_key", "authorization")
+    encoded = jsonable_encoder(value)
+
+    def clean(item: Any) -> Any:
+        if isinstance(item, dict):
+            return {
+                key: (
+                    "[redacted]"
+                    if any(word in str(key).lower() for word in sensitive_keys)
+                    else clean(child)
+                )
+                for key, child in item.items()
+            }
+        if isinstance(item, list):
+            return [clean(child) for child in item]
+        return item
+
+    return clean(encoded)
+
+
+def _json_text(value: Any) -> str:
+    text = json.dumps(_safe_payload(value), ensure_ascii=False, separators=(",", ":"))
+    return text if len(text) <= 300_000 else text[:300_000] + "…[truncated]"
+
+
+def _field(name: str, description: str, field_type: str = "string") -> dict[str, str]:
+    return {"type": field_type, "description": description}
+
+
+def _tool(
+    name: str,
+    description: str,
+    properties: dict[str, Any] | None = None,
+    required: list[str] | None = None,
+    *,
+    read_only: bool,
+    destructive: bool = False,
+    idempotent: bool = False,
+) -> dict[str, Any]:
+    return {
+        "name": name,
+        "description": description,
+        "inputSchema": {
+            "type": "object",
+            "properties": properties or {},
+            "required": required or [],
+            "additionalProperties": False,
+        },
+        "annotations": {
+            "readOnlyHint": read_only,
+            "destructiveHint": destructive,
             "idempotentHint": idempotent,
             "openWorldHint": False,
         },
