@@ -501,7 +501,7 @@ class RunPodLiveWorkerServer:
                 "session_id": claims.session_id,
                 "video_profile": "hd-720p30-minimum",
                 "audio_sample_rate_hz": 48000,
-                "synthetic_video_label_required": True,
+                "synthetic_disclosure_validation_required": True,
                 "realism_evidence_required": self.require_realism_evidence,
             }
             if self.actual_accelerator_profile is not None:
@@ -846,7 +846,7 @@ class RunPodLiveWorkerClient:
         if (
             ready.header.get("type") != "ready"
             or ready.header.get("session_id") != session_id
-            or ready.header.get("synthetic_video_label_required") is not True
+            or ready.header.get("synthetic_disclosure_validation_required") is not True
         ):
             writer.close()
             await writer.wait_closed()
