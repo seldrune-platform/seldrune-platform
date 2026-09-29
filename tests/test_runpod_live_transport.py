@@ -108,7 +108,7 @@ def test_control_messages_round_trip_with_binary_video_payload():
     asyncio.run(scenario())
 
 
-def test_worker_round_trips_labeled_video_and_transformed_voice():
+def test_worker_round_trips_disclosure_validated_video_and_transformed_voice():
     async def transform_face(payload, profile_id):
         return payload + b":" + profile_id.encode()
 
@@ -116,7 +116,7 @@ def test_worker_round_trips_labeled_video_and_transformed_voice():
         return payload + b":" + profile_id.encode()
 
     async def label_video(payload):
-        return b"AI-SYNTHETIC|" + payload
+        return payload
 
     async def scenario():
         worker = RunPodLiveWorkerServer(
@@ -163,11 +163,11 @@ def test_worker_round_trips_labeled_video_and_transformed_voice():
         )
         video = await read_message(reader)
         assert video.header["type"] == "result"
-        assert video.header["synthetic_label_applied"] is True
+        assert video.header["synthetic_disclosure_validated"] is True
         assert (video.header["width"], video.header["height"]) == (1080, 1920)
         assert video.header["fps"] == pytest.approx(7500 / 253)
         assert video.header["pixel_format"] == "jpeg"
-        assert video.payload == b"AI-SYNTHETIC|frame:face-test"
+        assert video.payload == b"frame:face-test"
 
         await write_message(
             writer,
@@ -270,6 +270,65 @@ def test_worker_rejects_profile_mismatch_before_transforming():
     asyncio.run(scenario())
 
 
+def test_worker_rejects_disclosure_adapter_that_mutates_video_pixels():
+    async def transform_face(payload, _profile):
+        return payload
+
+    async def transform_voice(payload, _profile):
+        return payload
+
+    async def mutating_disclosure(payload):
+        return b"badge|" + payload
+
+    async def scenario():
+        worker = RunPodLiveWorkerServer(
+            service_token=SERVICE_TOKEN,
+            ticket_secret=SIGNING_SECRET,
+            transform_face=transform_face,
+            transform_voice=transform_voice,
+            label_synthetic_video=mutating_disclosure,
+        )
+        server = await asyncio.start_server(worker.handle, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        await write_message(
+            writer,
+            {
+                "type": "hello",
+                "service_token": SERVICE_TOKEN,
+                "ticket": issue_session_ticket(make_claims(), SIGNING_SECRET),
+                "session_id": "session-test",
+            },
+        )
+        assert (await read_message(reader)).header["type"] == "ready"
+        await write_message(
+            writer,
+            {
+                "type": "request",
+                "request_id": "video-mutating-disclosure",
+                "session_id": "session-test",
+                "media_kind": "video",
+                "profile_id": "face-test",
+                "timestamp_ms": 20,
+                "sequence": 1,
+                "width": 1280,
+                "height": 720,
+                "fps": 30,
+                "pixel_format": "jpeg",
+            },
+            b"frame",
+        )
+        error = await read_message(reader)
+        assert error.header["type"] == "error"
+        assert error.header["code"] == "worker_processing_failed"
+        writer.close()
+        await writer.wait_closed()
+        server.close()
+        await server.wait_closed()
+
+    asyncio.run(scenario())
+
+
 def test_multiplexed_client_correlates_audio_and_video_results():
     async def transform_face(payload, _profile):
         await asyncio.sleep(0.01)
@@ -280,7 +339,7 @@ def test_multiplexed_client_correlates_audio_and_video_results():
         return payload + b"-voice"
 
     async def label_video(payload):
-        return b"AI-SYNTHETIC|" + payload
+        return payload
 
     async def scenario():
         worker = RunPodLiveWorkerServer(
@@ -330,7 +389,7 @@ def test_multiplexed_client_correlates_audio_and_video_results():
                 )
             ),
         )
-        assert video.payload == b"AI-SYNTHETIC|frame-face"
+        assert video.payload == b"frame-face"
         assert video.timestamp_ms == 20
         assert video.pixel_format == "jpeg"
         assert (video.width, video.height, video.fps) == (1280, 720, 30.0)
@@ -406,7 +465,7 @@ def test_strict_worker_requires_and_returns_realism_evidence():
         )
 
     async def label_video(payload):
-        return b"AI-SYNTHETIC|" + payload
+        return payload
 
     async def scenario():
         worker = RunPodLiveWorkerServer(
@@ -471,7 +530,7 @@ def test_strict_worker_requires_and_returns_realism_evidence():
             ),
         )
         assert video.quality_evidence["media_kind"] == "video"
-        assert video.payload == b"AI-SYNTHETIC|frame-face"
+        assert video.payload == b"frame-face"
         assert (video.width, video.height, video.fps) == (1280, 720, 30.0)
         assert audio.quality_evidence["evaluator_id"] == "voice-eval"
         assert audio.payload == b"audio-voice"
