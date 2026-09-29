@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 from PIL import Image, ImageDraw, ImageFont
 
+from .synthetic_disclosure import get_visible_disclosure_label
+
 
 @dataclass(frozen=True)
 class MarkerPosition:
@@ -16,8 +18,10 @@ class MarkerPosition:
     y: float = 0.0
 
     def __post_init__(self) -> None:
-        if any(not isinstance(v, (int, float)) or not math.isfinite(v) or not 0 <= v <= 1
-               for v in (self.x, self.y)):
+        if any(
+            not isinstance(v, (int, float)) or not math.isfinite(v) or not 0 <= v <= 1
+            for v in (self.x, self.y)
+        ):
             raise ValueError("marker coordinates must be finite numbers between zero and one")
 
 
@@ -32,13 +36,20 @@ def marker_bounds(width: int, height: int, position: MarkerPosition) -> tuple[in
     return left, top, left + badge_width, top + badge_height
 
 
+def marker_label() -> str:
+    """Return the same fail-closed disclosure wording used by the media worker."""
+    return get_visible_disclosure_label()
+
+
 def burn_marker(image: Image.Image, position: MarkerPosition) -> Image.Image:
     """Return an RGB image with an opaque, visible label; never modify source media."""
     result = image.convert("RGB")
     bounds = marker_bounds(*result.size, position)
     draw = ImageDraw.Draw(result)
-    draw.rounded_rectangle(bounds, radius=8, fill=(9, 18, 33), outline=(245, 249, 255), width=2)
-    label = "AI-MODIFIED"
+    draw.rounded_rectangle(
+        bounds, radius=8, fill=(9, 18, 33), outline=(245, 249, 255), width=2
+    )
+    label = marker_label()
     size = max(16, min(30, round(result.height * 0.024)))
     font = ImageFont.load_default(size=size)
     box = draw.textbbox((0, 0), label, font=font)
