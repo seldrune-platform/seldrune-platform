@@ -103,11 +103,65 @@ def test_voice_style_transform_is_real_time_shape_preserving(tmp_path, monkeypat
         transform_voice(
             source,
             "voice-1",
-            media_metadata={"sample_rate_hz": 48000, "channels": 1},
+            media_metadata={"session_id": "session-1", "sample_rate_hz": 48000, "channels": 1},
         )
     )
     assert len(output) == len(source)
     assert output != source
+
+
+
+def test_voice_style_filter_state_is_isolated_by_session(tmp_path, monkeypatch):
+    root = tmp_path / "profiles"
+    profile = root / "generic-style"
+    profile.mkdir(parents=True)
+    (profile / "voice-style.json").write_text(
+        json.dumps({"gain_db": 0.0, "presence": 0.4, "warmth": 0.3}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("SELDRUNE_LIVE_PROFILE_ROOT", str(root))
+    source = array("h", [10000] * 960).tobytes()
+
+    def run(session_id):
+        return asyncio.run(
+            transform_voice(
+                source,
+                "generic-style",
+                media_metadata={
+                    "session_id": session_id,
+                    "sample_rate_hz": 48000,
+                    "channels": 1,
+                },
+            )
+        )
+
+    a_first = run("a")
+    b_first = run("b")
+    a_second = run("a")
+    c_first = run("c")
+    assert a_first == b_first == c_first
+    assert a_second != a_first
+    assert len(a_second) == len(source)
+
+
+def test_voice_style_requires_live_session_id(tmp_path, monkeypatch):
+    root = tmp_path / "profiles"
+    profile = root / "generic-style"
+    profile.mkdir(parents=True)
+    (profile / "voice-style.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("SELDRUNE_LIVE_PROFILE_ROOT", str(root))
+    try:
+        asyncio.run(
+            transform_voice(
+                array("h", [1000] * 960).tobytes(),
+                "generic-style",
+                media_metadata={"sample_rate_hz": 48000, "channels": 1},
+            )
+        )
+    except ValueError as exc:
+        assert "session id" in str(exc)
+    else:
+        raise AssertionError("unscoped voice filter state must fail closed")
 
 
 def test_quality_warmup_is_explicit_instead_of_faking_full_windows():
