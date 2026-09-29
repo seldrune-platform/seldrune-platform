@@ -152,7 +152,6 @@ def _load_config() -> tuple[dict, str, Path]:
         config = json.loads(_config_path().read_text(encoding="utf-8"))
         token = _dpapi(base64.b64decode(config["token_dpapi"]), decrypt=True).decode("utf-8")
         install_dir = Path(config["install_dir"]).resolve()
-        server = str(config["server"]).rstrip("/")
     except FileNotFoundError:
         raise RuntimeError("Pair this computer first with the `pair` command.") from None
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
