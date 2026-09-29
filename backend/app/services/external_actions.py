@@ -1572,7 +1572,9 @@ DEFAULT_EXTERNAL_ACTION_CATALOG: tuple[dict[str, Any], ...] = (
         "name": "Runpod · Get Pod", "default_tool_slug": "runpod-get-pod",
         "credential_slug": "runpod-api-key", "credential_name": "Runpod API key",
         "credential_env_locator": "SELDRUNE_RUNPOD_API_KEY",
-        "description": "Read safe Pod metadata without returning environment values or SSH credentials.",
+        "description": (
+            "Read safe Pod metadata without returning environment values or SSH credentials."
+        ),
         "risk_level": "low",
         "input_schema": {
             "type": "object",
@@ -1585,7 +1587,9 @@ DEFAULT_EXTERNAL_ACTION_CATALOG: tuple[dict[str, Any], ...] = (
         "name": "Runpod · Start Pod", "default_tool_slug": "runpod-start-pod",
         "credential_slug": "runpod-api-key", "credential_name": "Runpod API key",
         "credential_env_locator": "SELDRUNE_RUNPOD_API_KEY",
-        "description": "Start a Runpod Pod. This can incur GPU charges and always requires owner approval.",
+        "description": (
+            "Start a Runpod Pod. This can incur GPU charges and always requires owner approval."
+        ),
         "risk_level": "high",
         "input_schema": {
             "type": "object",
@@ -1598,7 +1602,9 @@ DEFAULT_EXTERNAL_ACTION_CATALOG: tuple[dict[str, Any], ...] = (
         "name": "Runpod · Stop Pod", "default_tool_slug": "runpod-stop-pod",
         "credential_slug": "runpod-api-key", "credential_name": "Runpod API key",
         "credential_env_locator": "SELDRUNE_RUNPOD_API_KEY",
-        "description": "Stop a Runpod Pod and interrupt its work. This always requires owner approval.",
+        "description": (
+            "Stop a Runpod Pod and interrupt its work. This always requires owner approval."
+        ),
         "risk_level": "high",
         "input_schema": {
             "type": "object",

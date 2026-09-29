@@ -258,6 +258,7 @@ def test_tool_bootstrap_rejects_incomplete_github_app_bundle(
     assert github["ready"] is False
     assert github["secret_available"] is False
 
+
 def test_runpod_environment_bootstraps_approval_gated_tools(client, monkeypatch) -> None:
     _clear_bootstrap_env(monkeypatch)
     monkeypatch.setenv("SELDRUNE_RUNPOD_API_KEY", "runpod-test-token")

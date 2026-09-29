@@ -503,6 +503,7 @@ def test_github_app_private_key_requires_installation_metadata(
             "-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----",
         )
 
+
 def test_runpod_list_pods_sanitizes_environment_and_ssh_fields(monkeypatch) -> None:
     observed = {}
 

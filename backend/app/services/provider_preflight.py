@@ -392,7 +392,6 @@ def _runpod_preflight(credential: str) -> dict[str, Any]:
 
 
 def _model_list_preflight(
-
     provider: str,
     *,
     url: str,

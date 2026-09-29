@@ -278,6 +278,7 @@ def test_provider_preflight_handles_network_failure_without_leaking_secret(
     assert render["status"] == "network_error"
     assert "render-network-secret" not in str(response.json())
 
+
 def test_runpod_preflight_checks_pods_read_only_and_redacts_key(monkeypatch) -> None:
     observed = {}
 
