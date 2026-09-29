@@ -43,6 +43,7 @@
   const markerPositionStorageKey = 'seldrune.liveShell.markerPosition';
   let markerPosition = null;
   let markerDrag = null;
+  let markerLocked = false;
 
   try {
     const savedPosition = JSON.parse(localStorage.getItem(markerPositionStorageKey) || 'null');
@@ -104,6 +105,7 @@
     if (!wrap || !badge) return;
 
     badge.addEventListener('pointerdown', event => {
+      if (markerLocked) return;
       if (event.pointerType === 'mouse' && event.button !== 0) return;
       event.preventDefault();
       const rect = badge.getBoundingClientRect();
@@ -137,6 +139,7 @@
     badge.addEventListener('lostpointercapture', finishMarkerDrag);
 
     badge.addEventListener('keydown', event => {
+      if (markerLocked) return;
       const step = 12;
       const movement = {
         ArrowLeft: [-step, 0],
@@ -345,6 +348,8 @@
 
     state.browserDecodedVideo = null;
     state.outputProfile = null;
+    markerLocked = true;
+    q('#synthetic-badge').setAttribute('aria-disabled', 'true');
     q('#connect-button').disabled = true;
     q('#preview-button').disabled = true;
     q('#synthetic-indicator').disabled = true;
@@ -406,6 +411,8 @@
         voice_profile_id: q('#voice-profile').value.trim(),
         consent_confirmed: true,
         synthetic_media_indicator_enabled: true,
+        marker_x: markerPosition ? markerPosition.x : 1,
+        marker_y: markerPosition ? markerPosition.y : 0,
         video_resolution: q('#resolution').value,
         target_accelerator_profile: q('#gpu-target').value,
       };
@@ -470,6 +477,8 @@
     state.sessionId = '';
     state.browserDecodedVideo = null;
     state.outputProfile = null;
+    markerLocked = false;
+    q('#synthetic-badge').setAttribute('aria-disabled', 'false');
     if (state.peer) {
       state.peer.getSenders().forEach(sender => sender.track && sender.track.stop());
       state.peer.close();
@@ -597,4 +606,3 @@
   });
   initialize();
 })();
-
