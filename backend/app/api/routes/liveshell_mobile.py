@@ -26,6 +26,7 @@ live_run_dependency = require_org_permission(Permission.AGENTS_RUN)
 LiveRunDep = Annotated[Membership, Depends(live_run_dependency)]
 
 
+@page_router.get("/media", include_in_schema=False)
 @page_router.get("/liveshell/mobile", include_in_schema=False)
 def liveshell_mobile_page() -> FileResponse:
     return FileResponse(

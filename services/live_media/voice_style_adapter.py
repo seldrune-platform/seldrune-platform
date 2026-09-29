@@ -1,8 +1,8 @@
-"""48 kHz low-latency voice styling that preserves the enrolled speaker identity.
+"""48 kHz live voice styling that preserves the speaker's identity.
 
 This built-in adapter intentionally does not clone another person's voice. It
-provides a real live voice transformation path using bounded EQ/dynamics-like
-styling while keeping sample count, channel count, and timing unchanged.
+provides optional model-free pitch shifting plus bounded tonal/dynamic styling
+while keeping sample count, channel count, and packet duration unchanged.
 """
 
 from __future__ import annotations
@@ -15,13 +15,17 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from threading import Lock
 
+import numpy as np
+
 from .live_profile_store import load_voice_style
+from .openvoicechanger_pitch import PitchShifter
 
 
 @dataclass
 class _FilterState:
     previous_input: list[float]
     previous_low: list[float]
+    pitch_shifters: list[PitchShifter]
     lock: Lock = field(default_factory=Lock)
 
 
@@ -30,7 +34,12 @@ _STATES: OrderedDict[tuple[str, str, int], _FilterState] = OrderedDict()
 _STATES_LOCK = Lock()
 
 
-def _state_for(session_id: str, profile_id: str, channels: int) -> _FilterState:
+def _state_for(
+    session_id: str,
+    profile_id: str,
+    channels: int,
+    sample_rate_hz: int,
+) -> _FilterState:
     key = (session_id, profile_id, channels)
     with _STATES_LOCK:
         state = _STATES.get(key)
@@ -38,6 +47,7 @@ def _state_for(session_id: str, profile_id: str, channels: int) -> _FilterState:
             state = _FilterState(
                 previous_input=[0.0] * channels,
                 previous_low=[0.0] * channels,
+                pitch_shifters=[PitchShifter(sample_rate_hz) for _ in range(channels)],
             )
             _STATES[key] = state
         _STATES.move_to_end(key)
@@ -79,24 +89,34 @@ def _transform_sync(
         raise ValueError("PCM payload is not aligned to the declared channel count")
 
     style = load_voice_style(profile_id)
-    state = _state_for(session_id, profile_id, channels)
+    state = _state_for(session_id, profile_id, channels, sample_rate_hz)
     gain = 10.0 ** (style.gain_db / 20.0)
     normalizer = math.tanh(1.1)
     output = array("h")
+    channel_audio = [
+        np.asarray(samples[channel::channels], dtype=np.float32) / 32768.0
+        for channel in range(channels)
+    ]
 
     with state.lock:
-        for index, sample in enumerate(samples):
-            channel = index % channels
-            x = float(sample) / 32768.0
-            previous = state.previous_input[channel]
-            low = 0.92 * state.previous_low[channel] + 0.08 * x
-            high = x - previous
-            shaped = x + style.presence * 0.22 * high + style.warmth * 0.16 * low
-            shaped = math.tanh(shaped * gain * 1.1) / normalizer
-            shaped = max(-1.0, min(0.999969, shaped))
-            output.append(int(round(shaped * 32767.0)))
-            state.previous_input[channel] = x
-            state.previous_low[channel] = low
+        shifted = [
+            state.pitch_shifters[channel].process(
+                channel_audio[channel], style.pitch_semitones
+            )
+            for channel in range(channels)
+        ]
+        for frame in range(len(samples) // channels):
+            for channel in range(channels):
+                x = float(shifted[channel][frame])
+                previous = state.previous_input[channel]
+                low = 0.92 * state.previous_low[channel] + 0.08 * x
+                high = x - previous
+                shaped = x + style.presence * 0.22 * high + style.warmth * 0.16 * low
+                shaped = math.tanh(shaped * gain * 1.1) / normalizer
+                shaped = max(-1.0, min(0.999969, shaped))
+                output.append(int(round(shaped * 32767.0)))
+                state.previous_input[channel] = x
+                state.previous_low[channel] = low
 
     result = _encode_pcm16(output)
     if len(result) != len(payload):

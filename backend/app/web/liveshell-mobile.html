@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#080b14">
-  <title>LiveShell Mobile Studio · Seldrune</title>
+  <title>Seldrune Media Console</title>
   <link rel="stylesheet" href="/console-assets/liveshell-mobile.css">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/console"><span class="mark">S</span><span>SELDRUNE</span></a>
-    <span class="product-mark">LIVESHELL · MOBILE STUDIO</span>
+    <span class="product-mark">MEDIA CONSOLE</span>
     <a class="top-link" href="/liveshell/profiles">Profile authorization</a>
     <a class="top-link" href="/liveshell/faceswap/mobile">FaceSwap Studio</a>
     <a class="top-link" href="/web/products.html">Products</a>
@@ -20,8 +20,8 @@
     <section class="intro panel">
       <div>
         <p class="eyebrow">PHONE CAMERA + CLOUD GPU</p>
-        <h1>Live face &amp; voice studio</h1>
-        <p class="intro-copy">Use an authorized face and voice profile. Your phone captures the camera and microphone; the configured GPU gateway returns the transformed WebRTC stream.</p>
+        <h1>Live face &amp; voice camera</h1>
+        <p class="intro-copy">Use approved face and voice profiles. Seldrune sends your camera and microphone directly to its private GPU gateway and returns a labeled live stream.</p>
       </div>
       <div id="gateway-state" class="gateway-state" role="status" aria-live="polite">
         Checking session gateway…
@@ -38,13 +38,14 @@
     <section class="studio-grid">
       <form id="session-form" class="panel controls">
         <div class="section-heading">
-          <div><p class="eyebrow">SESSION SETUP</p><h2>Authorized profiles</h2></div>
+          <div><p class="eyebrow">SESSION SETUP</p><h2>Approved profiles</h2></div>
           <span class="secure-pill">ORG RUN PERMISSION REQUIRED</span>
         </div>
-        <label for="face-profile">Enrolled face profile ID</label>
+        <label for="face-profile">Approved face profile ID</label>
         <input id="face-profile" name="face-profile" autocomplete="off" required maxlength="100" pattern="[A-Za-z0-9][A-Za-z0-9._:-]*" placeholder="face-profile-id">
-        <label for="voice-profile">Enrolled voice profile ID</label>
+        <label for="voice-profile">Approved voice profile ID</label>
         <input id="voice-profile" name="voice-profile" autocomplete="off" required maxlength="100" pattern="[A-Za-z0-9][A-Za-z0-9._:-]*" placeholder="voice-profile-id">
+        <p class="privacy-note">The approved voice profile can apply its private real-time pitch and tone preset. This changes the enrolled speaker’s voice; it does not imitate another person.</p>
 
         <div class="two-col">
           <div>
@@ -71,10 +72,15 @@
           <label class="check-row"><input id="voice-consent" type="checkbox"><span>I have authorization to use the selected voice profile.</span></label>
           <label class="check-row"><input id="synthetic-indicator" type="checkbox"><span>Keep the AI-modified indicator enabled for this live session. It stays on until the session ends.</span></label>
         </fieldset>
+        <fieldset class="consent-box">
+          <legend>Seldrune app camera and mic</legend>
+          <label class="check-row"><input id="default-media" type="checkbox"><span>Use this approved, labeled media for compatible Seldrune web apps on this device.</span></label>
+          <p class="privacy-note">The app must load the Seldrune Media client. A GPU session starts only when the app asks for camera or microphone. The client uses both devices and only gives the app the track it requested.</p>
+        </fieldset>
 
         <div class="action-row">
           <button id="preview-button" class="button secondary" type="button">Preview camera &amp; mic</button>
-          <button id="connect-button" class="button primary" type="submit" disabled>Start LiveShell</button>
+          <button id="connect-button" class="button primary" type="submit" disabled>Start live session</button>
           <button id="stop-button" class="button danger" type="button" disabled>Stop session</button>
         </div>
         <button id="switch-camera" class="text-button" type="button" disabled>Switch front / rear camera</button>
@@ -113,6 +119,7 @@
       </section>
     </section>
   </main>
+  <script src="/console-assets/seldrune-media.js" defer></script>
   <script src="/console-assets/liveshell-mobile.js" defer></script>
 </body>
 </html>

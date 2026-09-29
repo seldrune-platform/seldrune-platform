@@ -84,6 +84,15 @@ similarity, latency or production readiness from signaling alone.
 Install only the media dependencies with the gateway Dockerfile. The normal Seldrune
 API image remains independent of aiortc.
 
+## Voice styling
+
+`voice_style_adapter.py` supports bounded live PCM styling and per-profile
+`pitch_semitones` controls from -8 to +8. Its streaming pitch shifter is adapted
+from the locally available MIT-licensed OpenVoiceChanger source; see
+`OPENVOICECHANGER-LICENSE`. This is a same-speaker effect and does not synthesize
+or imitate a different enrolled speaker. Set the value in the private
+`voice-style.json` for that approved profile.
+
 
 ## Change the visible disclosure wording
 

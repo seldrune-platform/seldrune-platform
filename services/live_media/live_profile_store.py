@@ -14,11 +14,12 @@ _FACE_NAMES = ("face.jpg", "face.jpeg", "face.png", "face.webp")
 
 @dataclass(frozen=True)
 class VoiceStyleProfile:
-    """Low-latency non-identity voice styling controls."""
+    """Low-latency, non-identity voice styling controls."""
 
     gain_db: float = 0.0
     presence: float = 0.0
     warmth: float = 0.0
+    pitch_semitones: float = 0.0
 
     def validate(self) -> None:
         if not -6.0 <= self.gain_db <= 6.0:
@@ -27,6 +28,8 @@ class VoiceStyleProfile:
             raise ValueError("voice style presence must be between -1 and 1")
         if not -1.0 <= self.warmth <= 1.0:
             raise ValueError("voice style warmth must be between -1 and 1")
+        if not -8.0 <= self.pitch_semitones <= 8.0:
+            raise ValueError("voice style pitch must be between -8 and 8 semitones")
 
 
 def profile_root() -> Path:
@@ -71,7 +74,7 @@ def load_voice_style(profile_id: str) -> VoiceStyleProfile:
         raise ValueError("voice style profile is unreadable") from exc
     if not isinstance(value, dict):
         raise ValueError("voice style profile must be a JSON object")
-    allowed = {"gain_db", "presence", "warmth"}
+    allowed = {"gain_db", "presence", "warmth", "pitch_semitones"}
     if set(value).difference(allowed):
         raise ValueError("voice style profile contains unsupported controls")
     try:
@@ -79,6 +82,7 @@ def load_voice_style(profile_id: str) -> VoiceStyleProfile:
             gain_db=float(value.get("gain_db", 0.0)),
             presence=float(value.get("presence", 0.0)),
             warmth=float(value.get("warmth", 0.0)),
+            pitch_semitones=float(value.get("pitch_semitones", 0.0)),
         )
     except (TypeError, ValueError) as exc:
         raise ValueError("voice style controls must be numeric") from exc

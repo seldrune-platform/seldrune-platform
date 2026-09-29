@@ -2,11 +2,11 @@
 
 ## What this change adds
 
-The Seldrune owner can open the mobile studio at /liveshell/mobile, preview a phone camera and microphone, choose a 720p or 1080p capture target, select an RTX 4090 or RTX 5090 worker target, and negotiate a WebRTC session through Seldrune's authenticated API. Camera switching is supported on mobile browsers.
+The Seldrune owner can open the Media Console at /media (/liveshell/mobile remains an alias), preview a phone camera and microphone, choose a 720p or 1080p capture target, select a supported GPU target, and negotiate a WebRTC session through Seldrune's authenticated API. Camera switching is supported on mobile browsers.
 
 Seldrune proxies only WebRTC signaling. When a gateway is configured, camera and microphone media flow directly between the browser and the GPU gateway. The mobile page keeps a visible synthetic-media badge on transformed output. A worker must independently confirm that both submitted profiles are authorized and that its synthetic-media indicator is enabled; the API rejects a response that omits any of those confirmations.
 
-The page distinguishes requested settings from returned measurements. Merely configuring a gateway does not mark HD output or production readiness as verified.
+The page distinguishes requested settings from returned measurements. Compatible same-origin Seldrune web apps can load /console-assets/seldrune-media.js to request the same approved, labeled camera and microphone stream by default. The app-cloning code does not currently inject this client automatically, so a cloned app's entry page must include it. Merely configuring a gateway does not mark HD output or production readiness as verified.
 
 ## GPU profile targets
 

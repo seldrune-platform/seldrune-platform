@@ -332,6 +332,72 @@
     }
   }
 
+  function restoreMediaDefault() {
+    const saved = window.SeldruneMedia && window.SeldruneMedia.getDefault();
+    if (!saved) return;
+    if (saved.organizationId !== state.organizationId || saved.userId !== state.userId) {
+      window.SeldruneMedia.clearDefault();
+      return;
+    }
+    q('#face-profile').value = saved.faceProfileId || '';
+    q('#voice-profile').value = saved.voiceProfileId || '';
+    q('#resolution').value = saved.videoResolution || '1080p';
+    q('#gpu-target').value = saved.targetAcceleratorProfile || 'rtx-4090';
+    q('#default-media').checked = true;
+  }
+
+  async function updateMediaDefault() {
+    if (!q('#default-media').checked) {
+      if (window.SeldruneMedia) window.SeldruneMedia.clearDefault();
+      showStatus('Default media for compatible Seldrune apps is off.', 'success');
+      return;
+    }
+    try {
+      if (!state.organizationId || !state.userId) {
+        throw new Error('Sign in through Seldrune before saving a media default.');
+      }
+      if (!q('#face-consent').checked || !q('#voice-consent').checked ||
+          !q('#synthetic-indicator').checked) {
+        throw new Error('Confirm both profile authorizations and keep the synthetic-media indicator on.');
+      }
+      const faceProfileId = q('#face-profile').value.trim();
+      const voiceProfileId = q('#voice-profile').value.trim();
+      if (!faceProfileId || !voiceProfileId) {
+        throw new Error('Enter both approved profile IDs before saving a media default.');
+      }
+      const grants = await api('/organizations/' + state.organizationId + '/liveshift/profile-authorizations');
+      const approved = (kind, profileId) => grants.some(item =>
+        item.user_id === state.userId && item.profile_kind === kind &&
+        item.profile_id === profileId && item.status === 'approved'
+      );
+      if (!approved('face', faceProfileId) || !approved('voice', voiceProfileId)) {
+        throw new Error('Both profiles need current owner/admin approval before they can be a default.');
+      }
+      window.SeldruneMedia.setDefault({
+        organizationId: state.organizationId,
+        userId: state.userId,
+        faceProfileId,
+        voiceProfileId,
+        videoResolution: q('#resolution').value,
+        targetAcceleratorProfile: q('#gpu-target').value,
+        consentConfirmed: true,
+        syntheticMediaIndicatorEnabled: true,
+      });
+      showStatus('Default saved. Compatible Seldrune apps will start a labeled GPU session when they request camera or microphone.', 'success');
+    } catch (error) {
+      q('#default-media').checked = false;
+      if (window.SeldruneMedia) window.SeldruneMedia.clearDefault();
+      showStatus(error.message, 'error');
+    }
+  }
+
+  function clearMediaDefaultOnEdit() {
+    if (!q('#default-media').checked) return;
+    q('#default-media').checked = false;
+    if (window.SeldruneMedia) window.SeldruneMedia.clearDefault();
+    showStatus('Media default cleared because the selected profiles or quality target changed.', '');
+  }
+
   async function startLive(event) {
     event.preventDefault();
     if (!state.gatewayConfigured) {
@@ -576,6 +642,7 @@
       if (!membership) throw new Error('No Seldrune organization is available for this account.');
       state.organizationId = membership.organization.id;
       state.userId = me.user.id;
+      restoreMediaDefault();
       const readiness = await api('/organizations/' + state.organizationId + '/liveshift/live/readiness');
       state.gatewayConfigured = Boolean(readiness.gateway_configured);
       if (state.gatewayConfigured) {
@@ -600,6 +667,10 @@
   q('#preview-button').addEventListener('click', preview);
   q('#stop-button').addEventListener('click', () => stopLive(true, true));
   q('#switch-camera').addEventListener('click', switchCamera);
+  q('#default-media').addEventListener('change', updateMediaDefault);
+  ['#face-profile', '#voice-profile', '#resolution', '#gpu-target'].forEach(selector => {
+    q(selector).addEventListener('change', clearMediaDefaultOnEdit);
+  });
   installMarkerPositionControl();
   window.addEventListener('pagehide', () => {
     if (state.disconnectTimer) clearTimeout(state.disconnectTimer);
