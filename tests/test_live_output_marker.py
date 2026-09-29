@@ -2,10 +2,17 @@
 
 import unittest
 from dataclasses import FrozenInstanceError
+from unittest.mock import patch
 
 from PIL import Image
 
-from services.live_media.output_marker import MarkerPosition, burn_marker, marker_bounds
+from services.live_media import synthetic_disclosure
+from services.live_media.output_marker import (
+    MarkerPosition,
+    burn_marker,
+    marker_bounds,
+    marker_label,
+)
 
 
 class OutputMarkerTests(unittest.TestCase):
@@ -20,6 +27,22 @@ class OutputMarkerTests(unittest.TestCase):
             MarkerPosition(float("nan"), 0)
         with self.assertRaises(FrozenInstanceError):
             top_right.x = 0
+
+    def test_marker_uses_shared_fail_closed_disclosure_wording(self):
+        self.assertEqual(marker_label(), "AI MODIFIED")
+        with patch.object(
+            synthetic_disclosure,
+            "VISIBLE_DISCLOSURE_LABEL",
+            "SYNTHETIC MEDIA",
+        ):
+            self.assertEqual(marker_label(), "SYNTHETIC MEDIA")
+        with patch.object(
+            synthetic_disclosure,
+            "VISIBLE_DISCLOSURE_LABEL",
+            "hidden",
+        ):
+            with self.assertRaisesRegex(ValueError, "approved visible disclosure"):
+                marker_label()
 
     def test_marker_is_in_returned_pixels_and_source_stays_unmodified(self):
         original = Image.new("RGB", (1280, 720), (70, 90, 110))
