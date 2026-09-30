@@ -480,7 +480,7 @@ def _worker_ssl_context() -> ssl.SSLContext:
     """Verify RunPod TLS with system roots and an optional operator-managed CA."""
     ca_pem = os.getenv("SELDRUNE_LIVE_WORKER_CA_PEM", "").strip()
     if ca_pem:
-        ca_pem = ca_pem.replace("\\\\n", "\\n")
+        ca_pem = ca_pem.replace("\\n", "\n")
         try:
             return ssl.create_default_context(cadata=ca_pem)
         except (ssl.SSLError, ValueError) as exc:
