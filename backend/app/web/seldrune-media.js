@@ -166,7 +166,8 @@
         check();
       };
       const onConnection = () => {
-        if (session.peer.connectionState === 'failed') {
+        if (session.peer.connectionState === 'failed' ||
+            session.peer.connectionState === 'closed') {
           cleanup();
           reject(new Error('The Seldrune Media WebRTC connection failed.'));
         }
@@ -179,27 +180,36 @@
 
   function closeRemote(session) {
     if (!session) return Promise.resolve();
-    if (session.closePromise) return session.closePromise;
-    session.closePromise = (async () => {
-      if (session.peer && session.peer.signalingState !== 'closed') session.peer.close();
-      if (session.local) session.local.getTracks().forEach(track => track.stop());
-      if (session.output) session.output.getTracks().forEach(track => track.stop());
-      if (session.sessionId) {
-        const path = '/organizations/' + encodeURIComponent(session.organizationId) +
-          '/liveshift/live/sessions/' + encodeURIComponent(session.sessionId);
-        await api(path, {method: 'DELETE'}).catch(() => null);
-      }
-      if (activeSession === session) activeSession = null;
-    })();
-    return session.closePromise;
+    if (activeSession === session) activeSession = null;
+    if (!session.closePromise) {
+      session.closePromise = (async () => {
+        if (session.peer && session.peer.signalingState !== 'closed') session.peer.close();
+        if (session.local) session.local.getTracks().forEach(track => track.stop());
+        if (session.output) session.output.getTracks().forEach(track => track.stop());
+      })();
+    }
+    // The worker can be created by an in-flight POST after stop() starts. Keep
+    // DELETE independent so a later closeRemote() still releases that session.
+    if (session.sessionId && !session.remoteClosePromise) {
+      const path = '/organizations/' + encodeURIComponent(session.organizationId) +
+        '/liveshift/live/sessions/' + encodeURIComponent(session.sessionId);
+      session.remoteClosePromise = api(path, {method: 'DELETE'}).catch(() => null);
+    }
+    return Promise.all([
+      session.closePromise,
+      session.remoteClosePromise || Promise.resolve(),
+    ]);
   }
 
-  async function openSession(constraints, config) {
+  async function openSession(constraints, config, attempt) {
     if (!nativeGetUserMedia || typeof RTCPeerConnection === 'undefined' ||
         typeof MediaStream === 'undefined') {
       throw new Error('This browser does not support Seldrune Media WebRTC.');
     }
 
+    const ensureNotStopped = () => {
+      if (attempt.cancelled) throw new Error('The Seldrune Media request was stopped.');
+    };
     const session = {
       organizationId: config.organizationId,
       configKey: JSON.stringify(config),
@@ -208,9 +218,12 @@
       peer: null,
       sessionId: '',
       closePromise: null,
+      remoteClosePromise: null,
     };
+    attempt.session = session;
     try {
       const me = await api('/auth/me');
+      ensureNotStopped();
       const membership = (me.memberships || []).find(item =>
         item.organization && item.organization.id === config.organizationId
       );
@@ -222,6 +235,7 @@
       }
       const grants = await api('/organizations/' + encodeURIComponent(config.organizationId) +
         '/liveshift/profile-authorizations');
+      ensureNotStopped();
       const approved = (kind, profileId) => grants.some(item =>
         item.user_id === userId && item.profile_kind === kind &&
         item.profile_id === profileId && item.status === 'approved'
@@ -231,15 +245,27 @@
       }
       const readiness = await api('/organizations/' + encodeURIComponent(config.organizationId) +
         '/liveshift/live/readiness');
+      ensureNotStopped();
       if (!readiness.gateway_configured) {
         throw new Error('The private Seldrune GPU gateway is not connected yet.');
       }
       const ice = await api('/organizations/' + encodeURIComponent(config.organizationId) +
         '/liveshift/live/ice-servers');
+      ensureNotStopped();
       if (!ice || !Array.isArray(ice.ice_servers) || !ice.ice_servers.length) {
         throw new Error('The Seldrune Media gateway did not provide ICE servers.');
       }
-      session.local = await nativeGetUserMedia(captureConstraints(constraints, config));
+      const capture = nativeGetUserMedia(captureConstraints(constraints, config));
+      capture.then(stream => {
+        if (attempt.cancelled) stream.getTracks().forEach(track => track.stop());
+      }).catch(() => null);
+      session.local = await Promise.race([
+        capture,
+        attempt.cancelledPromise.then(() => {
+          throw new Error('The Seldrune Media request was stopped.');
+        }),
+      ]);
+      ensureNotStopped();
       session.peer = new RTCPeerConnection({iceServers: ice.ice_servers});
       for (const track of session.local.getTracks()) {
         session.peer.addTrack(track, session.local);
@@ -248,8 +274,11 @@
         if (!session.output.getTracks().includes(event.track)) session.output.addTrack(event.track);
       });
       const offer = await session.peer.createOffer();
+      ensureNotStopped();
       await session.peer.setLocalDescription(offer);
+      ensureNotStopped();
       await waitForIce(session.peer, 10000);
+      ensureNotStopped();
       const result = await api('/organizations/' + encodeURIComponent(config.organizationId) +
         '/liveshift/live/sessions', {
           method: 'POST',
@@ -266,8 +295,11 @@
           }),
         });
       session.sessionId = result.session_id;
+      ensureNotStopped();
       await session.peer.setRemoteDescription(result.answer);
+      ensureNotStopped();
       await waitForOutput(session, {audio: true, video: true}, 20000);
+      ensureNotStopped();
       session.peer.addEventListener('connectionstatechange', () => {
         if (session.peer.connectionState === 'failed' ||
             session.peer.connectionState === 'closed') closeRemote(session);
@@ -298,14 +330,35 @@
     if (activeSession) await closeRemote(activeSession);
     if (pendingSession && pendingSession.key === configKey) return pendingSession.promise;
     if (pendingSession) {
-      const previous = await pendingSession.promise.catch(() => null);
+      const previousAttempt = pendingSession;
+      previousAttempt.cancel();
+      const previous = await previousAttempt.promise.catch(() => null);
       if (previous) await closeRemote(previous);
     }
-    const promise = openSession(constraints, config);
-    pendingSession = {key: configKey, promise};
+    let resolveCancellation;
+    const attempt = {
+      key: configKey,
+      cancelled: false,
+      session: null,
+      promise: null,
+      cancelledPromise: new Promise(resolve => { resolveCancellation = resolve; }),
+      cancel() {
+        if (attempt.cancelled) return;
+        attempt.cancelled = true;
+        resolveCancellation();
+      },
+    };
+    const promise = openSession(constraints, config, attempt);
+    attempt.promise = promise;
+    pendingSession = attempt;
     try {
-      activeSession = await promise;
-      return activeSession;
+      const session = await promise;
+      if (attempt.cancelled || pendingSession !== attempt) {
+        await closeRemote(session);
+        throw new Error('The Seldrune Media request was stopped.');
+      }
+      activeSession = session;
+      return session;
     } finally {
       if (pendingSession && pendingSession.promise === promise) pendingSession = null;
     }
@@ -374,10 +427,17 @@
   }
 
   async function stop() {
+    const pending = pendingSession;
+    pendingSession = null;
+    if (pending) pending.cancel();
     const session = activeSession;
+    activeSession = null;
     consumerTracks.forEach(track => track.stop());
     consumerTracks.clear();
-    await closeRemote(session);
+    await Promise.all([
+      closeRemote(session),
+      closeRemote(pending && pending.session),
+    ]);
   }
 
   function uninstallDefault() {
