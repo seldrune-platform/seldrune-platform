@@ -79,6 +79,54 @@ class IceServer:
             raise ValueError("TURN username and credential must be supplied together")
 
 
+
+
+def _turn_transport(url: str) -> str | None:
+    scheme, _, rest = url.partition(":")
+    scheme = scheme.lower()
+    if scheme == "turns":
+        return "tcp"
+    if scheme != "turn":
+        return None
+    query = rest.partition("?")[2]
+    for parameter in query.split("&"):
+        key, separator, value = parameter.partition("=")
+        if separator and key.casefold() == "transport":
+            return value.casefold()
+    return "udp"
+
+
+def _select_gateway_turn_transport(
+    servers: list[IceServer], transport: Literal["udp", "tcp"]
+) -> list[IceServer]:
+    stun_servers: list[IceServer] = []
+    turn_options: list[tuple[int, str, IceServer]] = []
+    for server in servers:
+        stun_urls = [
+            url for url in server.urls if url.lower().startswith(("stun:", "stuns:"))
+        ]
+        if stun_urls:
+            stun_servers.append(IceServer(stun_urls))
+        for url in server.urls:
+            if _turn_transport(url) != transport:
+                continue
+            preference = 0 if transport == "tcp" and url.lower().startswith("turns:") else 1
+            turn_options.append((preference, url, server))
+    if not turn_options:
+        raise GatewayUnavailable(
+            f"TURN provider did not return a {transport.upper()} relay for the gateway"
+        )
+    _, selected_url, selected_server = min(turn_options, key=lambda item: item[0])
+    return [
+        *stun_servers,
+        IceServer(
+            [selected_url],
+            selected_server.username,
+            selected_server.credential,
+        ),
+    ]
+
+
 @dataclass(frozen=True)
 class GatewaySettings:
     http_service_token: str
@@ -98,6 +146,7 @@ class GatewaySettings:
     cloudflare_turn_key_id: str | None = None
     cloudflare_turn_api_token: str | None = None
     turn_credential_ttl_seconds: int = DEFAULT_TURN_CREDENTIAL_TTL_SECONDS
+    gateway_turn_transport: Literal["provider", "udp", "tcp"] = "provider"
 
     def __post_init__(self) -> None:
         for name, value in (
@@ -117,6 +166,8 @@ class GatewaySettings:
             raise ValueError("session lifetime must be between one minute and one day")
         if self.turn_provider not in {"coturn", "cloudflare"}:
             raise ValueError("TURN provider must be coturn or cloudflare")
+        if self.gateway_turn_transport not in {"provider", "udp", "tcp"}:
+            raise ValueError("gateway TURN transport must be provider, udp, or tcp")
         if not self.ice_servers and self.turn_provider != "cloudflare":
             raise ValueError("at least one ICE server is required")
         if self.turn_provider == "coturn":
@@ -501,7 +552,14 @@ class LiveMediaGateway:
         return result
 
     async def _ice_servers_for_session(self) -> list[IceServer]:
-        return [*self.settings.ice_servers, *await self._turn_ice_servers(uuid4().hex)]
+        servers = [
+            *self.settings.ice_servers,
+            *await self._turn_ice_servers(uuid4().hex),
+        ]
+        transport = self.settings.gateway_turn_transport
+        if transport == "provider":
+            return servers
+        return _select_gateway_turn_transport(servers, transport)
 
     async def _connect_worker(self, **kwargs: Any) -> RunPodLiveSession:
         return await RunPodLiveSession.connect(
@@ -768,6 +826,9 @@ def gateway_from_environment() -> LiveMediaGateway:
     if not authorizer_spec:
         raise RuntimeError("SELDRUNE_PROFILE_AUTHORIZER is not configured")
     turn_provider = setting("SELDRUNE_LIVE_TURN_PROVIDER") or "coturn"
+    gateway_turn_transport = (
+        setting("SELDRUNE_LIVE_GATEWAY_TURN_TRANSPORT") or "provider"
+    )
     ice_raw = setting("SELDRUNE_LIVE_ICE_SERVERS_JSON")
     ice_servers = (
         _parse_ice_servers(ice_raw)
@@ -803,6 +864,7 @@ def gateway_from_environment() -> LiveMediaGateway:
             setting("SELDRUNE_LIVE_TURN_CREDENTIAL_TTL_SECONDS")
             or str(DEFAULT_TURN_CREDENTIAL_TTL_SECONDS)
         ),
+        gateway_turn_transport=gateway_turn_transport,
     )
     return LiveMediaGateway(
         settings,
