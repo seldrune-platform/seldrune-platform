@@ -199,7 +199,9 @@
   function classifyOutputKind(request, mode = creationMode) {
     const text = `${mode === 'any' ? '' : mode} ${request}`.toLowerCase();
     if (/\b(game|playable|gameplay|level design)\b/.test(text)) return 'game';
-    if (/\b(app|application|website|web app|software|program|script|source code|coding)\b/.test(text)) return 'app';
+    const mediaForExistingApp = /\b(song|music|lyrics|soundtrack|audio|video|film|movie|clip|storyboard|image|illustration|picture|visual|poster|artwork)\b.{0,60}\b(?:for|about)\s+(?:(?:my|our|the|an?)\s+)?(?:app|application|website|web app)\b/.test(text);
+    const appIntent = /\b(app|application|website|web app|software|program|source code|coding)\b/.test(text) && !mediaForExistingApp;
+    if (appIntent) return 'app';
     if (/\b(song|music|lyrics|soundtrack|audio)\b/.test(text)) return 'song';
     if (/\b(video|film|movie|clip|storyboard)\b/.test(text)) return 'video';
     if (/\b(image|illustration|picture|visual|poster|artwork|3d scene|3d model)\b/.test(text)) return 'visual';
