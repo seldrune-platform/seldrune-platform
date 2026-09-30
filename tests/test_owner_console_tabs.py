@@ -63,6 +63,25 @@ def test_creation_forge_routes_typed_projects_through_the_cognitive_operator():
     assert ".gpt-creation-forge" in styles
 
 
+def test_creation_forge_app_intent_precedes_media_keyword_classification():
+    script = (WEB / "seldrune-gpt.js").read_text()
+    classifier = script.split(
+        "function classifyOutputKind(request, mode = creationMode) {", 1
+    )[1].split("\n  function titleFromRequest", 1)[0]
+    game = classifier.index(r"/\b(game|playable|gameplay|level design)\b/.test(text)")
+    app = classifier.index(
+        r"/\b(app|application|website|web app|software|program|script|source code|coding)\b/.test(text)"
+    )
+    song = classifier.index(r"/\b(song|music|lyrics|soundtrack|audio)\b/.test(text)")
+    video = classifier.index(r"/\b(video|film|movie|clip|storyboard)\b/.test(text)")
+    visual = classifier.index(
+        r"/\b(image|illustration|picture|visual|poster|artwork|3d scene|3d model)\b/.test(text)"
+    )
+    assert game < app < song
+    assert app < video
+    assert app < visual
+
+
 def test_portal_controller_defines_owner_workspaces_and_fixed_home():
     js = (WEB / "console-cosmic-tabs.js").read_text()
     for workspace in (
