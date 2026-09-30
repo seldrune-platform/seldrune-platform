@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from services.live_media.runpod_live_transport import _invoke_transform
+from services.live_media import runpod_live_worker as worker_module
 from services.live_media.runpod_live_worker import detect_actual_accelerator_profile
 
 
@@ -64,3 +65,30 @@ def test_unknown_or_missing_cuda_hardware_is_not_advertised(monkeypatch):
     cuda.is_available = lambda: False
     with pytest.raises(RuntimeError, match="CUDA accelerator"):
         detect_actual_accelerator_profile()
+
+
+
+def test_worker_reads_runpod_secret_prefix_with_direct_env_precedence(monkeypatch):
+    name = "SELDRUNE_LIVE_WORKER_TOKEN"
+    monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv(f"RUNPOD_SECRET_{name}", "  runpod-secret  ")
+    assert worker_module._required_setting(name) == "runpod-secret"
+
+    monkeypatch.setenv(name, "direct-value")
+    assert worker_module._required_setting(name) == "direct-value"
+
+
+def test_inline_tls_pem_is_opened_from_anonymous_file():
+    if not hasattr(worker_module.os, "memfd_create"):
+        pytest.skip("Linux anonymous files are required")
+    fds = []
+    pem = "-----BEGIN CERTIFICATE-----\\nYWJj\\n-----END CERTIFICATE-----"
+    path = worker_module._tls_material_path(pem, "test-cert", fds)
+    try:
+        with open(path, encoding="utf-8") as handle:
+            assert handle.read() == (
+                "-----BEGIN CERTIFICATE-----\\nYWJj\\n-----END CERTIFICATE-----"
+            ).replace("\\n", "\n")
+    finally:
+        for fd in fds:
+            worker_module.os.close(fd)
