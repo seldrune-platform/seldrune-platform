@@ -476,6 +476,18 @@ def _default_description_factory(sdp: str, kind: str) -> object:
     return RTCSessionDescription(sdp=sdp, type=kind)
 
 
+def _worker_ssl_context() -> ssl.SSLContext:
+    """Verify RunPod TLS with system roots and an optional operator-managed CA."""
+    ca_pem = os.getenv("SELDRUNE_LIVE_WORKER_CA_PEM", "").strip()
+    if ca_pem:
+        ca_pem = ca_pem.replace("\\\\n", "\\n")
+        try:
+            return ssl.create_default_context(cadata=ca_pem)
+        except (ssl.SSLError, ValueError) as exc:
+            raise RuntimeError("configured RunPod worker CA is invalid") from exc
+    return ssl.create_default_context()
+
+
 class LiveMediaGateway:
     """Authorize, connect, and own WebRTC/RunPod sessions in one process."""
 
@@ -571,7 +583,7 @@ class LiveMediaGateway:
             face_profile_id=kwargs["face_profile_id"],
             voice_profile_id=kwargs["voice_profile_id"],
             region=self.settings.worker_region,
-            ssl_context=ssl.create_default_context(),
+            ssl_context=_worker_ssl_context(),
             server_hostname=self.settings.worker_tls_server_name,
             max_inflight=self.settings.max_inflight,
         )
