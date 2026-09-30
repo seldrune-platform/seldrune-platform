@@ -52,6 +52,10 @@ def test_creation_forge_routes_typed_projects_through_the_cognitive_operator():
         assert f"    {mode}: {{" in script
     assert 'id="seldrune-gpt-creation-status"' in html
     assert "buildCreativeOrder(request)" in script
+    assert '/console-assets/seldrune-media.js' in script
+    assert 'data-default="true"' in script
+    assert "authenticated Seldrune origin" in script
+    assert "never silently use raw device media as a fallback" in script
     assert "order: buildCreativeOrder(request)" in script
     assert "cannot render audio" in script
     assert "cannot render video" in script
