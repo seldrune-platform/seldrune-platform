@@ -24,6 +24,38 @@ WORKER_TOKEN = "w" * 40
 TICKET_SECRET = "s" * 48
 
 
+
+def test_worker_tls_context_uses_system_roots_by_default(monkeypatch):
+    calls = []
+    context = object()
+
+    monkeypatch.delenv("SELDRUNE_LIVE_WORKER_CA_PEM", raising=False)
+    monkeypatch.setattr(
+        gateway_module.ssl,
+        "create_default_context",
+        lambda **kwargs: calls.append(kwargs) or context,
+    )
+
+    assert gateway_module._worker_ssl_context() is context
+    assert calls == [{}]
+
+
+def test_worker_tls_context_adds_operator_ca_without_disabling_verification(monkeypatch):
+    ca_pem = "-----BEGIN CERTIFICATE-----\\npublic-test-ca\\n-----END CERTIFICATE-----"
+    calls = []
+    context = object()
+
+    monkeypatch.setenv("SELDRUNE_LIVE_WORKER_CA_PEM", ca_pem)
+    monkeypatch.setattr(
+        gateway_module.ssl,
+        "create_default_context",
+        lambda **kwargs: calls.append(kwargs) or context,
+    )
+
+    assert gateway_module._worker_ssl_context() is context
+    assert calls == [{"cadata": ca_pem.replace("\\n", "\n")}]
+
+
 class FakePeer:
     def __init__(self):
         self.handlers = {}
