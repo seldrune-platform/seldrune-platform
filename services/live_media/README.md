@@ -62,6 +62,46 @@ reconnection within that window preserves the call. Failed or closed peers
 release immediately. The browser uses the same grace window and stops local
 camera and microphone capture when the connection does not return.
 
+## RunPod Pod deployment settings
+
+The live worker is a long-running Pod service on TCP port 8765. Use a RunPod API key
+only from the operator or deployment environment for creating/managing the Pod; the
+key is not a Pod runtime variable and must not be placed in the image or worker secrets.
+
+In RunPod **Credentials → Secrets**, create these entries. RunPod requires names to
+start with `RUNPOD_SECRET_`; the worker resolves that prefix automatically:
+
+| RunPod secret name | Value |
+| --- | --- |
+| `RUNPOD_SECRET_SELDRUNE_LIVE_WORKER_TOKEN` | At least 32 random bytes; must match the gateway's `SELDRUNE_LIVE_WORKER_TOKEN`. |
+| `RUNPOD_SECRET_SELDRUNE_LIVE_TICKET_SECRET` | At least 32 random bytes; must match the gateway's `SELDRUNE_LIVE_TICKET_SECRET`. |
+| `RUNPOD_SECRET_SELDRUNE_LIVE_TLS_CERT` | TLS certificate chain PEM for the worker hostname. |
+| `RUNPOD_SECRET_SELDRUNE_LIVE_TLS_KEY` | Matching unencrypted private-key PEM. |
+
+Inline TLS PEM is loaded through an anonymous in-memory file; alternatively, set the
+unprefixed `SELDRUNE_LIVE_TLS_CERT` and `SELDRUNE_LIVE_TLS_KEY` variables to mounted
+certificate file paths. The certificate hostname must match the gateway's
+`SELDRUNE_LIVE_WORKER_TLS_NAME`.
+
+Set these non-secret Pod environment values to the import paths and policy supplied by
+the deployment:
+
+- `SELDRUNE_FACE_TRANSFORM_ADAPTER`
+- `SELDRUNE_VOICE_TRANSFORM_ADAPTER`
+- `SELDRUNE_SYNTHETIC_VIDEO_LABELER`
+- `SELDRUNE_FACE_QUALITY_EVALUATOR`
+- `SELDRUNE_VOICE_QUALITY_EVALUATOR`
+- `SELDRUNE_LIVE_REALISM_POLICY_JSON`
+- `SELDRUNE_LIVE_WORKER_HOST=0.0.0.0`
+- `SELDRUNE_LIVE_WORKER_PORT=8765`
+
+Adapter and evaluator values must resolve to installed async callables, and the
+transform adapter modules must each expose an async `prepare_profile` function.
+Mount reviewed private profile media at `/workspace/seldrune-live-profiles`; do not
+put profile media in the image. Expose the worker's TCP port 8765 to the gateway,
+use a certificate valid for the exposed hostname, and provision an accelerator that
+the worker recognizes before enabling live sessions.
+
 ## RunPod worker wire format
 
 The WebRTC gateway sends raw media bytes through the authenticated worker protocol:
