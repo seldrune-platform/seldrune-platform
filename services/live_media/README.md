@@ -29,6 +29,7 @@ Configure these gateway environment variables:
 | `SELDRUNE_LIVE_WORKER_HOST` | Private or public DNS name for the worker's TLS TCP listener. |
 | `SELDRUNE_LIVE_WORKER_PORT` | Worker TCP port (default 8765). |
 | `SELDRUNE_LIVE_WORKER_TLS_NAME` | Expected certificate hostname; defaults to the worker host. |
+| `SELDRUNE_LIVE_WORKER_CA_PEM` | Optional public PEM trust anchor for an operator-managed RunPod certificate authority. TLS hostname and certificate verification stay enabled. Never put the CA private key here. |
 | `SELDRUNE_LIVE_WORKER_REGION` | Worker region label bound to the session. |
 | `SELDRUNE_LIVE_ICE_SERVERS_JSON` | Optional JSON array of STUN entries and gateway-only static ICE entries. Do not put static TURN entries here when dynamic TURN is enabled. |
 | `SELDRUNE_LIVE_TURN_PROVIDER` | `coturn` (default) or `cloudflare`. Cloudflare issues short-lived credentials from the gateway. |
