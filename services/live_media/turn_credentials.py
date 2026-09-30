@@ -159,7 +159,7 @@ def _validate_cloudflare_ice_servers(
         has_server_stun = False
         for url in urls:
             if re.fullmatch(
-                r"stun:stun\\.cloudflare\\.com(?::[0-9]{1,5})?",
+                r"stun:stun\.cloudflare\.com(?::[0-9]{1,5})?",
                 url,
                 flags=re.IGNORECASE,
             ):
