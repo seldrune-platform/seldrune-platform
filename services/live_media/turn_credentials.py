@@ -156,14 +156,13 @@ def _validate_cloudflare_ice_servers(
 
         validated_urls: list[str] = []
         has_server_turn = False
-        has_server_stun = False
         for url in urls:
             if re.fullmatch(
                 r"stun:stun\.cloudflare\.com(?::[0-9]{1,5})?",
                 url,
                 flags=re.IGNORECASE,
             ):
-                has_stun = has_server_stun = True
+                has_stun = True
             elif url.lower().startswith(("turn:", "turns:")):
                 try:
                     validate_turn_urls([url])
