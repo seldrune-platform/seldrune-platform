@@ -24,6 +24,16 @@ def test_media_client_is_available_to_seldrune_web_apps():
     assert "for (const track of local.getTracks())" not in response.text
 
 
+def test_media_client_stop_cancels_a_pending_camera_session():
+    response = TestClient(app).get("/console-assets/seldrune-media.js")
+
+    assert response.status_code == 200
+    assert "pending.cancel()" in response.text
+    assert "attempt.cancelledPromise" in response.text
+    assert "pendingSession !== attempt" in response.text
+    assert "remoteClosePromise" in response.text
+
+
 def test_product_studio_links_to_the_separate_media_console():
     response = TestClient(app).get("/web/products.html")
 
