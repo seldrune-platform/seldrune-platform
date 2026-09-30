@@ -39,8 +39,10 @@ from .runpod_live_transport import (
 )
 from .transport_metadata import DeliveredAudioMetadata, DeliveredVideoMetadata
 from .turn_credentials import (
+    CloudflareTurnError,
     DEFAULT_TURN_CREDENTIAL_TTL_SECONDS,
     MAX_TURN_CREDENTIAL_TTL_SECONDS,
+    issue_cloudflare_turn_credentials,
     issue_turn_credentials,
     validate_turn_urls,
 )
@@ -92,6 +94,9 @@ class GatewaySettings:
     session_ttl_seconds: int = 3600
     turn_urls: list[str] = field(default_factory=list)
     turn_shared_secret: str | None = None
+    turn_provider: Literal["coturn", "cloudflare"] = "coturn"
+    cloudflare_turn_key_id: str | None = None
+    cloudflare_turn_api_token: str | None = None
     turn_credential_ttl_seconds: int = DEFAULT_TURN_CREDENTIAL_TTL_SECONDS
 
     def __post_init__(self) -> None:
@@ -110,21 +115,42 @@ class GatewaySettings:
             raise ValueError("gateway capacity is outside the supported range")
         if not 60 <= self.session_ttl_seconds <= 24 * 60 * 60:
             raise ValueError("session lifetime must be between one minute and one day")
-        if not self.ice_servers:
+        if self.turn_provider not in {"coturn", "cloudflare"}:
+            raise ValueError("TURN provider must be coturn or cloudflare")
+        if not self.ice_servers and self.turn_provider != "cloudflare":
             raise ValueError("at least one ICE server is required")
-        if self.turn_urls:
-            validate_turn_urls(self.turn_urls)
-        if bool(self.turn_urls) != bool(self.turn_shared_secret):
-            raise ValueError("TURN URLs and shared secret must be configured together")
-        if self.turn_shared_secret and len(self.turn_shared_secret.encode("utf-8")) < 32:
-            raise ValueError("TURN shared secret must contain at least 32 bytes")
+        if self.turn_provider == "coturn":
+            if self.turn_urls:
+                validate_turn_urls(self.turn_urls)
+            if bool(self.turn_urls) != bool(self.turn_shared_secret):
+                raise ValueError("TURN URLs and shared secret must be configured together")
+            if self.turn_shared_secret and len(self.turn_shared_secret.encode("utf-8")) < 32:
+                raise ValueError("TURN shared secret must contain at least 32 bytes")
+            if self.cloudflare_turn_key_id or self.cloudflare_turn_api_token:
+                raise ValueError("Cloudflare TURN settings require the cloudflare provider")
+        else:
+            if (
+                not isinstance(self.cloudflare_turn_key_id, str)
+                or re.fullmatch(r"[0-9a-fA-F]{32}", self.cloudflare_turn_key_id) is None
+            ):
+                raise ValueError("Cloudflare TURN key ID must contain 32 hexadecimal characters")
+            if (
+                not isinstance(self.cloudflare_turn_api_token, str)
+                or len(self.cloudflare_turn_api_token.encode("utf-8")) < 32
+            ):
+                raise ValueError("Cloudflare TURN API token must contain at least 32 bytes")
+            if self.turn_urls or self.turn_shared_secret:
+                raise ValueError("Cloudflare TURN cannot be combined with Coturn settings")
         if not 60 <= self.turn_credential_ttl_seconds <= MAX_TURN_CREDENTIAL_TTL_SECONDS:
             raise ValueError("TURN credential lifetime is outside the supported range")
-        if self.turn_urls and self.turn_credential_ttl_seconds < self.session_ttl_seconds + 300:
+        if (
+            (self.turn_urls or self.turn_provider == "cloudflare")
+            and self.turn_credential_ttl_seconds < self.session_ttl_seconds + 300
+        ):
             raise ValueError(
                 "TURN credentials must cover the session lifetime plus five minutes"
             )
-        if self.turn_urls and any(
+        if (self.turn_urls or self.turn_provider == "cloudflare") and any(
             url.lower().startswith(("turn:", "turns:"))
             for server in self.ice_servers
             for url in server.urls
@@ -426,7 +452,27 @@ class LiveMediaGateway:
             supplied, self.settings.http_service_token
         )
 
-    def _turn_ice_servers(self, subject: str) -> list[IceServer]:
+    async def _turn_ice_servers(self, subject: str) -> list[IceServer]:
+        if self.settings.turn_provider == "cloudflare":
+            try:
+                issued = await asyncio.to_thread(
+                    issue_cloudflare_turn_credentials,
+                    self.settings.cloudflare_turn_key_id or "",
+                    self.settings.cloudflare_turn_api_token or "",
+                    ttl_seconds=self.settings.turn_credential_ttl_seconds,
+                )
+            except CloudflareTurnError as exc:
+                raise GatewayUnavailable(
+                    "TURN credential provider is unavailable"
+                ) from exc
+            return [
+                IceServer(
+                    item["urls"],
+                    item.get("username"),
+                    item.get("credential"),
+                )
+                for item in issued["ice_servers"]
+            ]
         if not self.settings.turn_urls or not self.settings.turn_shared_secret:
             return []
         issued = issue_turn_credentials(
@@ -438,7 +484,7 @@ class LiveMediaGateway:
         item = issued["ice_servers"][0]
         return [IceServer(item["urls"], item["username"], item["credential"])]
 
-    def browser_ice_servers(self) -> list[IceServer]:
+    async def browser_ice_servers(self) -> list[IceServer]:
         """Return public STUN entries and freshly issued, expiring TURN credentials."""
         stun_urls = [
             url
@@ -447,13 +493,15 @@ class LiveMediaGateway:
             if url.lower().startswith(("stun:", "stuns:"))
         ]
         result = [IceServer(stun_urls)] if stun_urls else []
-        result.extend(self._turn_ice_servers(uuid4().hex))
+        for item in await self._turn_ice_servers(uuid4().hex):
+            if item not in result:
+                result.append(item)
         if not result:
             raise GatewayUnavailable("no browser-safe ICE servers are configured")
         return result
 
-    def _ice_servers_for_session(self) -> list[IceServer]:
-        return [*self.settings.ice_servers, *self._turn_ice_servers(uuid4().hex)]
+    async def _ice_servers_for_session(self) -> list[IceServer]:
+        return [*self.settings.ice_servers, *await self._turn_ice_servers(uuid4().hex)]
 
     async def _connect_worker(self, **kwargs: Any) -> RunPodLiveSession:
         return await RunPodLiveSession.connect(
@@ -533,7 +581,7 @@ class LiveMediaGateway:
                     "RunPod worker did not attest the selected accelerator"
                 )
 
-            peer = self.peer_factory(self._ice_servers_for_session())
+            peer = self.peer_factory(await self._ice_servers_for_session())
             metrics = _OutputMetrics()
             seen_tracks: set[str] = set()
             track_error: list[str] = []
@@ -719,10 +767,17 @@ def gateway_from_environment() -> LiveMediaGateway:
     authorizer_spec = setting("SELDRUNE_PROFILE_AUTHORIZER")
     if not authorizer_spec:
         raise RuntimeError("SELDRUNE_PROFILE_AUTHORIZER is not configured")
+    turn_provider = setting("SELDRUNE_LIVE_TURN_PROVIDER") or "coturn"
     ice_raw = setting("SELDRUNE_LIVE_ICE_SERVERS_JSON")
-    ice_servers = _parse_ice_servers(ice_raw) if ice_raw else [
-        IceServer(["stun:stun.l.google.com:19302"])
-    ]
+    ice_servers = (
+        _parse_ice_servers(ice_raw)
+        if ice_raw
+        else (
+            []
+            if turn_provider == "cloudflare"
+            else [IceServer(["stun:stun.l.google.com:19302"])]
+        )
+    )
     turn_urls_raw = setting("SELDRUNE_LIVE_TURN_URLS_JSON")
     turn_urls = _parse_turn_urls(turn_urls_raw) if turn_urls_raw else []
     turn_shared_secret = setting("SELDRUNE_LIVE_TURN_SHARED_SECRET")
@@ -741,6 +796,9 @@ def gateway_from_environment() -> LiveMediaGateway:
         session_ttl_seconds=int(setting("SELDRUNE_LIVE_SESSION_TTL_SECONDS") or "3600"),
         turn_urls=turn_urls,
         turn_shared_secret=turn_shared_secret or None,
+        turn_provider=turn_provider,
+        cloudflare_turn_key_id=setting("SELDRUNE_CLOUDFLARE_TURN_KEY_ID") or None,
+        cloudflare_turn_api_token=setting("SELDRUNE_CLOUDFLARE_TURN_API_TOKEN") or None,
         turn_credential_ttl_seconds=int(
             setting("SELDRUNE_LIVE_TURN_CREDENTIAL_TTL_SECONDS")
             or str(DEFAULT_TURN_CREDENTIAL_TTL_SECONDS)
@@ -804,7 +862,7 @@ def create_app(gateway: LiveMediaGateway | None = None) -> FastAPI:
                     **({"username": item.username, "credential": item.credential}
                        if item.username is not None else {}),
                 }
-                for item in current.browser_ice_servers()
+                for item in await current.browser_ice_servers()
             ]
         except GatewayUnavailable as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
