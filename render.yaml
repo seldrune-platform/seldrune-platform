@@ -237,6 +237,8 @@ services:
         sync: false
       - key: SELDRUNE_LIVE_TURN_PROVIDER
         value: cloudflare
+      - key: SELDRUNE_LIVE_GATEWAY_TURN_TRANSPORT
+        value: tcp
       - key: SELDRUNE_CLOUDFLARE_TURN_KEY_ID
         sync: false
       - key: SELDRUNE_CLOUDFLARE_TURN_API_TOKEN
