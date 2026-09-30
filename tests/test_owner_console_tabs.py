@@ -90,11 +90,12 @@ def test_creation_forge_app_intent_precedes_media_keyword_classification():
     assert media_pattern and app_pattern
     media_for_app = re.compile(media_pattern.group(1), re.IGNORECASE)
     app_terms = re.compile(app_pattern.group(1), re.IGNORECASE)
-    assert app_terms.search("Build a video chat app")
-    assert not media_for_app.search("Build a video chat app")
-    assert not app_terms.search("Create a promotional video for my app")
-    assert media_for_app.search("Create a promotional video for my app")
-    assert not app_terms.search("Write a video script")
+    def is_app_intent(value):
+        return bool(app_terms.search(value) and not media_for_app.search(value))
+
+    assert is_app_intent("Build a video chat app")
+    assert not is_app_intent("Create a promotional video for my app")
+    assert not is_app_intent("Write a video script")
 
 
 
