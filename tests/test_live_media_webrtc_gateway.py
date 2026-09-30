@@ -405,3 +405,83 @@ def test_gateway_uses_cloudflare_turn_credentials_for_browser_and_peer(monkeypat
         ("a" * 32, "t" * 64, 3900),
     ]
     assert "t" * 64 not in response.text
+
+
+
+def test_gateway_uses_tcp_turn_for_peer_and_all_provider_urls_for_browser(monkeypatch):
+    turn_urls = [
+        "turn:turn.cloudflare.com:3478?transport=udp",
+        "turn:turn.cloudflare.com:3478?transport=tcp",
+        "turns:turn.cloudflare.com:443?transport=tcp",
+    ]
+
+    def issue_credentials(_key_id, _api_token, *, ttl_seconds):
+        return {
+            "ice_servers": [
+                {"urls": ["stun:stun.cloudflare.com:3478"]},
+                {
+                    "urls": turn_urls,
+                    "username": "short-lived",
+                    "credential": "credential",
+                },
+            ],
+            "expires_at": int(time.time()) + ttl_seconds,
+        }
+
+    monkeypatch.setattr(
+        gateway_module,
+        "issue_cloudflare_turn_credentials",
+        issue_credentials,
+    )
+    gateway, _ = gateway_for(
+        FakePeer(),
+        FakeWorkerSession(),
+        ice_servers=[],
+        turn_provider="cloudflare",
+        cloudflare_turn_key_id="a" * 32,
+        cloudflare_turn_api_token="t" * 64,
+        turn_credential_ttl_seconds=3900,
+        gateway_turn_transport="tcp",
+    )
+
+    browser_servers = asyncio.run(gateway.browser_ice_servers())
+    session_servers = asyncio.run(gateway._ice_servers_for_session())
+
+    assert browser_servers[1].urls == turn_urls
+    assert session_servers[0].urls == ["stun:stun.cloudflare.com:3478"]
+    assert session_servers[1].urls == ["turns:turn.cloudflare.com:443?transport=tcp"]
+    assert session_servers[1].username == "short-lived"
+    assert session_servers[1].credential == "credential"
+
+
+def test_gateway_fails_closed_when_requested_turn_transport_is_unavailable(monkeypatch):
+    def issue_credentials(_key_id, _api_token, *, ttl_seconds):
+        return {
+            "ice_servers": [
+                {
+                    "urls": ["turn:turn.cloudflare.com:3478?transport=udp"],
+                    "username": "short-lived",
+                    "credential": "credential",
+                }
+            ],
+            "expires_at": int(time.time()) + ttl_seconds,
+        }
+
+    monkeypatch.setattr(
+        gateway_module,
+        "issue_cloudflare_turn_credentials",
+        issue_credentials,
+    )
+    gateway, _ = gateway_for(
+        FakePeer(),
+        FakeWorkerSession(),
+        ice_servers=[],
+        turn_provider="cloudflare",
+        cloudflare_turn_key_id="a" * 32,
+        cloudflare_turn_api_token="t" * 64,
+        turn_credential_ttl_seconds=3900,
+        gateway_turn_transport="tcp",
+    )
+
+    with pytest.raises(GatewayUnavailable, match="did not return a TCP relay"):
+        asyncio.run(gateway._ice_servers_for_session())
