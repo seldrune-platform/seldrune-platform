@@ -302,7 +302,7 @@ def test_gateway_ice_endpoint_authenticates_and_returns_expiring_credentials():
     assert servers[0]["urls"] == ["stun:stun.example.test:3478"]
     turn = servers[1]
     assert turn["urls"] == ["turn:relay.example.test:3478?transport=udp"]
-    session_turn = gateway._ice_servers_for_session()[1]
+    session_turn = asyncio.run(gateway._ice_servers_for_session())[1]
     assert session_turn.username and session_turn.credential
     assert session_turn.username != turn["username"]
     expiry, subject = turn["username"].split(":", 1)
@@ -344,3 +344,64 @@ def test_gateway_http_token_protects_create_and_delete():
     assert wrong_owner.status_code == 404
     assert closed.status_code == 200
     assert worker.closed and peer.closed
+
+
+
+def test_gateway_uses_cloudflare_turn_credentials_for_browser_and_peer(monkeypatch):
+    calls = []
+
+    def issue_credentials(key_id, api_token, *, ttl_seconds):
+        calls.append((key_id, api_token, ttl_seconds))
+        suffix = str(len(calls))
+        return {
+            "ice_servers": [
+                {"urls": ["stun:stun.cloudflare.com:3478"]},
+                {
+                    "urls": ["turns:turn.cloudflare.com:443?transport=tcp"],
+                    "username": "short-lived-" + suffix,
+                    "credential": "credential-" + suffix,
+                },
+            ],
+            "expires_at": int(time.time()) + ttl_seconds,
+        }
+
+    monkeypatch.setattr(
+        gateway_module,
+        "issue_cloudflare_turn_credentials",
+        issue_credentials,
+    )
+    gateway, _ = gateway_for(
+        FakePeer(),
+        FakeWorkerSession(),
+        ice_servers=[],
+        turn_provider="cloudflare",
+        cloudflare_turn_key_id="a" * 32,
+        cloudflare_turn_api_token="t" * 64,
+        turn_credential_ttl_seconds=3900,
+    )
+
+    with TestClient(create_app(gateway)) as client:
+        response = client.get(
+            "/v1/ice-servers",
+            headers={"Authorization": f"Bearer {HTTP_TOKEN}"},
+        )
+
+    assert response.status_code == 200
+    servers = response.json()["ice_servers"]
+    assert servers == [
+        {"urls": ["stun:stun.cloudflare.com:3478"]},
+        {
+            "urls": ["turns:turn.cloudflare.com:443?transport=tcp"],
+            "username": "short-lived-1",
+            "credential": "credential-1",
+        },
+    ]
+
+    session_servers = asyncio.run(gateway._ice_servers_for_session())
+    assert session_servers[0].urls == ["stun:stun.cloudflare.com:3478"]
+    assert session_servers[1].username == "short-lived-2"
+    assert calls == [
+        ("a" * 32, "t" * 64, 3900),
+        ("a" * 32, "t" * 64, 3900),
+    ]
+    assert "t" * 64 not in response.text
