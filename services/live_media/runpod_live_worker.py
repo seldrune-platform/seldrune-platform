@@ -17,8 +17,36 @@ Adapter = Callable[..., Awaitable[object]]
 def _required_setting(name: str) -> str:
     value = os.getenv(name, "").strip()
     if not value:
+        value = os.getenv(f"RUNPOD_SECRET_{name}", "").strip()
+    if not value:
         raise RuntimeError(f"required live-worker setting is missing: {name}")
     return value
+
+
+def _tls_material_path(
+    value: str, name: str, open_fds: list[int]
+) -> str:
+    """Accept a mounted file path or keep inline PEM material in an anonymous file."""
+    normalized = value.replace("\\n", "\n")
+    if "-----BEGIN " not in normalized:
+        return value
+    memfd_create = getattr(os, "memfd_create", None)
+    if memfd_create is None:
+        raise RuntimeError("inline TLS PEM requires Linux anonymous-file support")
+    fd = memfd_create(name, flags=0)
+    try:
+        remaining = memoryview(normalized.encode("utf-8"))
+        while remaining:
+            written = os.write(fd, remaining)
+            if written <= 0:
+                raise OSError("unable to write TLS material")
+            remaining = remaining[written:]
+        os.lseek(fd, 0, os.SEEK_SET)
+    except Exception:
+        os.close(fd)
+        raise
+    open_fds.append(fd)
+    return f"/proc/self/fd/{fd}"
 
 
 def _load_async_adapter(setting: str, name: str) -> Adapter:
@@ -113,11 +141,22 @@ def worker_from_environment() -> tuple[
     except RealismEvidenceError as exc:
         raise RuntimeError("SELDRUNE_LIVE_REALISM_POLICY_JSON is invalid") from exc
 
-    cert_path = _required_setting("SELDRUNE_LIVE_TLS_CERT")
-    key_path = _required_setting("SELDRUNE_LIVE_TLS_KEY")
+    tls_secret_fds: list[int] = []
+    cert_value = _required_setting("SELDRUNE_LIVE_TLS_CERT")
+    key_value = _required_setting("SELDRUNE_LIVE_TLS_KEY")
+    cert_path = _tls_material_path(
+        cert_value, "seldrune-live-tls-cert", tls_secret_fds
+    )
+    key_path = _tls_material_path(
+        key_value, "seldrune-live-tls-key", tls_secret_fds
+    )
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.minimum_version = ssl.TLSVersion.TLSv1_2
-    tls.load_cert_chain(certfile=cert_path, keyfile=key_path)
+    try:
+        tls.load_cert_chain(certfile=cert_path, keyfile=key_path)
+    finally:
+        for fd in tls_secret_fds:
+            os.close(fd)
 
     try:
         port = int(os.getenv("SELDRUNE_LIVE_WORKER_PORT", "8765"))
