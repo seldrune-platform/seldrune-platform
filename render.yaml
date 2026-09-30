@@ -97,11 +97,14 @@ services:
       - key: SELDRUNE_OWNER_PUSH_VAPID_PUBLIC_KEY
         sync: false
       - key: SELDRUNE_LIVESHIFT_WORKER_URL
-        sync: false
+        fromService:
+          name: seldrune-live-gateway
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
       - key: SELDRUNE_LIVESHIFT_WORKER_TOKEN
-        sync: false
+        generateValue: true
       - key: SELDRUNE_LIVE_PROFILE_AUTHORIZER_TOKEN
-        sync: false
+        generateValue: true
       - key: SELDRUNE_FACESWAP_WORKER_URL
         sync: false
       - key: SELDRUNE_FACESWAP_WORKER_TOKEN
@@ -195,6 +198,60 @@ services:
         value: true
       - key: SELDRUNE_LIFE_WORKER_INTERVAL_SECONDS
         value: 20
+  - type: web
+    name: seldrune-live-gateway
+    runtime: docker
+    plan: 1c-2g
+    region: oregon
+    numInstances: 1
+    autoDeployTrigger: checksPass
+    dockerfilePath: ./Dockerfile.webrtc-gateway
+    healthCheckPath: /readyz
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - key: SELDRUNE_PROFILE_AUTHORIZER
+        value: services.live_media.seldrune_profile_authorizer:authorize_profiles
+      - key: SELDRUNE_PROFILE_AUTHORIZATION_URL
+        fromService:
+          name: seldrune-platform
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: SELDRUNE_PROFILE_AUTHORIZATION_TOKEN
+        fromService:
+          name: seldrune-platform
+          type: web
+          envVarKey: SELDRUNE_LIVE_PROFILE_AUTHORIZER_TOKEN
+      - key: SELDRUNE_LIVESHIFT_WORKER_TOKEN
+        fromService:
+          name: seldrune-platform
+          type: web
+          envVarKey: SELDRUNE_LIVESHIFT_WORKER_TOKEN
+      - key: SELDRUNE_LIVE_WORKER_TOKEN
+        sync: false
+      - key: SELDRUNE_LIVE_TICKET_SECRET
+        sync: false
+      - key: SELDRUNE_LIVE_WORKER_HOST
+        sync: false
+      - key: SELDRUNE_LIVE_WORKER_PORT
+        value: "8765"
+      - key: SELDRUNE_LIVE_WORKER_TLS_NAME
+        sync: false
+      - key: SELDRUNE_LIVE_WORKER_REGION
+        sync: false
+      - key: SELDRUNE_LIVE_TURN_PROVIDER
+        value: cloudflare
+      - key: SELDRUNE_CLOUDFLARE_TURN_KEY_ID
+        sync: false
+      - key: SELDRUNE_CLOUDFLARE_TURN_API_TOKEN
+        sync: false
+      - key: SELDRUNE_LIVE_TURN_CREDENTIAL_TTL_SECONDS
+        value: "3900"
+      - key: SELDRUNE_LIVE_MAX_SESSIONS
+        value: "1"
+      - key: SELDRUNE_LIVE_MAX_INFLIGHT
+        value: "2"
+      - key: SELDRUNE_LIVE_SESSION_TTL_SECONDS
+        value: "3600"
 databases:
   - name: seldrune-db
     databaseName: seldrune
