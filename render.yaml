@@ -97,10 +97,7 @@ services:
       - key: SELDRUNE_OWNER_PUSH_VAPID_PUBLIC_KEY
         sync: false
       - key: SELDRUNE_LIVESHIFT_WORKER_URL
-        fromService:
-          name: seldrune-live-gateway
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
+        sync: false
       - key: SELDRUNE_LIVESHIFT_WORKER_TOKEN
         generateValue: true
       - key: SELDRUNE_LIVE_PROFILE_AUTHORIZER_TOKEN
@@ -215,7 +212,7 @@ services:
         fromService:
           name: seldrune-platform
           type: web
-          envVarKey: RENDER_EXTERNAL_URL
+          envVarKey: SELDRUNE_PUBLIC_APP_URL
       - key: SELDRUNE_PROFILE_AUTHORIZATION_TOKEN
         fromService:
           name: seldrune-platform
