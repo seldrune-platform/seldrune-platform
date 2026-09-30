@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import xml.etree.ElementTree as ET
 
 WEB = Path("backend/app/web")
@@ -70,17 +71,31 @@ def test_creation_forge_app_intent_precedes_media_keyword_classification():
         "function classifyOutputKind(request, mode = creationMode) {", 1
     )[1].split("\n  function titleFromRequest", 1)[0]
     game = classifier.index(r"/\b(game|playable|gameplay|level design)\b/.test(text)")
-    app = classifier.index(
-        r"/\b(app|application|website|web app|software|program|script|source code|coding)\b/.test(text)"
-    )
+    app_intent = classifier.index("if (appIntent) return 'app';")
     song = classifier.index(r"/\b(song|music|lyrics|soundtrack|audio)\b/.test(text)")
     video = classifier.index(r"/\b(video|film|movie|clip|storyboard)\b/.test(text)")
     visual = classifier.index(
         r"/\b(image|illustration|picture|visual|poster|artwork|3d scene|3d model)\b/.test(text)"
     )
-    assert game < app < song
-    assert app < video
-    assert app < visual
+    assert game < app_intent < song
+    assert app_intent < video
+    assert app_intent < visual
+
+    media_pattern = re.search(
+        r"const mediaForExistingApp = /(.+)/\.test\(text\);", classifier
+    )
+    app_pattern = re.search(
+        r"const appIntent = /(.*)/\.test\(text\) && !mediaForExistingApp;", classifier
+    )
+    assert media_pattern and app_pattern
+    media_for_app = re.compile(media_pattern.group(1), re.IGNORECASE)
+    app_terms = re.compile(app_pattern.group(1), re.IGNORECASE)
+    assert app_terms.search("Build a video chat app")
+    assert not media_for_app.search("Build a video chat app")
+    assert not app_terms.search("Create a promotional video for my app")
+    assert media_for_app.search("Create a promotional video for my app")
+    assert not app_terms.search("Write a video script")
+
 
 
 def test_portal_controller_defines_owner_workspaces_and_fixed_home():
