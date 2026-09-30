@@ -32,6 +32,7 @@ Configure these gateway environment variables:
 | `SELDRUNE_LIVE_WORKER_REGION` | Worker region label bound to the session. |
 | `SELDRUNE_LIVE_ICE_SERVERS_JSON` | Optional JSON array of STUN entries and gateway-only static ICE entries. Do not put static TURN entries here when dynamic TURN is enabled. |
 | `SELDRUNE_LIVE_TURN_PROVIDER` | `coturn` (default) or `cloudflare`. Cloudflare issues short-lived credentials from the gateway. |
+| `SELDRUNE_LIVE_GATEWAY_TURN_TRANSPORT` | `provider` (default), `udp`, or `tcp`. Restrict gateway-side TURN selection when the host cannot use UDP; browser ICE still receives the provider's full URL list. |
 | `SELDRUNE_LIVE_TURN_URLS_JSON` | Coturn only: JSON array of `turn:` or `turns:` relay URLs. |
 | `SELDRUNE_LIVE_TURN_SHARED_SECRET` | Coturn only: `static-auth-secret`; at least 32 random bytes. It stays inside the gateway. |
 | `SELDRUNE_CLOUDFLARE_TURN_KEY_ID` | Cloudflare only: 32-character TURN key ID. |
