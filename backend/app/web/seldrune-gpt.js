@@ -42,12 +42,12 @@
     },
     app: {
       label: 'App',
-      guidance: 'Create a working app deliverable for the request. Use enabled coding tools to create a branch named for this isolated change, write source and tests into it, run available checks, and report exact files and verification receipts. If tools are unavailable, return a source draft and say it was not committed or tested.',
+      guidance: 'Create a working app deliverable for the request. Use enabled coding tools to create a branch named for this isolated change, write source and tests into it, run available checks, and report exact files and verification receipts. When the app uses a camera or microphone and will run on the authenticated Seldrune origin, load `<script src="/console-assets/seldrune-media.js" data-default="true" defer></script>` before app code and use navigator.mediaDevices.getUserMedia for all capture. Tell the user to enable Use Seldrune Media by default in /media. Preserve fail-closed behavior; never silently use raw device media as a fallback. For apps hosted outside Seldrune, do not claim this same-origin client is installed. If tools are unavailable, return a source draft and say it was not committed or tested.',
       status: 'App · Seldrune tries connected coding tools first; any fallback draft is saved as a file and labeled unbuilt.',
     },
     game: {
       label: 'Game',
-      guidance: 'Create a playable game deliverable for the request. Use enabled coding tools to create a branch named for this isolated change, write source and tests into it, run available checks, and report exact files and verification receipts. If tools are unavailable, return a source draft and say it was not committed or tested.',
+      guidance: 'Create a playable game deliverable for the request. Use enabled coding tools to create a branch named for this isolated change, write source and tests into it, run available checks, and report exact files and verification receipts. When the game uses a camera or microphone and will run on the authenticated Seldrune origin, load `<script src="/console-assets/seldrune-media.js" data-default="true" defer></script>` before game code and use navigator.mediaDevices.getUserMedia for all capture. Tell the user to enable Use Seldrune Media by default in /media. Preserve fail-closed behavior; never silently use raw device media as a fallback. For games hosted outside Seldrune, do not claim this same-origin client is installed. If tools are unavailable, return a source draft and say it was not committed or tested.',
       status: 'Game · Seldrune tries connected coding tools first; any fallback draft is saved as a file and labeled unbuilt.',
     },
     song: {
