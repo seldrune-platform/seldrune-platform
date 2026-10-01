@@ -1,21 +1,57 @@
 import os
+import secrets
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+from uuid import UUID
 
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from backend.app.api.dependencies import SessionDep
 from backend.app.core.config import settings
+from backend.app.core.tasking import TaskStatus
+from backend.app.models.agent import Agent
+from backend.app.models.task import Task
+from backend.app.services.agent_runtime import AgentRuntimeError, execute_agent_task
 
 router = APIRouter(tags=["status"])
 _PROJECT_ROOT = Path(__file__).resolve().parents[4]
 _PRODUCTION_ENVIRONMENTS = {"prod", "production"}
+_ASTRA_BRIDGE_ORG_ID = UUID("8a0bd04d-914d-4481-a94d-050b21f5d9f5")
+_astra_bridge_used = False
+_ASTRA_RUNPOD_OBJECTIVE = """
+Act as Seldrune's Architecture Agent using OpenAI GPT-6 Astra. Review the verified
+Seldrune STI Live Media / RunPod state and return the shortest safe execution plan.
+
+Verified context:
+- Repository: seldrune-platform/seldrune-platform.
+- Production already contains governed RunPod Owner Console integration.
+- Seldrune has RunPod list/get/start/stop provider tools and evidence gating.
+- The live Seldrune OpenAI provider has completed successful model invocations.
+- ChatGPT's current conversation cannot mount the RunPod or Seldrune MCP tools.
+- A RunPod API key was stored in a separate Codex environment, but Codex is not
+  available to the owner now.
+- Goal: complete Seldrune Live Media GPU deployment without exposing secrets or
+  pretending an action happened.
+
+Return a compact engineering decision with:
+1. the preferred connection path from the current production architecture,
+2. exact next actions in order,
+3. what Seldrune agents/tools should perform each action,
+4. verification/evidence gates for RunPod authentication, pod/endpoint readiness,
+   Live Media worker health, transformed-frame proof, and p95 latency,
+5. cost/cleanup controls,
+6. any blocker that still requires owner interaction.
+
+Do not perform external infrastructure actions. Do not invent credentials, pod IDs,
+successful tests, or deployment results. Separate verified facts from proposed steps.
+""".strip()
 
 
 @lru_cache
@@ -147,3 +183,90 @@ def service_readiness(session: SessionDep) -> JSONResponse:
         status_code=200 if payload["ready"] else 503,
         content=payload,
     )
+
+
+@router.get("/internal/astra-runpod-review")
+def temporary_astra_runpod_review(token: str, session: SessionDep) -> dict[str, Any]:
+    """Temporary, disabled-by-default bridge for one governed Astra architecture review."""
+    global _astra_bridge_used
+
+    enabled = os.getenv("SELDRUNE_ASTRA_BRIDGE_ENABLED", "").strip() == "1"
+    expected_token = os.getenv("SELDRUNE_ASTRA_BRIDGE_TOKEN", "").strip()
+    if (
+        not enabled
+        or not expected_token
+        or _astra_bridge_used
+        or not secrets.compare_digest(token, expected_token)
+    ):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    agent = session.scalar(
+        select(Agent)
+        .where(
+            Agent.organization_id == _ASTRA_BRIDGE_ORG_ID,
+            Agent.slug == "seldrune-architecture",
+        )
+        .limit(1)
+    )
+    if agent is None or agent.created_by_user_id is None:
+        raise HTTPException(status_code=503, detail="Architecture Agent is unavailable")
+
+    task = Task(
+        organization_id=_ASTRA_BRIDGE_ORG_ID,
+        created_by_user_id=agent.created_by_user_id,
+        assigned_agent_id=agent.id,
+        title="GPT-6 Astra RunPod architecture review",
+        objective=_ASTRA_RUNPOD_OBJECTIVE,
+        priority=10,
+        status=TaskStatus.ASSIGNED.value,
+        input_data={
+            "source": "temporary_astra_bridge",
+            "requested_model": "gpt-6-astra",
+            "external_actions_allowed": False,
+        },
+    )
+    session.add(task)
+    session.flush()
+
+    runtime_agent = SimpleNamespace(
+        id=agent.id,
+        name=agent.name,
+        slug=agent.slug,
+        status=agent.status,
+        version=agent.version,
+        capabilities=agent.capabilities,
+        runtime_config={
+            **(agent.runtime_config or {}),
+            "provider": "openai",
+            "model": "gpt-6-astra",
+            "max_output_tokens": 450,
+            "input_cost_per_million": 10.0,
+            "output_cost_per_million": 50.0,
+        },
+        allowed_model_providers=["openai"],
+        allowed_models=["gpt-6-astra"],
+        allowed_tool_slugs=agent.allowed_tool_slugs,
+    )
+
+    try:
+        completed = execute_agent_task(
+            session,
+            task=task,
+            agent=runtime_agent,
+            actor_user_id=agent.created_by_user_id,
+        )
+    except AgentRuntimeError as exc:
+        raise HTTPException(status_code=502, detail=f"Astra review failed: {exc}") from exc
+
+    _astra_bridge_used = True
+    output = completed.output_data or {}
+    return {
+        "task_id": str(completed.id),
+        "status": completed.status,
+        "agent": agent.name,
+        "provider": output.get("provider"),
+        "model": output.get("model"),
+        "response_id": output.get("response_id"),
+        "usage": output.get("usage"),
+        "response": output.get("text"),
+    }
