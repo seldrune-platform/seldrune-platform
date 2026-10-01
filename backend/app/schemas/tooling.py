@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProviderCredentialUpsert(BaseModel):
-    provider: Literal["github", "render", "gmail"]
+    provider: Literal["github", "render", "gmail", "runpod"]
     secret_value: str = Field(min_length=8, max_length=20000)
 
 

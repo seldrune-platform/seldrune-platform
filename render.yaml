@@ -90,6 +90,8 @@ services:
         value: main
       - key: SELDRUNE_RENDER_API_KEY
         sync: false
+      - key: SELDRUNE_RUNPOD_API_KEY
+        sync: false
       - key: SELDRUNE_RENDER_DEFAULT_SERVICE_ID
         sync: false
       - key: SELDRUNE_AGENT_AUTO_GRANT_PRODUCTION_TOOLS
@@ -188,6 +190,8 @@ services:
       - key: SELDRUNE_GITHUB_DEFAULT_REF
         value: main
       - key: SELDRUNE_RENDER_API_KEY
+        sync: false
+      - key: SELDRUNE_RUNPOD_API_KEY
         sync: false
       - key: SELDRUNE_RENDER_DEFAULT_SERVICE_ID
         sync: false
