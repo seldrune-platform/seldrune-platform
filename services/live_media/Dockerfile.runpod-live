@@ -19,16 +19,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN git clone https://github.com/facefusion/facefusion.git /opt/facefusion \
-    && git -C /opt/facefusion checkout "\${FACEFUSION_COMMIT}" \
+    && git -C /opt/facefusion checkout "${FACEFUSION_COMMIT}" \
     && cd /opt/facefusion \
     && python install.py cuda@12 --skip-conda \
     && python -c "import onnxruntime as ort; assert 'CUDAExecutionProvider' in ort.get_available_providers()"
 
 RUN git init /opt/seed-vc \
     && git -C /opt/seed-vc remote add origin https://github.com/Plachtaa/seed-vc.git \
-    && git -C /opt/seed-vc fetch --depth 1 origin "\${SEEDVC_COMMIT}" \
+    && git -C /opt/seed-vc fetch --depth 1 origin "${SEEDVC_COMMIT}" \
     && git -C /opt/seed-vc checkout --detach FETCH_HEAD \
-    && test "$(git -C /opt/seed-vc rev-parse HEAD)" = "\${SEEDVC_COMMIT}" \
+    && test "$(git -C /opt/seed-vc rev-parse HEAD)" = "${SEEDVC_COMMIT}" \
     && test -s /opt/seed-vc/LICENSE
 
 WORKDIR /app
