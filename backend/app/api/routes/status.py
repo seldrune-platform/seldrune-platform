@@ -26,31 +26,28 @@ _PRODUCTION_ENVIRONMENTS = {"prod", "production"}
 _ASTRA_BRIDGE_ORG_ID = UUID("8a0bd04d-914d-4481-a94d-050b21f5d9f5")
 _astra_bridge_used = False
 _ASTRA_RUNPOD_OBJECTIVE = """
-Act as Seldrune's Architecture Agent using OpenAI GPT-6 Astra. Review the verified
-Seldrune STI Live Media / RunPod state and return the shortest safe execution plan.
+Continue the previous Seldrune Architecture Agent GPT-6 Astra RunPod review.
 
-Verified context:
-- Repository: seldrune-platform/seldrune-platform.
-- Production already contains governed RunPod Owner Console integration.
-- Seldrune has RunPod list/get/start/stop provider tools and evidence gating.
-- The live Seldrune OpenAI provider has completed successful model invocations.
-- ChatGPT's current conversation cannot mount the RunPod or Seldrune MCP tools.
-- A RunPod API key was stored in a separate Codex environment, but Codex is not
-  available to the owner now.
-- Goal: complete Seldrune Live Media GPU deployment without exposing secrets or
-  pretending an action happened.
+Already established:
+- Preferred path: existing Owner Console -> governed Seldrune agents/provider tools -> RunPod.
+- Step 1: record bounded deployment/test approval with GPU/spend/test/SLO limits.
+- Step 2: use RunPod list/get for read-only authentication and account/resource-scope evidence.
+- Step 3 began: inspect the repository for the Live Media image, startup contract,
+  GPU requirements, and health endpoint.
 
-Return a compact engineering decision with:
-1. the preferred connection path from the current production architecture,
-2. exact next actions in order,
-3. what Seldrune agents/tools should perform each action,
-4. verification/evidence gates for RunPod authentication, pod/endpoint readiness,
-   Live Media worker health, transformed-frame proof, and p95 latency,
-5. cost/cleanup controls,
-6. any blocker that still requires owner interaction.
+Return ONLY the unfinished portion, starting at Step 3. Complete Steps 3-6 with:
+- the responsible existing Seldrune agent/tool,
+- the exact action,
+- an explicit acceptance/evidence gate,
+- RunPod pod/endpoint readiness,
+- Live Media worker health,
+- transformed-frame proof and p95 latency evidence,
+- cost limits and cleanup,
+- any owner-only blocker.
 
-Do not perform external infrastructure actions. Do not invent credentials, pod IDs,
-successful tests, or deployment results. Separate verified facts from proposed steps.
+Keep the answer compact enough to finish. Do not repeat Steps 1-2 except where a dependency
+must be referenced. Do not perform external actions and do not invent credentials, resource
+IDs, test results, or readiness claims.
 """.strip()
 
 
@@ -215,7 +212,7 @@ def temporary_astra_runpod_review(token: str, session: SessionDep) -> dict[str, 
         organization_id=_ASTRA_BRIDGE_ORG_ID,
         created_by_user_id=agent.created_by_user_id,
         assigned_agent_id=agent.id,
-        title="GPT-6 Astra RunPod architecture review",
+        title="GPT-6 Astra RunPod architecture review continuation",
         objective=_ASTRA_RUNPOD_OBJECTIVE,
         priority=10,
         status=TaskStatus.ASSIGNED.value,
