@@ -27,6 +27,7 @@ import numpy as np
 
 MODEL_REPO = "Plachta/Seed-VC"
 MODEL_REVISION = "609dd03a0312184629d90659f56d72b3132fb696"
+MODEL_CONFIG_REVISION = "5cffe4f001043a09d6e871e43cdcdb7aa75b7e8c"
 MODEL_CHECKPOINT = "DiT_uvit_tat_xlsr_ema.pth"
 MODEL_CONFIG = "config_dit_mel_seed_uvit_xlsr_tiny.yml"
 MODEL_CHECKPOINT_SHA256 = "c853ea578b409f625f961bcb15d5cff1f8ef9a75f3209ec21d9b7c73ab422e88"
@@ -139,7 +140,7 @@ class _SeedVCRealtimeEngine:
             raise RuntimeError("Seed-VC checkpoint hash does not match the pinned model")
         config = hf_hub_download(
             repo_id=MODEL_REPO, filename=MODEL_CONFIG,
-            revision=MODEL_REVISION, cache_dir=cache,
+            revision=MODEL_CONFIG_REVISION, cache_dir=cache,
         )
         device = torch.device("cuda")
         module.device = device
