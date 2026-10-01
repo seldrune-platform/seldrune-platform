@@ -24,9 +24,11 @@ from sqlalchemy.orm import Session
 from backend.app.api.dependencies import SessionDep
 from backend.app.api.routes import auth as auth_routes
 from backend.app.api.routes import owner_commands
+from backend.app.api.routes import seldrune_gpt as seldrune_gpt_routes
 from backend.app.core.config import settings
 from backend.app.core.rbac import Role
 from backend.app.core.security import access_token_fingerprint
+from backend.app.models.agent import Agent
 from backend.app.models.membership import Membership
 from backend.app.models.mcp_oauth import MCPAuthorizationCode, MCPOAuthClient, MCPRefreshToken
 from backend.app.models.deepfacelive_bridge import (
@@ -1109,6 +1111,27 @@ TOOLS = [
         idempotent=True,
     ),
     _tool(
+        "list_seldrune_agents",
+        "List Seldrune agents and their model/tool policies for an organization.",
+        {"organization_id": ORG_ID},
+        ["organization_id"],
+        read_only=True,
+        idempotent=True,
+    ),
+    _tool(
+        "ask_seldrune_ai",
+        "Ask Seldrune GPT to reason with OpenAI GPT-6 Astra. This performs a model call "
+        "under Seldrune's provider configuration, spend governor, history, and evidence rules.",
+        {
+            "organization_id": ORG_ID,
+            "message": _field("message", "Question or engineering task for Seldrune AI."),
+        },
+        ["organization_id", "message"],
+        read_only=False,
+        destructive=False,
+        idempotent=False,
+    ),
+    _tool(
         "get_governance_policy",
         "Read the current owner governance policy for an organization.",
         {"organization_id": ORG_ID},
@@ -1509,6 +1532,43 @@ def _dispatch_tool(
 
     if name == "get_owner_dashboard":
         return owner_commands.get_owner_dashboard(org_uuid, membership, session)
+    if name == "list_seldrune_agents":
+        agents = list(
+            session.scalars(
+                select(Agent)
+                .where(Agent.organization_id == org_uuid)
+                .order_by(Agent.name)
+            )
+        )
+        return [
+            {
+                "id": str(agent.id),
+                "name": agent.name,
+                "slug": agent.slug,
+                "status": agent.status,
+                "capabilities": agent.capabilities,
+                "allowed_model_providers": agent.allowed_model_providers,
+                "allowed_models": agent.allowed_models,
+                "allowed_tool_slugs": agent.allowed_tool_slugs,
+            }
+            for agent in agents
+        ]
+    if name == "ask_seldrune_ai":
+        message = str(arguments.get("message") or "").strip()
+        if not message:
+            raise ValueError("message is required")
+        payload = seldrune_gpt_routes.SeldruneGPTRequest(
+            message=message,
+            provider="openai",
+            model="gpt-6-astra",
+        )
+        return seldrune_gpt_routes.seldrune_gpt(
+            org_uuid,
+            payload,
+            membership,
+            user,
+            session,
+        )
     if name == "get_governance_policy":
         return owner_commands.get_governance_policy(org_uuid, membership, session)
     if name in {"preview_governance_policy", "update_governance_policy"}:
