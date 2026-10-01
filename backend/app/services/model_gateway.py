@@ -667,7 +667,7 @@ class ModelGateway:
                         "schema": request.response_schema,
                     }
                 }
-            if request.reasoning_effort and request.model.startswith("gpt-5.6"):
+            if request.reasoning_effort and request.model.startswith(("gpt-5.6", "gpt-6")):
                 response_args["reasoning"] = {
                     "effort": request.reasoning_effort,
                 }
