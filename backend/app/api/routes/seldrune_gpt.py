@@ -205,6 +205,7 @@ class SeldruneGPTRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20000)
     attachments: list[SeldruneGPTAttachment] = Field(default_factory=list, max_length=6)
     provider: Literal["auto", "openai", "openai_compatible", "gemini", "anthropic"] = "auto"
+    model: str | None = Field(default=None, min_length=1, max_length=120)
 
 
 _IMAGE_MEDIA_TYPES = {
@@ -494,6 +495,12 @@ def seldrune_gpt(
     else:
         selected_provider = ModelProvider(payload.provider)
 
+    if payload.model and selected_provider is not ModelProvider.OPENAI:
+        raise HTTPException(
+            status_code=422,
+            detail="Explicit model selection is currently supported only for OpenAI.",
+        )
+
     provider_config = {
         item["provider"]: item
         for item in model_provider_statuses(
@@ -635,9 +642,19 @@ def seldrune_gpt(
             text=payload.message,
             has_images=bool(input_images),
             has_files=bool(input_files),
+            explicit_model=payload.model,
         ),
         monthly_utilization=float(spend_status["monthly_utilization"]),
     )
+    if payload.model and estimate_model_cost(
+        route.model,
+        input_tokens=1,
+        output_tokens=1,
+    ) is None:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Seldrune has no cost estimate for requested model {route.model}.",
+        )
     provider_model = {
         ModelProvider.GEMINI: settings.gemini_model,
         ModelProvider.ANTHROPIC: settings.anthropic_model,
