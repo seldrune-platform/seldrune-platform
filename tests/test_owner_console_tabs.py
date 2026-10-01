@@ -57,7 +57,9 @@ def test_creation_forge_routes_typed_projects_through_the_cognitive_operator():
     assert 'data-default="true"' in script
     assert "authenticated Seldrune origin" in script
     assert "never silently use raw device media as a fallback" in script
-    assert "When building or cloning a camera or microphone app" in script
+    assert "When building or cloning a camera or microphone app hosted on the authenticated Seldrune origin" in script
+    assert "required bootstrap before app code" in script
+    assert script.count("saved /media face and voice profiles") >= 3
     assert "order: buildCreativeOrder(request)" in script
     assert "cannot render audio" in script
     assert "cannot render video" in script
