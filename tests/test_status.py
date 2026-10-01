@@ -179,3 +179,17 @@ def test_compatible_model_provider_is_ready_with_configured_endpoint(
         "model": settings.model_default,
         "live_ai": True,
     }
+
+
+def test_temporary_astra_bridge_is_hidden_when_disabled(monkeypatch) -> None:
+    monkeypatch.delenv("SELDRUNE_ASTRA_BRIDGE_ENABLED", raising=False)
+    monkeypatch.delenv("SELDRUNE_ASTRA_BRIDGE_TOKEN", raising=False)
+    response = client.get("/api/v1/internal/astra-runpod-review", params={"token": "nope"})
+    assert response.status_code == 404
+
+
+def test_temporary_astra_bridge_rejects_wrong_token(monkeypatch) -> None:
+    monkeypatch.setenv("SELDRUNE_ASTRA_BRIDGE_ENABLED", "1")
+    monkeypatch.setenv("SELDRUNE_ASTRA_BRIDGE_TOKEN", "expected-token")
+    response = client.get("/api/v1/internal/astra-runpod-review", params={"token": "wrong-token"})
+    assert response.status_code == 404
