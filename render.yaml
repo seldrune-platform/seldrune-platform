@@ -233,6 +233,8 @@ services:
         value: "8765"
       - key: SELDRUNE_LIVE_WORKER_TLS_NAME
         sync: false
+      - key: SELDRUNE_LIVE_WORKER_CA_PEM
+        sync: false
       - key: SELDRUNE_LIVE_WORKER_REGION
         sync: false
       - key: SELDRUNE_LIVE_TURN_PROVIDER
