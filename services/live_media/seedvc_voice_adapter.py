@@ -49,7 +49,7 @@ class ConversionEngine(Protocol):
     def prepare(self, profile_id: str, reference_path: Path) -> np.ndarray: ...
 
     def convert_block(
-        self, reference_path: Path, reference_audio: np.ndarray, state: "_StreamState",
+        self, reference_path: Path, reference_audio: np.ndarray, state: _StreamState,
         source_block_48k: np.ndarray,
     ) -> np.ndarray: ...
 
@@ -111,7 +111,9 @@ class _SeedVCRealtimeEngine:
 
         cache = os.getenv("HF_HOME")
 
-        def cached_model_download(repo_id, model_filename="pytorch_model.bin", config_filename=None):
+        def cached_model_download(
+            repo_id, model_filename="pytorch_model.bin", config_filename=None
+        ):
             model_path = hf_hub_download(
                 repo_id=repo_id,
                 filename=model_filename,
