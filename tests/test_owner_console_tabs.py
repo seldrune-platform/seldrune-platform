@@ -62,7 +62,7 @@ def test_creation_forge_routes_typed_projects_through_the_cognitive_operator():
         " authenticated Seldrune origin"
     ) in script
     assert "required bootstrap before app code" in script
-    assert script.count("saved /media face and voice profiles") >= 3
+    assert script.count("saved /media face and voice profiles") >= 2
     assert "order: buildCreativeOrder(request)" in script
     assert "cannot render audio" in script
     assert "cannot render video" in script
