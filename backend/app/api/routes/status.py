@@ -26,28 +26,16 @@ _PRODUCTION_ENVIRONMENTS = {"prod", "production"}
 _ASTRA_BRIDGE_ORG_ID = UUID("8a0bd04d-914d-4481-a94d-050b21f5d9f5")
 _astra_bridge_used = False
 _ASTRA_RUNPOD_OBJECTIVE = """
-Continue the previous Seldrune Architecture Agent GPT-6 Astra RunPod review.
+Continue the prior Seldrune Architecture Agent GPT-6 Astra RunPod review.
 
-Already established:
-- Preferred path: existing Owner Console -> governed Seldrune agents/provider tools -> RunPod.
-- Step 1: record bounded deployment/test approval with GPU/spend/test/SLO limits.
-- Step 2: use RunPod list/get for read-only authentication and account/resource-scope evidence.
-- Step 3 began: inspect the repository for the Live Media image, startup contract,
-  GPU requirements, and health endpoint.
+Return ONLY:
+- the remainder of Step 4's acceptance/evidence gate after the phrase "allocated GPU",
+- Step 5 for Live Media worker health, real transformed-frame proof, and measured p95 latency,
+- Step 6 for cost controls, shutdown/cleanup, evidence retention, and owner-only blockers.
 
-Return ONLY the unfinished portion, starting at Step 3. Complete Steps 3-6 with:
-- the responsible existing Seldrune agent/tool,
-- the exact action,
-- an explicit acceptance/evidence gate,
-- RunPod pod/endpoint readiness,
-- Live Media worker health,
-- transformed-frame proof and p95 latency evidence,
-- cost limits and cleanup,
-- any owner-only blocker.
-
-Keep the answer compact enough to finish. Do not repeat Steps 1-2 except where a dependency
-must be referenced. Do not perform external actions and do not invent credentials, resource
-IDs, test results, or readiness claims.
+Use compact bullets, maximum 280 words total. For every step include responsible Seldrune
+agent/tool, exact action, and pass/fail evidence gate. Do not repeat Steps 1-3. Do not perform
+external actions. Do not invent credentials, RunPod IDs, test results, or readiness claims.
 """.strip()
 
 
@@ -212,7 +200,7 @@ def temporary_astra_runpod_review(token: str, session: SessionDep) -> dict[str, 
         organization_id=_ASTRA_BRIDGE_ORG_ID,
         created_by_user_id=agent.created_by_user_id,
         assigned_agent_id=agent.id,
-        title="GPT-6 Astra RunPod architecture review continuation",
+        title="GPT-6 Astra RunPod architecture review final continuation",
         objective=_ASTRA_RUNPOD_OBJECTIVE,
         priority=10,
         status=TaskStatus.ASSIGNED.value,
