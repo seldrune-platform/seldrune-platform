@@ -24,6 +24,19 @@ def test_gpt_response_schema_exposes_runtime_metadata():
     assert response.provider == "openai"
 
 
+def test_gpt_request_accepts_explicit_openai_model() -> None:
+    from backend.app.api.routes.seldrune_gpt import SeldruneGPTRequest
+
+    request = SeldruneGPTRequest(
+        message="Review this Seldrune deployment.",
+        provider="openai",
+        model="gpt-6-astra",
+    )
+
+    assert request.model == "gpt-6-astra"
+    assert request.provider == "openai"
+
+
 def test_gpt_attachment_parser_accepts_image_and_pdf() -> None:
     import base64
 
