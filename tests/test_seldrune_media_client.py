@@ -34,6 +34,23 @@ def test_media_client_stop_cancels_a_pending_camera_session():
     assert "remoteClosePromise" in response.text
 
 
+def test_media_client_waits_for_gateway_teardown_before_restart():
+    response = TestClient(app).get("/console-assets/seldrune-media.js")
+
+    source = response.text
+    close_start = source.index("function closeRemote(session) {")
+    close_end = source.index("async function openSession", close_start)
+    close_remote = source[close_start:close_end]
+
+    assert "session.closing = true;" in close_remote
+    assert "session.remoteClosePromise || Promise.resolve()" in close_remote
+    assert "]).finally(() => {" in close_remote
+    assert close_remote.index("]).finally") < close_remote.index(
+        "if (activeSession === session) activeSession = null;"
+    )
+    assert "activeSession && !activeSession.closing && activeSession.peer" in source
+
+
 def test_product_studio_links_to_the_separate_media_console():
     response = TestClient(app).get("/web/products.html")
 

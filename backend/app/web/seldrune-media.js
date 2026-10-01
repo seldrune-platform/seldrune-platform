@@ -180,7 +180,7 @@
 
   function closeRemote(session) {
     if (!session) return Promise.resolve();
-    if (activeSession === session) activeSession = null;
+    session.closing = true;
     if (!session.closePromise) {
       session.closePromise = (async () => {
         if (session.peer && session.peer.signalingState !== 'closed') session.peer.close();
@@ -198,7 +198,10 @@
     return Promise.all([
       session.closePromise,
       session.remoteClosePromise || Promise.resolve(),
-    ]);
+    ]).finally(() => {
+      // Keep the closing session visible until the gateway releases its worker.
+      if (activeSession === session) activeSession = null;
+    });
   }
 
   async function openSession(constraints, config, attempt) {
@@ -323,7 +326,7 @@
     const kinds = requestedKinds(constraints);
     if (!kinds.audio && !kinds.video) return nativeGetUserMedia(constraints);
     const configKey = JSON.stringify(config);
-    if (activeSession && activeSession.peer &&
+    if (activeSession && !activeSession.closing && activeSession.peer &&
         activeSession.configKey === configKey &&
         activeSession.peer.connectionState !== 'failed' &&
         activeSession.peer.connectionState !== 'closed') return activeSession;
@@ -431,7 +434,6 @@
     pendingSession = null;
     if (pending) pending.cancel();
     const session = activeSession;
-    activeSession = null;
     consumerTracks.forEach(track => track.stop());
     consumerTracks.clear();
     await Promise.all([
