@@ -147,3 +147,66 @@ def test_pdf_editor_rejects_plan_when_target_is_missing() -> None:
         )
 
     assert exc_info.value.status_code == 422
+
+
+def test_pdf_retry_visual_pages_skips_typography_only_retry() -> None:
+    from backend.app.api.routes.seldrune_gpt import _pdf_retry_visual_pages
+
+    plan = {
+        "operations": [
+            {"action": "replace_text", "page": 2, "target_text": "OLD"},
+        ]
+    }
+
+    pages = _pdf_retry_visual_pages(
+        plan,
+        ["candidate is structurally safe but original-look fidelity is 88%"],
+        page_count=5,
+    )
+
+    assert pages == ()
+
+
+def test_pdf_retry_visual_pages_targets_only_missing_operation_page() -> None:
+    from backend.app.api.routes.seldrune_gpt import _pdf_retry_visual_pages
+
+    plan = {
+        "operations": [
+            {"action": "replace_text", "page": 1, "target_text": "A"},
+            {"action": "replace_text", "page": 4, "target_text": "B"},
+            {"action": "replace_text", "page": 5, "target_text": "C"},
+        ]
+    }
+
+    pages = _pdf_retry_visual_pages(
+        plan,
+        [
+            "operation 2: target 'B' was not found on original page 4; "
+            "use the exact source value or a precise bbox"
+        ],
+        page_count=6,
+    )
+
+    assert pages == (4,)
+
+
+def test_pdf_retry_visual_pages_caps_multi_operation_fallback() -> None:
+    from backend.app.api.routes.seldrune_gpt import _pdf_retry_visual_pages
+
+    plan = {
+        "operations": [
+            {"action": "replace_text", "page": page, "target_text": str(page)}
+            for page in range(1, 6)
+        ]
+    }
+
+    pages = _pdf_retry_visual_pages(
+        plan,
+        [
+            f"operation {page}: target was not found; use a precise bbox"
+            for page in range(1, 6)
+        ],
+        page_count=6,
+    )
+
+    assert pages == (1, 2, 3)
