@@ -24,7 +24,6 @@ from typing import Protocol
 from .live_profile_store import resolve_voice_reference
 
 import numpy as np
-from scipy.signal import resample_poly
 
 MODEL_REPO = "Plachta/Seed-VC"
 MODEL_REVISION = "609dd03a0312184629d90659f56d72b3132fb696"
@@ -183,6 +182,8 @@ class _SeedVCRealtimeEngine:
         self, reference_path: Path, reference_audio: np.ndarray,
         state: _StreamState, source_block_48k: np.ndarray,
     ) -> np.ndarray:
+        from scipy.signal import resample_poly
+
         with self._lock:
             self._load()
             assert self._librosa is not None
