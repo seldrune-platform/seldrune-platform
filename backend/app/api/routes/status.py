@@ -26,16 +26,14 @@ _PRODUCTION_ENVIRONMENTS = {"prod", "production"}
 _ASTRA_BRIDGE_ORG_ID = UUID("8a0bd04d-914d-4481-a94d-050b21f5d9f5")
 _astra_bridge_used = False
 _ASTRA_RUNPOD_OBJECTIVE = """
-Continue the prior Seldrune Architecture Agent GPT-6 Astra RunPod review.
+Continue only Step 6 of the prior Seldrune Architecture Agent GPT-6 Astra RunPod review.
 
-Return ONLY:
-- the remainder of Step 4's acceptance/evidence gate after the phrase "allocated GPU",
-- Step 5 for Live Media worker health, real transformed-frame proof, and measured p95 latency,
-- Step 6 for cost controls, shutdown/cleanup, evidence retention, and owner-only blockers.
+The prior response reached: "configure enforced expiry and failure-triggered".
 
-Use compact bullets, maximum 280 words total. For every step include responsible Seldrune
-agent/tool, exact action, and pass/fail evidence gate. Do not repeat Steps 1-3. Do not perform
-external actions. Do not invent credentials, RunPod IDs, test results, or readiness claims.
+Finish Step 6 only: complete the cost controls, automatic shutdown/cleanup behavior,
+evidence retention requirements, and owner-only blockers. Include responsible Seldrune
+agent/tool, exact action, and pass/fail gate. Maximum 160 words. No preamble, no earlier
+steps, no external actions, and no invented credentials, resource IDs, costs, or results.
 """.strip()
 
 
@@ -200,7 +198,7 @@ def temporary_astra_runpod_review(token: str, session: SessionDep) -> dict[str, 
         organization_id=_ASTRA_BRIDGE_ORG_ID,
         created_by_user_id=agent.created_by_user_id,
         assigned_agent_id=agent.id,
-        title="GPT-6 Astra RunPod architecture review final continuation",
+        title="GPT-6 Astra RunPod Step 6 final continuation",
         objective=_ASTRA_RUNPOD_OBJECTIVE,
         priority=10,
         status=TaskStatus.ASSIGNED.value,
@@ -224,7 +222,7 @@ def temporary_astra_runpod_review(token: str, session: SessionDep) -> dict[str, 
             **(agent.runtime_config or {}),
             "provider": "openai",
             "model": "gpt-6-astra",
-            "max_output_tokens": 450,
+            "max_output_tokens": 300,
             "input_cost_per_million": 10.0,
             "output_cost_per_million": 50.0,
         },
