@@ -7,8 +7,11 @@ from fastapi.testclient import TestClient
 from services.live_media.runpod_facefusion_worker import (
     _authorize,
     _check_owner,
+    _synthetic_output_command,
     app,
     build_facefusion_command,
+    meets_output_target,
+    output_canvas_dimensions,
     supports_video_dimensions,
 )
 
@@ -75,3 +78,27 @@ def test_worker_accepts_portrait_1080p_and_rejects_larger_video():
     assert supports_video_dimensions(1920, 1080)
     assert not supports_video_dimensions(1080, 2160)
     assert not supports_video_dimensions(3840, 2160)
+
+def test_output_canvas_matches_video_orientation():
+    assert output_canvas_dimensions(1920, 1080) == (1920, 1080)
+    assert output_canvas_dimensions(1080, 1920) == (1080, 1920)
+
+
+def test_worker_normalizes_output_to_1080p_at_30_fps():
+    assert meets_output_target(1920, 1080, 30.0, 640, 480)
+    assert meets_output_target(1080, 1920, 30.0, 480, 640)
+    assert not meets_output_target(1280, 720, 30.0, 640, 480)
+    assert not meets_output_target(1920, 1080, 29.97, 640, 480)
+
+
+def test_synthetic_output_command_sets_resolution_fps_and_watermark():
+    command = _synthetic_output_command(
+        Path("/tmp/faceswapped.mp4"),
+        Path("/tmp/seldrune-output.mp4"),
+        640,
+        480,
+    )
+    assert "scale=1920:1080" in command[command.index("-vf") + 1]
+    assert "fps=30" in command[command.index("-vf") + 1]
+    assert "AI-SYNTHETIC" in command[command.index("-vf") + 1]
+    assert command[command.index("-r") + 1] == "30"
