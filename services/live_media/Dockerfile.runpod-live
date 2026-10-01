@@ -11,7 +11,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     SEEDVC_HOME=/opt/seed-vc \
     SELDRUNE_LIVE_PROFILE_ROOT=/workspace/seldrune-live-profiles \
     HF_HOME=/workspace/seldrune-live-profiles/.model-cache \
-    HF_HUB_DISABLE_TELEMETRY=1
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    HF_HUB_ENABLE_HF_TRANSFER=0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ffmpeg git fonts-dejavu-core libgl1 libglib2.0-0 libgomp1 \
