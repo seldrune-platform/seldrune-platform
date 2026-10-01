@@ -137,6 +137,24 @@ def test_known_model_cost_estimate_accounts_for_cache_discount() -> None:
     assert cached < uncached
 
 
+def test_astra_cost_estimate_uses_official_standard_rates() -> None:
+    uncached = estimate_model_cost(
+        "gpt-6-astra",
+        input_tokens=100_000,
+        output_tokens=10_000,
+    )
+    cached = estimate_model_cost(
+        "gpt-6-astra",
+        input_tokens=100_000,
+        output_tokens=10_000,
+        cached_input_tokens=90_000,
+    )
+
+    assert uncached == pytest.approx(1.5, abs=0.000001)
+    assert cached == pytest.approx(0.69, abs=0.000001)
+    assert cached < uncached
+
+
 def test_gateway_budget_guard_blocks_expensive_request_before_generation() -> None:
     settings = _settings()
     gateway = ModelGateway(settings)
