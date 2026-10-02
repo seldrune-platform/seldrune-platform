@@ -18,6 +18,8 @@ services:
           property: connectionString
       - key: SELDRUNE_MODEL_PROVIDER
         value: openai
+      - key: SELDRUNE_MODEL_OPENAI_DEFAULT
+        value: gpt-6-luna
       - key: SELDRUNE_MODEL_DEFAULT
         value: gpt-5.6-sol
       - key: SELDRUNE_MODEL_ECONOMY
@@ -123,6 +125,8 @@ services:
           property: connectionString
       - key: SELDRUNE_MODEL_PROVIDER
         value: openai
+      - key: SELDRUNE_MODEL_OPENAI_DEFAULT
+        value: gpt-6-luna
       - key: SELDRUNE_MODEL_DEFAULT
         value: gpt-5.6-sol
       - key: SELDRUNE_MODEL_ECONOMY
