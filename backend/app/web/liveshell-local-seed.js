@@ -25,6 +25,7 @@
     seed: null,
     readyResolve: null,
     readyReject: null,
+    readyTimer: null,
     frameWindowStart: 0,
     frameWindowCount: 0,
     lastVideoTimestamp: -1,
@@ -57,6 +58,7 @@
     const json = JSON.stringify(state.seed);
     $('#local-seed-seed').textContent = json;
     $('#local-seed-seed-size').textContent = new TextEncoder().encode(json).length + ' bytes';
+    $('#local-seed-warmth-value').textContent = state.seed.warmth.toFixed(2);
     if (state.audioNode && state.audioContext) {
       const parameter = state.audioNode.parameters.get('warmth');
       parameter.setTargetAtTime(state.seed.warmth, state.audioContext.currentTime, 0.04);
@@ -76,14 +78,17 @@
   function waitForWorkerReady(worker) {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('The local face model did not finish loading. Check the connection and try again.')), 30000);
+      state.readyTimer = timer;
       state.readyResolve = () => {
         clearTimeout(timer);
+        state.readyTimer = null;
         state.readyResolve = null;
         state.readyReject = null;
         resolve();
       };
       state.readyReject = error => {
         clearTimeout(timer);
+        state.readyTimer = null;
         state.readyResolve = null;
         state.readyReject = null;
         reject(error);
@@ -363,6 +368,10 @@
 
   async function stop(showMessage) {
     state.running = false;
+    if (state.readyTimer) clearTimeout(state.readyTimer);
+    state.readyTimer = null;
+    state.readyResolve = null;
+    state.readyReject = null;
     if (state.raf) cancelAnimationFrame(state.raf);
     state.raf = 0;
     if (state.worker) {
@@ -400,6 +409,7 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     $('#local-seed-output-badge').hidden = true;
     $('#local-seed-stop').disabled = true;
+    startButton.disabled = false;
     $('#local-seed-video-metrics').textContent = 'Not running';
     $('#local-seed-audio-metrics').textContent = '48 kHz target · not running';
     $('#local-seed-face-metrics').textContent = 'Waiting for camera';
