@@ -25,10 +25,8 @@ def test_capability_seed_is_appended_to_custom_agent_instructions() -> None:
 
     assert instructions.startswith(custom)
     assert "Seldrune collaborative execution seed" in instructions
-    assert (
-        "Keep established facts distinct from assumptions and testable hypotheses"
-        in instructions
-    )
+    normalized = " ".join(instructions.split())
+    assert "Keep established facts distinct from assumptions and testable hypotheses" in normalized
     assert "model statement alone is not completion proof" in instructions
     assert "compact skill capsules" in instructions
     assert "required owner approval" in instructions
