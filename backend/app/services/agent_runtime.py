@@ -24,6 +24,12 @@ from backend.app.services.ai_spend_guard import (
 from backend.app.services.audit import record_audit
 from backend.app.services.knowledge import build_agent_context, remember_task_result
 from backend.app.services.model_gateway import ModelGateway
+from backend.app.services.shared_agent_context import (
+    append_capability_seed,
+    append_owner_continuity,
+    load_owner_continuity,
+    resolve_requested_model,
+)
 from backend.app.services.task_engine import transition_task
 
 
@@ -60,14 +66,7 @@ def _resolve_model(agent: Agent) -> str:
     return model
 
 
-_CORE_CAPABILITY_SEED = """Seldrune execution seed:
-Target: identify the requested outcome, constraints, and acceptance evidence.
-Context: use relevant task inputs and retrieved knowledge; separate source claims, assumptions, and unknowns.
-Transform: choose the shortest effective path across research, reasoning, coding, data, writing, or operations.
-Act: use only capabilities and tools available to this agent through Seldrune's governed paths.
-Prove: check the result against acceptance evidence. A plan, queued action, or model claim alone is not completion evidence.
-Reuse: when a procedure succeeds with evidence, express it as a compact skill capsule: trigger, steps, recovery, and proof. Reuse only verified capsules for matching work.
-Report: state what was produced, the evidence checked, and any unresolved blocker plainly."""
+
 
 
 def _build_instructions(agent: Agent) -> str:
@@ -81,15 +80,19 @@ def _build_instructions(agent: Agent) -> str:
             f"Your capabilities are: {capabilities}. Complete the assigned objective clearly, "
             "state assumptions, and return an actionable result."
         )
-    return f"{base}\n\n{_CORE_CAPABILITY_SEED}"
+    return append_capability_seed(base)
 
 
-def _build_input(task: Task, knowledge_context: str = "") -> str:
+def _build_input(
+    task: Task,
+    knowledge_context: str = "",
+    owner_continuity: str = "",
+) -> str:
     payload = json.dumps(task.input_data, sort_keys=True, default=str)
     base = f"Task: {task.title}\nObjective: {task.objective}\nContext: {payload}"
     if knowledge_context:
-        return f"{base}\n\n{knowledge_context}"
-    return base
+        base = f"{base}\n\n{knowledge_context}"
+    return append_owner_continuity(base, owner_continuity)
 
 
 def _task_response_schema(task: Task) -> dict | None:
@@ -144,12 +147,15 @@ def execute_agent_task(
         raise AgentRuntimeError("Only assigned tasks can be executed")
 
     provider = _resolve_provider(agent)
-    explicit_model = (
-        _resolve_model(agent)
-        if isinstance(agent.runtime_config.get("model"), str)
-        and str(agent.runtime_config.get("model")).strip()
-        else None
-    )
+    configured_model = agent.runtime_config.get("model")
+    if isinstance(configured_model, str) and configured_model.strip():
+        explicit_model = _resolve_model(agent)
+    else:
+        explicit_model = resolve_requested_model(
+            provider,
+            None,
+            settings.model_openai_default,
+        )
     spend_status = ai_spend_budget_status(
         session,
         organization_id=task.organization_id,
@@ -171,6 +177,7 @@ def execute_agent_task(
         permitted = [
             candidate
             for candidate in (
+                settings.model_openai_default,
                 settings.model_economy,
                 settings.model_balanced,
                 settings.model_premium,
@@ -213,6 +220,11 @@ def execute_agent_task(
         agent_id=agent.id,
         limit=settings.knowledge_retrieval_limit,
         max_chars=settings.knowledge_context_max_chars,
+    )
+    owner_continuity = load_owner_continuity(
+        session,
+        task.organization_id,
+        actor_user_id,
     )
     response_schema = _task_response_schema(task)
     invocation = ModelInvocation(
@@ -262,13 +274,14 @@ def execute_agent_task(
         provider=provider,
         model=model,
         instructions=_build_instructions(agent),
-        input_text=_build_input(task, knowledge_context),
+        input_text=_build_input(task, knowledge_context, owner_continuity),
         max_output_tokens=max_output_tokens,
         metadata={
             "task_id": str(task.id),
             "agent_id": str(agent.id),
             "agent_version": agent.version,
             "cost_tier": route.tier,
+            "owner_continuity_attached": bool(owner_continuity),
         },
         response_schema=response_schema,
         reasoning_effort=route.reasoning_effort,
