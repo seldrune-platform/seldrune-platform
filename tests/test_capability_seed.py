@@ -25,7 +25,7 @@ def test_capability_seed_is_appended_to_custom_agent_instructions() -> None:
 
     assert instructions.startswith(custom)
     assert "Seldrune collaborative execution seed" in instructions
-    assert "separate established facts, assumptions, and hypotheses" in instructions
+    assert "Keep established facts distinct from assumptions and testable hypotheses" in instructions
     assert "model statement alone is not completion proof" in instructions
     assert "compact skill capsules" in instructions
     assert "required owner approval" in instructions
@@ -105,9 +105,9 @@ def test_openai_route_defaults_to_gpt_6_luna_and_keeps_explicit_override() -> No
 def test_gpt_6_luna_cost_estimate_matches_per_million_rates() -> None:
     assert estimate_model_cost(
         "gpt-6-luna",
-        input_tokens=1_000_000,
-        output_tokens=1_000_000,
-    ) == 0.6
+        input_tokens=100_000,
+        output_tokens=100_000,
+    ) == 0.06
 
 
 def test_empty_continuity_does_not_change_input() -> None:
