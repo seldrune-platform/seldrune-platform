@@ -44,7 +44,7 @@
         </div>
         <span class="secure-pill">LOCAL · SYNTHETIC EFFECT</span>
       </div>
-      <p class="local-seed-copy">A tiny style seed selects the halo color and a gentle warmth setting. A pinned face-landmark model runs on the browser CPU; the canvas targets 1080p30 and an AudioWorklet runs at 48 kHz. The seed is only a few settings, separate from the downloaded model files. This makes a stylized overlay and light timbre effect; it does not reproduce another person’s face or voice.</p>
+      <p class="local-seed-copy">A tiny style seed selects the halo color and a gentle warmth setting. A pinned face-landmark model runs on the browser CPU; the canvas targets 1080p30 and an AudioWorklet runs at 48 kHz. Face detection runs in the page thread and can slow updates on mobile, so use the measured FPS shown below. The seed is only a few settings, separate from the downloaded model files. This makes a stylized overlay and light timbre effect; it does not reproduce another person’s face or voice.</p>
       <p class="local-seed-copy">When started, the browser downloads the pinned model and WebAssembly runtime from Google’s model host and jsDelivr. This experiment does not upload camera or microphone media, record it, or connect to the GPU gateway. Source resolution and decoded preview FPS are measured separately; a 1080p canvas cannot add detail to a lower-resolution camera feed.</p>
       <div class="local-seed-controls">
         <label for="local-seed-style">Style capsule
