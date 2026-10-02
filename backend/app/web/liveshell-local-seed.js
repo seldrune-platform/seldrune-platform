@@ -347,7 +347,11 @@
       $('#local-seed-model-metrics').textContent = 'Face landmarks ready · CPU';
       $('#local-seed-output-badge').hidden = false;
       setStatus('Local CPU effect running. Raw camera and microphone stay in this browser; model files load from the listed providers.', 'success');
-      if (typeof view.requestVideoFrameCallback === 'function') view.requestVideoFrameCallback(updateDecodedFps);
+      if (typeof view.requestVideoFrameCallback === 'function') {
+        view.requestVideoFrameCallback(updateDecodedFps);
+      } else {
+        $('#local-seed-video-metrics').textContent = canvas.width + '×' + canvas.height + ' · 30 fps requested · decoded FPS unavailable';
+      }
       renderLoop();
     } catch (error) {
       setStatus(error.message || 'The local preview could not start.', 'error');
