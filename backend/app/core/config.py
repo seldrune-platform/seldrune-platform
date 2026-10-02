@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     render_default_service_id: str | None = None
     agent_auto_grant_production_tools: bool = False
     model_provider: str = "mock"
+    model_openai_default: str = "gpt-6-luna"
     model_default: str = "mock-v1"
     model_compatible_base_url: str | None = None
     model_compatible_api_key: str | None = None
