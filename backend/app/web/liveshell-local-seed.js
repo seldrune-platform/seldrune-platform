@@ -4,6 +4,8 @@
   if (!startButton) return;
 
   const FHD = { width: 1920, height: 1080, fps: 30, sampleRate: 48000 };
+  const PORTRAIT = { width: FHD.height, height: FHD.width };
+  const MIN_FACE_INFERENCE_INTERVAL = 250;
   const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
   const VISION_WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm';
   const PRESETS = {
@@ -21,6 +23,7 @@
     raf: 0,
     inferenceBusy: false,
     lastInferenceAt: 0,
+    faceInferenceInterval: MIN_FACE_INFERENCE_INTERVAL,
     landmarks: null,
     seed: null,
     frameWindowStart: 0,
@@ -175,7 +178,7 @@
     if (!state.running) return;
     const now = performance.now();
     if (!state.inferenceBusy && state.landmarker && camera.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-        now - state.lastInferenceAt >= 66 && camera.currentTime !== state.lastVideoTimestamp) {
+        now - state.lastInferenceAt >= state.faceInferenceInterval && camera.currentTime !== state.lastVideoTimestamp) {
       state.inferenceBusy = true;
       state.lastInferenceAt = now;
       state.lastVideoTimestamp = camera.currentTime;
@@ -214,6 +217,14 @@
     if (now - state.frameWindowStart >= 2000) {
       const fps = state.frameWindowCount * 1000 / (now - state.frameWindowStart);
       $('#local-seed-video-metrics').textContent = canvas.width + '×' + canvas.height + ' · ' + fps.toFixed(1) + ' decoded fps';
+      // CPU face inference is synchronous in this browser context. If it
+      // starves rendering, sample faces less often; recover the tracking rate
+      // only after the output has sustained nearly 30 decoded fps.
+      if (fps < 20) {
+        state.faceInferenceInterval = Math.min(1500, state.faceInferenceInterval + 100);
+      } else if (fps > 29) {
+        state.faceInferenceInterval = Math.max(MIN_FACE_INFERENCE_INTERVAL, state.faceInferenceInterval - 50);
+      }
       if (fps < 29) {
         setStatus('The local effect is running, but the measured preview is below 30 fps on this device.', 'error');
       } else {
@@ -300,8 +311,8 @@
 
       const capture = state.stream.getVideoTracks()[0].getSettings();
       const portrait = (capture.width || camera.videoWidth) < (capture.height || camera.videoHeight);
-      canvas.width = portrait ? 1080 : FHD.width;
-      canvas.height = portrait ? FHD.height : 1080;
+      canvas.width = portrait ? PORTRAIT.width : FHD.width;
+      canvas.height = portrait ? PORTRAIT.height : FHD.height;
       $('#local-seed-video-metrics').textContent =
         (capture.width && capture.height ? capture.width + '×' + capture.height : 'Camera resolution unreported') + ' input · 30 fps requested';
       await setupAudio();
