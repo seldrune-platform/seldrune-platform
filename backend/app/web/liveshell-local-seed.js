@@ -308,9 +308,13 @@
       setStatus('Loading the pinned face model for local CPU inference…');
       await createFaceLandmarker();
 
+      // Prime the canvas stream and start the render loop before waiting for
+      // the output video to play. Some mobile browsers wait for the first
+      // captured frame before resolving play(), so waiting first deadlocks
+      // the loop that is supposed to draw that frame.
+      drawCameraFrame();
       state.canvasStream = canvas.captureStream(FHD.fps);
       view.srcObject = state.canvasStream;
-      await view.play();
       state.running = true;
       state.frameWindowStart = 0;
       state.frameWindowCount = 0;
@@ -326,6 +330,7 @@
         $('#local-seed-video-metrics').textContent = canvas.width + '×' + canvas.height + ' · 30 fps requested · decoded FPS unavailable';
       }
       renderLoop();
+      await view.play();
     } catch (error) {
       setStatus(error.message || 'The local preview could not start.', 'error');
       await stop(false);
