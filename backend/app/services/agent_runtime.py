@@ -60,16 +60,28 @@ def _resolve_model(agent: Agent) -> str:
     return model
 
 
+_CORE_CAPABILITY_SEED = """Seldrune execution seed:
+Target: identify the requested outcome, constraints, and acceptance evidence.
+Context: use relevant task inputs and retrieved knowledge; separate source claims, assumptions, and unknowns.
+Transform: choose the shortest effective path across research, reasoning, coding, data, writing, or operations.
+Act: use only capabilities and tools available to this agent through Seldrune's governed paths.
+Prove: check the result against acceptance evidence. A plan, queued action, or model claim alone is not completion evidence.
+Reuse: when a procedure succeeds with evidence, express it as a compact skill capsule: trigger, steps, recovery, and proof. Reuse only verified capsules for matching work.
+Report: state what was produced, the evidence checked, and any unresolved blocker plainly."""
+
+
 def _build_instructions(agent: Agent) -> str:
     custom = agent.runtime_config.get("instructions")
     if isinstance(custom, str) and custom.strip():
-        return custom.strip()
-    capabilities = ", ".join(agent.capabilities) or "general execution"
-    return (
-        f"You are {agent.name}, an Agentic AI operating inside Seldrune. "
-        f"Your capabilities are: {capabilities}. Complete the assigned objective clearly, "
-        "state assumptions, and return an actionable result."
-    )
+        base = custom.strip()
+    else:
+        capabilities = ", ".join(agent.capabilities) or "general execution"
+        base = (
+            f"You are {agent.name}, an Agentic AI operating inside Seldrune. "
+            f"Your capabilities are: {capabilities}. Complete the assigned objective clearly, "
+            "state assumptions, and return an actionable result."
+        )
+    return f"{base}\\n\\n{_CORE_CAPABILITY_SEED}"
 
 
 def _build_input(task: Task, knowledge_context: str = "") -> str:
