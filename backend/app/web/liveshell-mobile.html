@@ -22,6 +22,7 @@
         <p class="eyebrow">PHONE CAMERA + CLOUD GPU</p>
         <h1>Live face &amp; voice camera</h1>
         <p class="intro-copy">Use approved face and voice profiles. Seldrune sends your camera and microphone directly to its private GPU gateway and returns a labeled live stream.</p>
+        <p class="local-seed-jump"><a href="#local-seed-lab">Try the local CPU seed preview ↓</a></p>
       </div>
       <div id="gateway-state" class="gateway-state" role="status" aria-live="polite">
         Checking session gateway…
@@ -33,6 +34,67 @@
       <div><small>VOICE TARGET</small><strong>48 kHz</strong></div>
       <div><small>GPU BASELINE</small><strong>RTX 4090 · 24 GB</strong></div>
       <div><small>LOW-COST PILOT</small><strong>RTX PRO 4500 SE · pilot</strong></div>
+    </section>
+
+    <section id="local-seed-lab" class="panel local-seed-panel" aria-labelledby="local-seed-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">LOCAL CPU EXPERIMENT</p>
+          <h2 id="local-seed-title">Transformation seed preview</h2>
+        </div>
+        <span class="secure-pill">LOCAL · SYNTHETIC EFFECT</span>
+      </div>
+      <p class="local-seed-copy">A tiny style seed selects the halo color and a gentle warmth setting. A pinned face-landmark model runs on the browser CPU; the canvas targets 1080p30 and an AudioWorklet runs at 48 kHz. The seed is only a few settings, separate from the downloaded model files. This makes a stylized overlay and light timbre effect; it does not reproduce another person’s face or voice.</p>
+      <p class="local-seed-copy">When started, the browser downloads the pinned model and WebAssembly runtime from Google’s model host and jsDelivr. This experiment does not upload camera or microphone media, record it, or connect to the GPU gateway. Source resolution and decoded preview FPS are measured separately; a 1080p canvas cannot add detail to a lower-resolution camera feed.</p>
+      <div class="local-seed-controls">
+        <label for="local-seed-style">Style capsule
+          <select id="local-seed-style">
+            <option value="aurora">Aurora · cool halo</option>
+            <option value="ember">Ember · warm halo</option>
+            <option value="violet">Violet · soft halo</option>
+          </select>
+        </label>
+        <label for="local-seed-warmth">Voice warmth <output id="local-seed-warmth-value">0.18</output>
+          <input id="local-seed-warmth" type="range" min="0" max="1" step="0.01" value="0.18">
+        </label>
+      </div>
+      <div class="local-seed-consent">
+        <label class="local-seed-check">
+          <input id="local-seed-consent" type="checkbox">
+          <span>I consent to camera and microphone processing in this browser for this local preview.</span>
+        </label>
+        <label class="local-seed-check">
+          <input id="local-seed-hear" type="checkbox">
+          <span>Hear the processed voice (headphones recommended).</span>
+        </label>
+      </div>
+      <div class="action-row local-seed-actions">
+        <button id="local-seed-start" class="button primary" type="button">Start local preview</button>
+        <button id="local-seed-stop" class="button danger" type="button" disabled>Stop and release devices</button>
+      </div>
+      <p id="local-seed-status" class="local-seed-status" role="status" aria-live="polite">Camera and microphone remain off until you start the preview.</p>
+      <div class="local-seed-preview-grid">
+        <article class="local-seed-preview">
+          <div class="video-label"><span>LOCAL CPU OUTPUT</span><span>AI MODIFIED LABEL STAYS ON</span></div>
+          <div class="local-seed-video-wrap">
+            <video id="local-seed-input" muted playsinline hidden></video>
+            <canvas id="local-seed-canvas" hidden></canvas>
+            <video id="local-seed-output" autoplay muted playsinline></video>
+            <span id="local-seed-output-badge" class="local-seed-output-badge" hidden>AI MODIFIED · SYNTHETIC PREVIEW</span>
+          </div>
+          <audio id="local-seed-audio-output" controls muted playsinline></audio>
+        </article>
+        <div class="local-seed-readouts" aria-label="Local preview measurements">
+          <div><small>CAMERA INPUT / OUTPUT</small><strong id="local-seed-video-metrics">Not running</strong></div>
+          <div><small>VOICE PROCESSING</small><strong id="local-seed-audio-metrics">48 kHz target · not running</strong></div>
+          <div><small>FACE TRACKER</small><strong id="local-seed-face-metrics">Waiting for camera</strong></div>
+          <div><small>MODEL / DEVICE</small><strong id="local-seed-model-metrics">Not loaded</strong></div>
+        </div>
+      </div>
+      <div class="local-seed-capsule">
+        <div><small>ACTIVE STYLE SEED</small><code id="local-seed-seed"></code></div>
+        <strong id="local-seed-seed-size"></strong>
+      </div>
     </section>
 
     <section class="studio-grid">
@@ -121,5 +183,6 @@
   </main>
   <script src="/console-assets/seldrune-media.js" defer></script>
   <script src="/console-assets/liveshell-mobile.js" defer></script>
+  <script src="/console-assets/liveshell-local-seed.js" defer></script>
 </body>
 </html>
