@@ -81,7 +81,7 @@ def _build_instructions(agent: Agent) -> str:
             f"Your capabilities are: {capabilities}. Complete the assigned objective clearly, "
             "state assumptions, and return an actionable result."
         )
-    return f"{base}\\n\\n{_CORE_CAPABILITY_SEED}"
+    return f"{base}\n\n{_CORE_CAPABILITY_SEED}"
 
 
 def _build_input(task: Task, knowledge_context: str = "") -> str:
