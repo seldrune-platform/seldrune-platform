@@ -17,15 +17,12 @@
     canvasStream: null,
     audioContext: null,
     audioNode: null,
-    worker: null,
+    landmarker: null,
     raf: 0,
     inferenceBusy: false,
     lastInferenceAt: 0,
     landmarks: null,
     seed: null,
-    readyResolve: null,
-    readyReject: null,
-    readyTimer: null,
     frameWindowStart: 0,
     frameWindowCount: 0,
     lastVideoTimestamp: -1,
@@ -75,67 +72,25 @@
     });
   }
 
-  function waitForWorkerReady(worker) {
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('The local face model did not finish loading. Check the connection and try again.')), 30000);
-      state.readyTimer = timer;
-      state.readyResolve = () => {
-        clearTimeout(timer);
-        state.readyTimer = null;
-        state.readyResolve = null;
-        state.readyReject = null;
-        resolve();
-      };
-      state.readyReject = error => {
-        clearTimeout(timer);
-        state.readyTimer = null;
-        state.readyResolve = null;
-        state.readyReject = null;
-        reject(error);
-      };
-      worker.postMessage({ type: 'init', modelUrl: MODEL_URL, wasmRoot: VISION_WASM_URL });
+  async function createFaceLandmarker() {
+    // MediaPipe's WASM bootstrap can fail with "ModuleFactory not set" in
+    // module workers on mobile browsers. Initialize it in the supported page
+    // context instead; inference remains CPU-only and measured FPS reports the
+    // actual device performance.
+    const { FilesetResolver, FaceLandmarker } = await import(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs'
+    );
+    const vision = await FilesetResolver.forVisionTasks(VISION_WASM_URL);
+    state.landmarker = await FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: MODEL_URL,
+        delegate: 'CPU',
+      },
+      runningMode: 'VIDEO',
+      numFaces: 1,
+      outputFaceBlendshapes: false,
     });
-  }
-
-  function onWorkerMessage(event) {
-    const message = event.data || {};
-    if (message.type === 'ready') {
-      $('#local-seed-model-metrics').textContent = 'Face landmarks ready · CPU';
-      if (state.readyResolve) state.readyResolve();
-      return;
-    }
-    if (message.type === 'landmarks') {
-      state.landmarks = message.points || null;
-      state.faceCount = state.landmarks ? 1 : 0;
-      state.inferenceBusy = false;
-      $('#local-seed-face-metrics').textContent = state.faceCount ? '1 face · local landmarks' : 'No face detected';
-      return;
-    }
-    if (message.type === 'error') {
-      const error = new Error(message.message || 'The local face model failed.');
-      $('#local-seed-model-metrics').textContent = 'Face model unavailable';
-      if (state.readyReject) {
-        state.readyReject(error);
-      } else {
-        setStatus(error.message, 'error');
-        void stop(false);
-      }
-    }
-  }
-
-  async function createFaceWorker() {
-    const worker = new Worker('/console-assets/liveshell-face-worker.js', { type: 'module' });
-    state.worker = worker;
-    worker.addEventListener('message', onWorkerMessage);
-    worker.addEventListener('error', event => {
-      const error = new Error(event.message || 'The CPU face worker stopped unexpectedly.');
-      if (state.readyReject) state.readyReject(error);
-      else {
-        setStatus(error.message, 'error');
-        void stop(false);
-      }
-    });
-    await waitForWorkerReady(worker);
+    $('#local-seed-model-metrics').textContent = 'Face landmarks ready · CPU';
   }
 
   function drawCameraFrame() {
@@ -219,19 +174,32 @@
   function trackFace() {
     if (!state.running) return;
     const now = performance.now();
-    if (!state.inferenceBusy && state.worker && camera.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+    if (!state.inferenceBusy && state.landmarker && camera.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
         now - state.lastInferenceAt >= 66 && camera.currentTime !== state.lastVideoTimestamp) {
       state.inferenceBusy = true;
       state.lastInferenceAt = now;
       state.lastVideoTimestamp = camera.currentTime;
-      createImageBitmap(camera).then(bitmap => {
-        if (!state.running || !state.worker) {
-          bitmap.close();
-          state.inferenceBusy = false;
-          return;
+      try {
+        const result = state.landmarker.detectForVideo(camera, Math.max(0, Math.round(now)));
+        const face = result.faceLandmarks && result.faceLandmarks[0];
+        state.landmarks = null;
+        if (face) {
+          const indices = { forehead: 10, chin: 152, left: 234, right: 454, eyeL: 33, eyeR: 263 };
+          state.landmarks = {};
+          Object.keys(indices).forEach(key => {
+            const point = face[indices[key]];
+            if (point) state.landmarks[key] = { x: point.x, y: point.y };
+          });
         }
-        state.worker.postMessage({ type: 'frame', bitmap, timestamp: Math.max(0, Math.round(now)) }, [bitmap]);
-      }).catch(() => { state.inferenceBusy = false; });
+        state.faceCount = state.landmarks ? 1 : 0;
+        $('#local-seed-face-metrics').textContent = state.faceCount ? '1 face · local landmarks' : 'No face detected';
+      } catch (error) {
+        $('#local-seed-model-metrics').textContent = 'Face model unavailable';
+        setStatus('CPU face tracking failed: ' + (error && error.message ? error.message : error), 'error');
+        void stop(false);
+      } finally {
+        state.inferenceBusy = false;
+      }
     }
   }
 
@@ -338,7 +306,7 @@
         (capture.width && capture.height ? capture.width + '×' + capture.height : 'Camera resolution unreported') + ' input · 30 fps requested';
       await setupAudio();
       setStatus('Loading the pinned face model for local CPU inference…');
-      await createFaceWorker();
+      await createFaceLandmarker();
 
       state.canvasStream = canvas.captureStream(FHD.fps);
       view.srcObject = state.canvasStream;
@@ -368,16 +336,11 @@
 
   async function stop(showMessage) {
     state.running = false;
-    if (state.readyTimer) clearTimeout(state.readyTimer);
-    state.readyTimer = null;
-    state.readyResolve = null;
-    state.readyReject = null;
     if (state.raf) cancelAnimationFrame(state.raf);
     state.raf = 0;
-    if (state.worker) {
-      state.worker.postMessage({ type: 'close' });
-      state.worker.terminate();
-      state.worker = null;
+    if (state.landmarker) {
+      state.landmarker.close();
+      state.landmarker = null;
     }
     state.inferenceBusy = false;
     state.landmarks = null;
