@@ -29,7 +29,7 @@ def test_capability_seed_is_appended_to_custom_agent_instructions() -> None:
     assert "Keep established facts distinct from assumptions and testable hypotheses" in normalized
     assert "model statement alone is not completion proof" in instructions
     assert "compact skill capsules" in instructions
-    assert "required owner approval" in instructions
+    assert "operations require the applicable owner approval" in normalized
 
 
 def test_capability_seed_is_appended_to_default_agent_instructions() -> None:
