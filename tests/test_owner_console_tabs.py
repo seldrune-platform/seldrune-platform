@@ -14,8 +14,9 @@ def test_owner_console_uses_single_owner_portal_shell():
     assert "/console-assets/console-portal.css" in html
     assert "/console-assets/console-portal-settings.js" in html
     assert "/console-assets/seldrune-gpt-studio.css" in html
-    assert "/console-assets/console-nexus-arena.css" in html
-    assert "/console-assets/console-nexus-arena.js" in html
+    assert "/console-assets/console-clean.css" in html
+    assert "/console-assets/console-nexus-arena.css" not in html
+    assert "/console-assets/console-nexus-arena.js" not in html
     assert "/console-assets/console-connections.js" in html
 
     # Engineering/version presentation layers stay out of the normal owner portal.
@@ -40,7 +41,8 @@ def test_gpt_operator_remains_truth_gated_and_multimodal():
     assert 'id="seldrune-gpt-mode"' in html
     assert 'id="seldrune-gpt-capabilities"' in html
     assert 'id="seldrune-gpt-open-tools"' in html
-    assert "Ask, create, and build with Seldrune" in html
+    assert "Seldrune AI · text chat" in html
+    assert "Chat replies are text." in html
 
 
 def test_creation_forge_routes_typed_projects_through_the_cognitive_operator():
@@ -48,8 +50,12 @@ def test_creation_forge_routes_typed_projects_through_the_cognitive_operator():
     script = (WEB / "seldrune-gpt.js").read_text()
     styles = (WEB / "seldrune-gpt-studio.css").read_text()
 
-    for mode in ("any", "app", "game", "song", "video", "visual"):
+    for mode in ("song", "video"):
         assert f'data-creation-mode="{mode}"' in html
+        assert f"    {mode}: {{" in script
+    for hidden_mode in ("app", "game", "visual"):
+        assert f'data-creation-mode="{hidden_mode}"' not in html
+    for mode in ("app", "game", "visual"):
         assert f"    {mode}: {{" in script
     assert 'id="seldrune-gpt-creation-status"' in html
     assert "buildCreativeOrder(request)" in script
@@ -118,8 +124,8 @@ def test_portal_controller_defines_owner_workspaces_and_fixed_home():
     assert "portal-quick-orders" not in js
     assert "Ask Seldrune" in js
     for label in (
-        "NEXUS", "SELDRUNE AI", "OUTPUTS", "CODING LAB",
-        "MISSIONS", "MEDIA", "SYSTEM", "CONNECT", "SENSE",
+        "HOME", "AI CHAT", "OUTPUTS", "CODING LAB",
+        "WORKSPACE", "MEDIA", "SYSTEM", "CONNECT", "SENSE", "CONTACT",
     ):
         assert label in js
     assert 'move("#seldrune-gpt", "operator")' in js
@@ -136,8 +142,8 @@ def test_portal_controller_defines_owner_workspaces_and_fixed_home():
     assert 'event.key === "Home"' in js
     assert 'portalSettings.id = "portal-settings"' in js
     assert 'grid("intelligence")?.append(portalSettings)' in js
-    assert 'data-open-portal="sense"' in js
-    assert "SYSTEM SENSE" in js
+    assert '["contact", "CONTACT", "✉"]' in js
+    assert "PRIMARY_WORKSPACES" in js
     assert 'workspace: "home", depth: 0' in js
     assert 'activate("home", {historyMode: "none", scroll: false})' in js
     assert "seldrune.portal.lastWorkspace" not in js
