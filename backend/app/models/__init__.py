@@ -52,6 +52,7 @@ from backend.app.models.research_source import ResearchSource
 from backend.app.models.revoked_access_token import RevokedAccessToken
 from backend.app.models.secret_reference import SecretReference
 from backend.app.models.security_event import SecurityEvent
+from backend.app.models.seldrune_gpt_conversation import SeldruneGPTConversation
 from backend.app.models.seldrune_gpt_message import SeldruneGPTMessage
 from backend.app.models.task import Task, TaskEvent
 from backend.app.models.tool_definition import ToolDefinition
@@ -103,6 +104,7 @@ __all__ = [
     "RevokedAccessToken",
     "SecretReference",
     "SecurityEvent",
+    "SeldruneGPTConversation",
     "SeldruneGPTMessage",
     "Task",
     "TaskEvent",
