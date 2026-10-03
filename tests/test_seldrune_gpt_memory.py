@@ -1,4 +1,5 @@
-from backend.app.models.seldrune_gpt_conversation import SeldruneGPTConversation\nfrom backend.app.models.seldrune_gpt_message import SeldruneGPTMessage
+from backend.app.models.seldrune_gpt_conversation import SeldruneGPTConversation
+from backend.app.models.seldrune_gpt_message import SeldruneGPTMessage
 
 
 def test_gpt_message_model_tracks_conversation_fields():
