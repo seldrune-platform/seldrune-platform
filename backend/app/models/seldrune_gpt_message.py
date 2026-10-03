@@ -19,6 +19,12 @@ class SeldruneGPTMessage(Base):
     user_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    conversation_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("seldrune_gpt_conversations.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     model: Mapped[str | None] = mapped_column(String(128), nullable=True)
