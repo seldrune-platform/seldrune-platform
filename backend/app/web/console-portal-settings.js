@@ -1,8 +1,8 @@
 (() => {
   const DEFAULTS = {
-    theme: "nebula",
+    theme: "seldrune",
     density: "comfortable",
-    motion: "system",
+    motion: "reduced",
     descriptions: "on",
   };
 
@@ -40,12 +40,11 @@
     host.innerHTML = `
       <div class="portal-settings-grid">
         <label class="portal-setting-card">
-          <span>Visual atmosphere</span>
-          <small>Choose the portal surface without changing application behavior.</small>
+          <span>Color theme</span>
+          <small>Choose a flat, high-contrast Seldrune palette.</small>
           <select id="portal-theme-setting">
-            <option value="nebula">Nebula</option>
-            <option value="aurora">Aurora</option>
-            <option value="void">Void</option>
+            <option value="seldrune">Seldrune Light</option>
+            <option value="night">Seldrune Night</option>
           </select>
         </label>
 
@@ -62,9 +61,7 @@
           <span>Motion</span>
           <small>Respect system preference, keep full motion, or reduce all portal animation.</small>
           <select id="portal-motion-setting">
-            <option value="system">Follow device</option>
-            <option value="full">Full</option>
-            <option value="reduced">Reduced</option>
+            <option value="reduced">Reduced motion</option>
           </select>
         </label>
 
