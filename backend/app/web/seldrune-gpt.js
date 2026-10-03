@@ -20,6 +20,22 @@
   const openToolsButton = document.querySelector('#seldrune-gpt-open-tools');
   const creationStatus = document.querySelector('#seldrune-gpt-creation-status');
   const providerSelect = document.querySelector('#seldrune-gpt-provider');
+  const workspace = document.querySelector('#seldrune-gpt');
+  const historySidebar = document.querySelector('#seldrune-gpt-history-list');
+  const historyPageList = document.querySelector('#seldrune-gpt-history-page-list');
+  const historySearch = document.querySelector('#seldrune-gpt-history-search');
+  const historyPageSearch = document.querySelector('[data-gpt-history-filter]');
+  const providerList = document.querySelector('#seldrune-gpt-provider-list');
+  const toolList = document.querySelector('#seldrune-gpt-tool-list');
+  const sidebarToggle = document.querySelector('#seldrune-gpt-sidebar-toggle');
+  const sidebarScrim = document.querySelector('#seldrune-gpt-sidebar-scrim');
+  const initialWelcomeMarkup = thread.querySelector('.gpt-welcome')?.outerHTML
+    || '<div class="gpt-welcome empty"><span class="gpt-welcome-mark" aria-hidden="true">✦</span><p class="gpt-welcome-kicker">A clearer place to think and build</p><h2>What would you like to work on?</h2><p class="gpt-welcome-copy">Ask a question, explore an idea, or bring in a file. Your chats stay in your history.</p><div class="gpt-suggestions"><button type="button" data-gpt-prompt="Check production readiness, active tools, provider configuration, and owner attention items."><strong>Review system status</strong><small>Check runtime and connected tools</small></button><button type="button" data-gpt-prompt="Inspect the Seldrune repository state and summarize the safest next engineering action."><strong>Review a codebase</strong><small>Find the next useful engineering step</small></button></div></div>';
+  let conversations = [];
+  let activeConversationId = null;
+  let activeConversationTitle = 'Seldrune GPT';
+  let currentGptView = 'chat';
+  let workspaceInitialization = null;
 
   const MAX_FILES = 6;
   const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -596,22 +612,234 @@
     renderAttachments();
   }
 
+  function showWelcome() {
+    thread.innerHTML = initialWelcomeMarkup;
+  }
+
+  function setGptView(view) {
+    currentGptView = ['chat', 'history', 'tools'].includes(view) ? view : 'chat';
+    document.querySelectorAll('[data-gpt-view]').forEach(button => {
+      const selected = button.dataset.gptView === currentGptView;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
+    document.querySelectorAll('[data-gpt-page]').forEach(page => {
+      const selected = page.dataset.gptPage === currentGptView;
+      page.hidden = !selected;
+      page.classList.toggle('active', selected);
+    });
+    if (currentGptView === 'history') renderConversationLists();
+    if (currentGptView === 'tools') renderToolCatalog();
+    closeMobileSidebar();
+  }
+
+  function closeMobileSidebar() {
+    workspace?.classList.remove('sidebar-open');
+    sidebarToggle?.setAttribute('aria-expanded', 'false');
+    sidebarScrim?.classList.add('hidden');
+  }
+
+  function formatConversationDate(value) {
+    if (!value) return 'Earlier';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Saved chat' : date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+  }
+
+  function renderConversationList(target, query, pageList = false) {
+    if (!target) return;
+    target.replaceChildren();
+    const filter = String(query || '').trim().toLowerCase();
+    const visible = conversations.filter(item => !filter || String(item.title || '').toLowerCase().includes(filter));
+    if (!visible.length) {
+      const empty = document.createElement('p');
+      empty.className = 'gpt-history-empty';
+      empty.textContent = filter ? 'No chats match that search.' : 'Your saved chats will appear here.';
+      target.append(empty);
+      return;
+    }
+    visible.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'gpt-history-row';
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'gpt-history-open';
+      open.textContent = String(item.title || 'Untitled chat');
+      open.title = open.textContent + ' · ' + formatConversationDate(item.updated_at);
+      const isActive = item.id
+        ? String(item.id) === String(activeConversationId)
+        : Boolean(item.legacy) && activeConversationId === null;
+      if (isActive) open.setAttribute('aria-current', 'page');
+      open.addEventListener('click', () => { void openConversation(item); });
+      row.append(open);
+      if (item.id) {
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'gpt-history-delete';
+        remove.textContent = '×';
+        remove.setAttribute('aria-label', 'Delete ' + open.textContent);
+        remove.title = 'Delete chat';
+        remove.addEventListener('click', event => {
+          event.stopPropagation();
+          void deleteConversation(item);
+        });
+        row.append(remove);
+      } else if (pageList && item.legacy) {
+        const archive = document.createElement('small');
+        archive.textContent = 'Archive';
+        row.append(archive);
+      }
+      if (pageList) {
+        const details = document.createElement('small');
+        details.className = 'gpt-history-date';
+        details.textContent = formatConversationDate(item.updated_at);
+        row.append(details);
+      }
+      target.append(row);
+    });
+  }
+
+  function renderConversationLists() {
+    renderConversationList(historySidebar, historySearch?.value || '');
+    renderConversationList(historyPageList, historyPageSearch?.value || '', true);
+  }
+
+  async function refreshConversations() {
+    try {
+      const result = await api('/gpt/conversations');
+      conversations = Array.isArray(result) ? result : [];
+      renderConversationLists();
+    } catch (error) {
+      conversations = [];
+      renderConversationLists();
+      if (historySidebar) {
+        historySidebar.replaceChildren();
+        const message = document.createElement('p');
+        message.className = 'gpt-history-empty';
+        message.textContent = 'Chat history unavailable: ' + error.message;
+        historySidebar.append(message);
+      }
+    }
+  }
+
   async function loadHistory() {
     try {
-      const messages = await api('/gpt/history');
-      if (!messages.length) return;
+      const query = activeConversationId
+        ? '?conversation_id=' + encodeURIComponent(activeConversationId)
+        : '';
+      const messages = await api('/gpt/history' + query);
+      if (!messages.length) {
+        showWelcome();
+        status.textContent = activeConversationTitle === 'Earlier saved history'
+          ? 'Earlier saved history · ready.'
+          : 'New chat · ready.';
+        return;
+      }
       thread.replaceChildren();
       messages.forEach(item => addMessage(
         item.role === 'assistant' ? 'Seldrune AI' : 'You',
         item.content,
         item.role === 'assistant' ? 'assistant' : 'user',
       ));
-      status.textContent = `Restored ${messages.length} saved messages.`;
+      status.textContent = 'Restored ' + messages.length + ' saved messages.';
     } catch (error) {
-      status.textContent = `History unavailable: ${error.message}`;
+      showWelcome();
+      status.textContent = 'History unavailable: ' + error.message;
     }
   }
 
+  async function createConversation() {
+    const conversation = await api('/gpt/conversations', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    activeConversationId = conversation.id || null;
+    activeConversationTitle = conversation.title || 'New chat';
+    clearAttachments();
+    if (input) input.value = '';
+    if (model) model.textContent = 'Seldrune Auto';
+    const title = document.querySelector('#seldrune-gpt-title');
+    if (title) title.textContent = activeConversationTitle;
+    showWelcome();
+    setGptView('chat');
+    await refreshConversations();
+    status.textContent = 'New chat · ready.';
+    return conversation;
+  }
+
+  async function openConversation(conversation) {
+    if (!conversation) return;
+    activeConversationId = conversation.id || null;
+    activeConversationTitle = conversation.title || 'Seldrune GPT';
+    const title = document.querySelector('#seldrune-gpt-title');
+    if (title) title.textContent = activeConversationTitle;
+    if (input) input.value = '';
+    clearAttachments();
+    setGptView('chat');
+    await loadHistory();
+    renderConversationLists();
+  }
+
+  async function deleteConversation(conversation) {
+    if (!conversation?.id) return;
+    const label = conversation.title || 'this chat';
+    if (!window.confirm('Delete "' + label + '"? This removes its saved messages.')) return;
+    try {
+      await api('/gpt/conversations/' + encodeURIComponent(conversation.id), {method: 'DELETE'});
+      const wasActive = String(conversation.id) === String(activeConversationId);
+      await refreshConversations();
+      if (wasActive) {
+        if (conversations.length) await openConversation(conversations[0]);
+        else await createConversation();
+      }
+      status.textContent = 'Chat deleted.';
+    } catch (error) {
+      status.textContent = 'Could not delete chat: ' + error.message;
+    }
+  }
+
+  function renderToolCatalog() {
+    if (providerList) {
+      providerList.replaceChildren();
+      const providers = Object.entries(providerReadiness || {});
+      if (!providers.length) {
+        const empty = document.createElement('p');
+        empty.className = 'gpt-history-empty';
+        empty.textContent = 'Provider status is not available yet.';
+        providerList.append(empty);
+      } else {
+        providers.forEach(([name, ready]) => {
+          const card = document.createElement('div');
+          card.className = 'gpt-provider-card';
+          const title = document.createElement('strong');
+          title.textContent = name.replaceAll('_', ' ').replace(/\b\w/g, character => character.toUpperCase());
+          const state = document.createElement('small');
+          state.textContent = ready ? 'Ready' : 'Needs setup';
+          card.append(title, state);
+          providerList.append(card);
+        });
+      }
+    }
+    if (toolList) {
+      toolList.replaceChildren();
+      if (!registeredTools.length) {
+        const empty = document.createElement('p');
+        empty.className = 'gpt-history-empty';
+        empty.textContent = 'No tools are currently connected to this workspace.';
+        toolList.append(empty);
+      } else {
+        registeredTools.forEach(slug => {
+          const card = document.createElement('div');
+          card.className = 'gpt-tool-card';
+          const title = document.createElement('strong');
+          title.textContent = String(slug).replaceAll('_', ' ').replaceAll('-', ' ');
+          const state = document.createElement('small');
+          state.textContent = 'Available';
+          card.append(title, state);
+          toolList.append(card);
+        });
+      }
+    }
+  }
 
   async function loadCapabilities() {
     if (capabilityStatus) {
@@ -708,22 +936,42 @@
   }
 
   function initializeGptWorkspace() {
-    void loadHistory();
-    void loadCapabilities();
+    if (workspaceInitialization) return workspaceInitialization;
+    workspaceInitialization = (async () => {
+      await refreshConversations();
+      const current = conversations.find(item => item.id && String(item.id) === String(activeConversationId));
+      const first = current || conversations[0];
+      if (first) await openConversation(first);
+      else await createConversation();
+      await loadCapabilities();
+    })().catch(error => {
+      status.textContent = 'Seldrune GPT could not start: ' + error.message;
+      workspaceInitialization = null;
+    });
+    return workspaceInitialization;
   }
 
-  newConversation?.addEventListener('click', async () => {
-    if (!window.confirm('Start a new Seldrune AI conversation and clear saved context?')) return;
+  async function startNewConversation() {
     try {
-      await api('/gpt/history', {method: 'DELETE'});
-      clearAttachments();
-      thread.innerHTML = '<div class="empty">New conversation started.</div>';
-      status.textContent = 'Saved GPT context cleared.';
+      await createConversation();
     } catch (error) {
-      status.textContent = `Could not clear history: ${error.message}`;
+      status.textContent = 'Could not start a new chat: ' + error.message;
     }
-  });
+  }
 
+  newConversation?.addEventListener('click', () => { void startNewConversation(); });
+  document.querySelector('#seldrune-gpt-history-new')?.addEventListener('click', () => { void startNewConversation(); });
+  document.querySelectorAll('[data-gpt-view]').forEach(button => {
+    button.addEventListener('click', () => setGptView(button.dataset.gptView));
+  });
+  historySearch?.addEventListener('input', renderConversationLists);
+  historyPageSearch?.addEventListener('input', renderConversationLists);
+  sidebarToggle?.addEventListener('click', () => {
+    const isOpen = workspace?.classList.toggle('sidebar-open') || false;
+    sidebarToggle.setAttribute('aria-expanded', String(isOpen));
+    sidebarScrim?.classList.toggle('hidden', !isOpen);
+  });
+  sidebarScrim?.addEventListener('click', closeMobileSidebar);
 
   openToolsButton?.addEventListener('click', () => {
     const systemTab = document.querySelector('[data-portal-tab="intelligence"]');
@@ -755,14 +1003,14 @@
     if (files.length) addFiles(files);
   });
 
-  document.querySelectorAll('[data-gpt-prompt]').forEach(button => {
-    button.addEventListener('click', () => {
-      if (button.dataset.creationMode) setCreationMode(button.dataset.creationMode);
-      input.value = button.dataset.gptPrompt || '';
-      const startedFromMedia = Boolean(button.closest('#seldrune-media-creation'));
-      if (startedFromMedia) window.seldrunePortal?.activate('operator');
-      requestAnimationFrame(() => input.focus());
-    });
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-gpt-prompt]');
+    if (!button) return;
+    if (button.dataset.creationMode) setCreationMode(button.dataset.creationMode);
+    input.value = button.dataset.gptPrompt || '';
+    const startedFromMedia = Boolean(button.closest('#seldrune-media-creation'));
+    if (startedFromMedia) window.seldrunePortal?.activate('operator');
+    requestAnimationFrame(() => input.focus());
   });
 
   document.querySelectorAll('.gpt-creation-mode').forEach(button => {
@@ -780,6 +1028,7 @@
       method: 'POST',
       body: JSON.stringify({
         order,
+        conversation_id: activeConversationId,
         command_id: commandId,
         confirm_sensitive_action: confirmed,
         stop_on_failure: true,
@@ -914,6 +1163,7 @@
       body: JSON.stringify({
         message: `${notice}${buildChatRequest(request, kind)}`,
         attachments: [],
+        conversation_id: activeConversationId,
         provider: providerSelect?.value || 'auto',
       }),
     });
@@ -952,6 +1202,7 @@
     addMessage(codingLab ? 'You · Coding Lab' : 'You', request, 'user');
     try {
       const result = await runCognitiveRequest(order);
+      await refreshConversations();
       await loadCapabilities();
       if (result.status === 'configuration_required') {
         const missing = (result.missing_tools || []).join(', ');
@@ -1125,6 +1376,7 @@
         method: 'POST',
         body: JSON.stringify({
           instruction,
+          conversation_id: activeConversationId,
           pdf: {
             name: pdf.name,
             media_type: pdf.media_type,
@@ -1136,6 +1388,7 @@
       clearAttachments();
       input.value = '';
       model.textContent = result.model || 'OpenAI';
+      await refreshConversations();
       const warningText = (result.warnings || []).length
         ? ` Warnings: ${result.warnings.join('; ')}`
         : '';
@@ -1224,13 +1477,16 @@
         body: JSON.stringify({
           message: chatMessage,
           attachments: outgoingAttachments,
+          conversation_id: activeConversationId,
           provider: providerSelect?.value || 'auto',
         }),
       });
       clearAttachments();
       model.textContent = (result.provider ? result.provider + ' · ' : '') + (result.model || 'Seldrune AI');
+      if (result.conversation_id) activeConversationId = result.conversation_id;
       const responseText = result.response || '(No text returned)';
       const responseCard = addMessage('Seldrune AI', responseText);
+      await refreshConversations();
       let savedOutput = null;
       if (shouldSaveTextOutput(request)) {
         try {
