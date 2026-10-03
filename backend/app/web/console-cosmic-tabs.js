@@ -338,7 +338,7 @@
     contactPanel.innerHTML = `
       <p class="eyebrow">CONTACT SELDRUNE</p>
       <h2 id="seldrune-contact-title">How can we help?</h2>
-      <p>Use Seldrune Mail to send a message, or report a portal problem through the project issue tracker.</p>
+      <p>Use Seldrune Mail to send a message, or report a portal problem on the public project issue tracker. Do not include secrets in public issues.</p>
       <div class="contact-options">
         <a class="contact-option" href="/mail">
           <strong>Open Seldrune Mail →</strong>
@@ -346,7 +346,7 @@
         </a>
         <a class="contact-option" href="https://github.com/seldrune-platform/seldrune-platform/issues/new" target="_blank" rel="noopener noreferrer">
           <strong>Report a portal issue →</strong>
-          <span>Open a new issue with the Seldrune project.</span>
+          <span>Open a public issue with the Seldrune project.</span>
         </a>
         <a class="contact-option" id="seldrune-contact-email-link" href="#" hidden>
           <strong>Email Seldrune →</strong>
