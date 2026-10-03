@@ -76,6 +76,12 @@
       button.setAttribute('aria-pressed', String(selected));
     });
     if (creationStatus) creationStatus.textContent = CREATION_MODES[next].status;
+    if (modePill) {
+      const mediaLabel = next === 'song' ? 'Media · Audio brief'
+        : next === 'video' ? 'Media · Video brief' : 'Text chat';
+      modePill.textContent = mediaLabel;
+      modePill.classList.toggle('active', next !== 'any');
+    }
   }
 
   function buildCreativeOrder(request) {
@@ -507,8 +513,10 @@
     pdfPasswordWrap?.classList.toggle('hidden', !hasPdf);
     dropzone?.classList.toggle('ai-pdf-mode', aiPdfMode);
     if (modePill) {
-      modePill.textContent = aiPdfMode ? 'AI PDF Editor' : 'Seldrune AI';
-      modePill.classList.toggle('active', aiPdfMode);
+      const mediaLabel = creationMode === 'song' ? 'Media · Audio brief'
+        : creationMode === 'video' ? 'Media · Video brief' : 'Text chat';
+      modePill.textContent = aiPdfMode ? 'AI PDF Editor' : mediaLabel;
+      modePill.classList.toggle('active', aiPdfMode || creationMode !== 'any');
     }
     if (chatButton) {
       chatButton.innerHTML = aiPdfMode
@@ -758,7 +766,13 @@
   });
 
   document.querySelectorAll('.gpt-creation-mode').forEach(button => {
-    button.addEventListener('click', () => setCreationMode(button.dataset.creationMode));
+    button.addEventListener('click', () => {
+      setCreationMode(button.dataset.creationMode);
+      if (button.closest('#seldrune-media-creation')) {
+        window.seldrunePortal?.activate('operator');
+        requestAnimationFrame(() => input?.focus());
+      }
+    });
   });
 
   async function runCognitiveRequest(order, commandId = null, confirmed = false) {
