@@ -314,29 +314,63 @@ body.owner-portal #console-view > main {
 }
 
 .owner-home-intro {
-  padding: 24px clamp(18px, 3vw, 32px);
-  border: 1px solid var(--portal-line);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-height: 290px;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  padding: clamp(22px, 3.5vw, 38px);
+  color: #f4f8ff;
+  border: 1px solid #263a5d;
   border-radius: var(--portal-radius);
-  background: var(--portal-panel);
+  background:
+    linear-gradient(90deg, rgb(6 14 31 / 90%) 0%, rgb(6 14 31 / 68%) 34%, rgb(6 14 31 / 8%) 86%),
+    url("/console-assets/seldrune-celestial-hero.png") center 45% / cover no-repeat;
+}
+
+.owner-home-intro > span,
+.owner-home-intro h2,
+.owner-home-intro p {
+  position: relative;
+  z-index: 1;
 }
 
 .owner-home-intro > span {
-  color: var(--portal-accent);
+  max-width: 430px;
+  color: #7bf1e6;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: .14em;
 }
 
 .owner-home-intro h2 {
+  max-width: 430px;
   margin: 7px 0;
+  color: #f5f8ff;
   font-size: clamp(23px, 3vw, 34px);
 }
 
 .owner-home-intro p {
-  max-width: 700px;
+  max-width: 420px;
   margin: 0;
-  color: var(--portal-muted);
+  color: #d9e8ff;
   line-height: 1.55;
+}
+
+@media (max-width: 760px) {
+  .owner-home-intro {
+    min-height: 270px;
+    background:
+      linear-gradient(0deg, rgb(6 14 31 / 90%) 0%, rgb(6 14 31 / 56%) 58%, rgb(6 14 31 / 8%) 100%),
+      url("/console-assets/seldrune-celestial-hero.png") center center / cover no-repeat;
+  }
+
+  .owner-home-intro h2,
+  .owner-home-intro p {
+    max-width: 100%;
+  }
 }
 
 .owner-home-actions {
