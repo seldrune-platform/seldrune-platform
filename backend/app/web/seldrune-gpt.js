@@ -788,7 +788,7 @@
     if (hasAttachments) return false;
     if (mode === 'app' || mode === 'game') return true;
     const text = String(request || '').trim();
-    const mediaIntent = /\\b(create|generate|make|compose|produce|render)\\b.{0,70}\\b(audio|song|music|video|film|movie|clip)\\b/i.test(text);
+    const mediaIntent = /\b(create|generate|make|compose|produce|render)\b.{0,70}\b(audio|song|music|video|film|movie|clip)\b/i.test(text);
     const inferredMediaKind = classifyOutputKind(text, 'any');
     if (['song', 'video', 'visual'].includes(mode)) {
       return mediaIntent && inferredMediaKind === mode && mediaToolReady(mode);
