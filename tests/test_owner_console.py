@@ -109,3 +109,11 @@ def test_owner_console_assets_are_served() -> None:
         assert "/governance-policy/history?limit=10" in script.text
         assert "rollbackGovernancePolicy" in script.text
         assert "/governance-policy/rollback" in script.text
+
+
+def test_celestial_home_art_is_served() -> None:
+    with TestClient(app) as client:
+        response = client.get("/console-assets/seldrune-celestial-hero.png")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("image/png")
+        assert response.content.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
