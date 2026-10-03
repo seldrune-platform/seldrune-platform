@@ -406,6 +406,7 @@ body.seldrune-products .card:focus-visible {
 }
 
 .intro.panel {
+  display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(220px, .8fr);
   gap: clamp(18px, 3vw, 36px);
   align-items: center;
