@@ -1,0 +1,112 @@
+/* Improve legibility in the dark GPT workspace, especially on phones. */
+#seldrune-gpt {
+  color: #f4f7ff !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+#seldrune-gpt .gpt-sidebar {
+  color: #f0f5ff !important;
+  background: rgb(3 8 19 / 96%) !important;
+}
+
+#seldrune-gpt .gpt-sidebar :is(button, a, label, small, input),
+#seldrune-gpt .gpt-sidebar-label,
+#seldrune-gpt .gpt-history-open,
+#seldrune-gpt .gpt-history-empty,
+#seldrune-gpt .gpt-creation-status,
+#seldrune-gpt .gpt-sidebar-bottom {
+  color: #dce8f8 !important;
+  opacity: 1 !important;
+}
+
+#seldrune-gpt .gpt-sidebar-brand strong,
+#seldrune-gpt .gpt-history-open[aria-current="page"],
+#seldrune-gpt .gpt-workspace-nav button.active {
+  color: #ffffff !important;
+}
+
+#seldrune-gpt .gpt-sidebar :is(button, a, label),
+#seldrune-gpt .gpt-sidebar-label {
+  font-size: 13px;
+}
+
+#seldrune-gpt .gpt-history-search input::placeholder,
+#seldrune-gpt .gpt-dropzone textarea::placeholder {
+  color: #c2d0e3 !important;
+  opacity: 1 !important;
+}
+
+#seldrune-gpt .gpt-thread .command-card {
+  color: #f4f7ff !important;
+  border-color: rgb(181 207 255 / 38%) !important;
+  background: rgb(4 11 25 / 96%) !important;
+}
+
+#seldrune-gpt .gpt-thread .command-card[data-role="user"] {
+  border-color: rgb(180 199 255 / 55%) !important;
+  background: linear-gradient(135deg, rgb(41 62 119 / 98%), rgb(24 67 105 / 98%)) !important;
+}
+
+#seldrune-gpt .gpt-thread .command-card[data-role="assistant"] {
+  background: rgb(4 11 25 / 96%) !important;
+}
+
+#seldrune-gpt .gpt-thread .command-card :is(p, li, td, th, blockquote, span) {
+  color: #f2f6ff !important;
+  font-size: 16px !important;
+  line-height: 1.65 !important;
+}
+
+#seldrune-gpt .gpt-thread .command-card :is(strong, b, h1, h2, h3, h4) {
+  color: #ffffff !important;
+}
+
+#seldrune-gpt .gpt-thread .command-card a {
+  color: #9feaff !important;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+#seldrune-gpt .gpt-thread .command-card :is(pre, code) {
+  color: #f5f7ff !important;
+  background-color: rgb(0 3 12 / 58%);
+}
+
+#seldrune-gpt .gpt-topbar,
+#seldrune-gpt .gpt-status-bar {
+  color: #dce8f8 !important;
+  background-color: rgb(3 8 19 / 90%);
+}
+
+#seldrune-gpt .gpt-provider-control,
+#seldrune-gpt .gpt-mode-pill,
+#seldrune-gpt .gpt-status-bar span {
+  color: #dce8f8 !important;
+}
+
+#seldrune-gpt .gpt-tool-button,
+#seldrune-gpt .gpt-composer-actions button {
+  opacity: 1 !important;
+}
+
+#seldrune-gpt .gpt-composer-actions button:disabled {
+  opacity: .9 !important;
+}
+
+@media (max-width: 760px) {
+  #seldrune-gpt .gpt-thread .command-card {
+    width: min(100%, 900px);
+    padding: 15px;
+  }
+
+  #seldrune-gpt .gpt-thread .command-card :is(p, li, td, th, blockquote, span) {
+    font-size: 15px !important;
+    line-height: 1.6 !important;
+  }
+
+  #seldrune-gpt .gpt-sidebar :is(button, a, label),
+  #seldrune-gpt .gpt-sidebar-label {
+    font-size: 13px;
+  }
+}
