@@ -1,0 +1,134 @@
+/* Keep the owner Home readable when mobile browsers request a tablet-width viewport. */
+@media (max-width: 1120px) {
+  body.owner-portal #portal-panel-home .owner-portal-home {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 16px !important;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  body.owner-portal #portal-panel-home .owner-portal-home > * {
+    grid-column: 1 / -1 !important;
+    min-width: 0;
+    width: 100%;
+  }
+
+  body.owner-portal #portal-panel-home .owner-portal-heading {
+    margin-bottom: 14px;
+  }
+
+  body.owner-portal #portal-panel-home .owner-portal-heading h1 {
+    font-size: clamp(28px, 4vw, 40px) !important;
+  }
+
+  body.owner-portal #portal-panel-home .owner-home-intro {
+    min-height: 250px;
+    padding: clamp(22px, 4vw, 36px);
+  }
+
+  body.owner-portal #portal-panel-home .owner-home-intro h2 {
+    max-width: 760px;
+    font-size: clamp(28px, 4.4vw, 40px);
+    line-height: 1.12;
+  }
+
+  body.owner-portal #portal-panel-home .owner-home-intro p {
+    max-width: 680px;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  body.owner-portal #portal-panel-home .owner-home-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px;
+  }
+
+  body.owner-portal #portal-panel-home .owner-home-actions .portal-quick-card {
+    min-width: 0;
+    min-height: 92px;
+    padding: 14px;
+  }
+
+  body.owner-portal #portal-panel-home .owner-home-actions .portal-quick-card strong {
+    font-size: 15px;
+    line-height: 1.3;
+  }
+
+  body.owner-portal #portal-panel-home .owner-home-actions .portal-quick-card small {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  body.owner-portal #portal-panel-home .owner-home-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  body.owner-portal #portal-panel-home .metrics {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px;
+  }
+
+  body.owner-portal #portal-panel-home .metrics article {
+    min-width: 0;
+    padding: 18px;
+  }
+
+  body.owner-portal #portal-panel-home .metrics label,
+  body.owner-portal #portal-panel-home .metrics small {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  body.owner-portal #portal-panel-home .metrics strong {
+    font-size: clamp(24px, 3vw, 32px);
+  }
+}
+
+@media (max-width: 560px) {
+  body.owner-portal #portal-panel-home .owner-home-intro {
+    min-height: 220px;
+    padding: 22px;
+  }
+
+  body.owner-portal #portal-panel-home .owner-home-intro h2 {
+    font-size: clamp(26px, 7vw, 34px);
+  }
+
+  body.owner-portal #portal-panel-home .owner-home-intro p {
+    font-size: 15px;
+  }
+
+  body.owner-portal #portal-panel-home .owner-home-actions {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  body.owner-portal #portal-panel-home .owner-home-actions .portal-quick-card {
+    min-height: 76px;
+  }
+
+  body.owner-portal #portal-panel-home .owner-home-status {
+    display: grid;
+    gap: 8px;
+  }
+
+  body.owner-portal #portal-panel-home .metrics article {
+    padding: 14px;
+  }
+
+  body.owner-portal #portal-panel-home .metrics label,
+  body.owner-portal #portal-panel-home .metrics small {
+    font-size: 12px;
+  }
+
+  body.owner-portal #portal-panel-home .metrics strong {
+    font-size: 24px;
+  }
+}
