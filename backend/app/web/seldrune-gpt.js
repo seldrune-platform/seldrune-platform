@@ -707,6 +707,14 @@
     try {
       const result = await api('/gpt/conversations');
       conversations = Array.isArray(result) ? result : [];
+      const active = activeConversationId
+        ? conversations.find(item => String(item.id) === String(activeConversationId))
+        : conversations.find(item => item.legacy);
+      if (active?.title) {
+        activeConversationTitle = active.title;
+        const title = document.querySelector('#seldrune-gpt-title');
+        if (title) title.textContent = activeConversationTitle;
+      }
       renderConversationLists();
     } catch (error) {
       conversations = [];
