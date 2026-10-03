@@ -124,17 +124,12 @@
     <section class="gpt-creation-forge" id="seldrune-media-creation" aria-labelledby="gpt-creation-title">
       <p class="eyebrow">MEDIA CREATION</p>
       <h3 id="gpt-creation-title">Create audio or video</h3>
-      <p>Choose a format, describe what you want in Seldrune AI, and submit it. A rendered file requires a connected media provider; otherwise Seldrune returns a text plan.</p>
+      <p>Choose Audio or Video, then describe your brief in the text composer. Any rendered file is saved in Outputs.</p>
       <div class="gpt-creation-modes" role="group" aria-label="Media creation type">
-        <button type="button" class="gpt-creation-mode active" data-creation-mode="song" aria-pressed="true">Audio</button>
+        <button type="button" class="gpt-creation-mode" data-creation-mode="song" aria-pressed="false">Audio</button>
         <button type="button" class="gpt-creation-mode" data-creation-mode="video" aria-pressed="false">Video</button>
       </div>
-      <div class="gpt-creation-presets">
-        <button type="button" class="gpt-quick-prompt" data-creation-mode="song" data-gpt-prompt="Create an original audio piece for this brief. If a compatible audio provider is connected, render the audio file and return its receipt. If not, return a clearly labeled text production plan and do not claim audio was rendered.">Start an audio brief</button>
-        <button type="button" class="gpt-quick-prompt" data-creation-mode="video" data-gpt-prompt="Create an original video for this brief. If a compatible video provider is connected, render the video file and return its receipt. If not, return a clearly labeled script and storyboard and do not claim video was rendered.">Start a video brief</button>
-      </div>
-      <button type="button" class="ghost" data-open-portal="operator">Describe your media request in Seldrune AI →</button>
-      <small id="seldrune-gpt-creation-status" class="gpt-creation-status" aria-live="polite">Audio and video generation require a connected provider.</small>
+      <small id="seldrune-gpt-creation-status" class="gpt-creation-status" aria-live="polite">Rendered audio or video requires a connected provider; otherwise Seldrune returns a text plan.</small>
     </section>
     <div class="gpt-capability-note">
       <span>ATTACHMENTS</span>
