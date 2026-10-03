@@ -564,3 +564,50 @@ body.owner-portal #console-view > main {
     transition-duration: .01ms !important;
   }
 }
+
+.owner-portal #portal-panel-operator .gpt-studio-body {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: min(76vh, 780px);
+}
+
+.owner-portal #portal-panel-operator .gpt-studio-sidebar { display: none; }
+
+.owner-portal .media-create-panel .gpt-creation-forge {
+  display: grid;
+  gap: 12px;
+  border: 0;
+  padding: 8px;
+  background: transparent;
+}
+
+.owner-portal .media-advanced-details {
+  grid-column: 1 / -1;
+  border: 1px solid var(--portal-line);
+  border-radius: 14px;
+  background: var(--portal-panel);
+}
+
+.owner-portal .media-advanced-details > summary {
+  padding: 15px 17px;
+  color: var(--portal-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  list-style-position: inside;
+}
+
+.owner-portal .media-advanced-details[open] > summary {
+  border-bottom: 1px solid var(--portal-line);
+}
+
+.owner-portal .media-advanced-details > section,
+.owner-portal .media-advanced-details > .media-live-studio {
+  margin: 14px;
+}
+
+.owner-portal .contact-option[hidden] { display: none; }
+
+@media (max-width: 600px) {
+  .owner-portal #portal-panel-operator .gpt-studio-body { min-height: 80vh; }
+  .owner-portal .gpt-studio-main { grid-template-rows: minmax(260px, 1fr) auto auto; }
+}
