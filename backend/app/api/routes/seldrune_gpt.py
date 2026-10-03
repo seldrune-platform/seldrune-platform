@@ -3,7 +3,7 @@ import binascii
 import json
 import re
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from typing import Annotated, Literal
 from uuid import UUID
@@ -238,7 +238,7 @@ def _resolve_gpt_conversation(
 
     if conversation.title == "New chat" and title_hint.strip():
         conversation.title = _conversation_title(title_hint)
-    conversation.updated_at = datetime.now(timezone.utc)
+    conversation.updated_at = datetime.now(UTC)
     return conversation
 
 
