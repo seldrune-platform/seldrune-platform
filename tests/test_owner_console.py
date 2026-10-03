@@ -116,4 +116,4 @@ def test_celestial_home_art_is_served() -> None:
         response = client.get("/console-assets/seldrune-celestial-hero.png")
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("image/png")
-        assert response.content.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+        assert response.content.startswith(b"\x89PNG\r\n\x1a\n")
