@@ -80,7 +80,7 @@ body.owner-portal {
 
 body.owner-portal #console-view {
   background:
-    linear-gradient(145deg, rgb(243 246 250 / 91%), rgb(237 243 250 / 96%)),
+    linear-gradient(145deg, rgb(243 246 250 / 74%), rgb(237 243 250 / 82%)),
     url("/console-assets/seldrune-celestial-hero.png") center 42% / cover fixed;
 }
 
@@ -669,8 +669,8 @@ body.seldrune-products .card:focus-visible {
 .login-shell,
 .login-view {
   background-image:
-    linear-gradient(115deg, rgb(5 10 22 / 36%), rgb(5 10 22 / 28%)),
-    radial-gradient(ellipse 52% 50% at 50% 48%, rgb(5 10 22 / 30%) 18%, rgb(5 10 22 / 14%) 62%, transparent 100%),
+    linear-gradient(115deg, rgb(5 10 22 / 18%), rgb(5 10 22 / 12%)),
+    radial-gradient(ellipse 52% 50% at 50% 48%, rgb(5 10 22 / 16%) 18%, rgb(5 10 22 / 7%) 62%, transparent 100%),
     url("/console-assets/seldrune-celestial-hero.png");
   background-position: center, center, center 42%;
   background-size: cover, cover, cover;
@@ -719,7 +719,7 @@ body.seldrune-products .card:focus-visible {
   border-radius: 20px;
   background-color: #07101d;
   background-image:
-    linear-gradient(115deg, rgb(4 10 23 / 48%), rgb(4 10 23 / 36%)),
+    linear-gradient(115deg, rgb(4 10 23 / 29%), rgb(4 10 23 / 22%)),
     url("/console-assets/seldrune-celestial-hero.png");
   background-position: center, center 42%;
   background-size: cover, cover;
