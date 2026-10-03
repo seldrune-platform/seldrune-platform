@@ -1,0 +1,626 @@
+/* Shared Seldrune visual system: celestial atmosphere, clear surfaces, and responsive sizing. */
+:root {
+  --seldrune-night: #070d1b;
+  --seldrune-night-soft: #101b30;
+  --seldrune-mint: #87efd5;
+  --seldrune-lilac: #b8a8ff;
+  --seldrune-copy: #edf3ff;
+  --seldrune-muted: #aab7cd;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  overflow-x: hidden;
+  background-color: var(--seldrune-night);
+  background-image:
+    linear-gradient(145deg, rgb(5 11 24 / 76%), rgb(5 10 22 / 88%)),
+    url("/console-assets/seldrune-celestial-hero.png");
+  background-position: center, center 42%;
+  background-size: cover, cover;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--seldrune-mint);
+  outline-offset: 3px;
+}
+
+body.owner-portal {
+  background-color: #07101e;
+  background-image:
+    linear-gradient(145deg, rgb(5 11 24 / 30%), rgb(5 10 22 / 44%)),
+    url("/console-assets/seldrune-celestial-hero.png");
+}
+
+body.owner-portal #console-view {
+  background:
+    linear-gradient(145deg, rgb(243 246 250 / 91%), rgb(237 243 250 / 96%)),
+    url("/console-assets/seldrune-celestial-hero.png") center 42% / cover fixed;
+}
+
+.owner-portal .panel,
+.owner-portal .metrics article,
+.owner-portal .command-card,
+.owner-portal .runtime-status,
+.owner-portal .agent-scorecard,
+.owner-portal .portal-quick-card,
+.owner-portal .gpt-thread .command-card {
+  border-color: rgb(205 217 234 / 92%);
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 12px 34px rgb(25 43 70 / 7%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.owner-portal .panel:hover,
+.owner-portal .metrics article:hover,
+.owner-portal .command-card:hover,
+.owner-portal .agent-scorecard:hover,
+.owner-portal .portal-quick-card:hover {
+  border-color: #b9c9e1;
+  box-shadow: 0 16px 38px rgb(25 43 70 / 11%);
+}
+
+.login-shell,
+.login-view {
+  min-height: 100vh;
+  min-height: 100svh;
+  background-color: var(--seldrune-night);
+  background-image:
+    linear-gradient(115deg, rgb(5 10 22 / 78%), rgb(5 10 22 / 48%)),
+    url("/console-assets/seldrune-celestial-hero.png");
+  background-position: center, center 44%;
+  background-size: cover, cover;
+  background-repeat: no-repeat;
+}
+
+.login-shell {
+  grid-column: 1 / -1;
+  width: 100%;
+  padding: clamp(20px, 5vw, 64px);
+}
+
+.login-shell > .login-card,
+.login-view > .login-card {
+  width: min(480px, 100%);
+  padding: clamp(25px, 5vw, 44px);
+  color: #f2f6ff;
+  border: 1px solid rgb(160 188 255 / 24%);
+  border-radius: 24px;
+  background: linear-gradient(150deg, rgb(15 25 47 / 95%), rgb(8 16 33 / 93%));
+  box-shadow: 0 28px 90px rgb(0 0 0 / 48%), inset 0 1px rgb(255 255 255 / 7%);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+
+.login-shell > .onboarding-card {
+  width: min(760px, 100%);
+}
+
+.login-card .brand,
+.login-card .brand div,
+.login-card h1,
+.login-card h2 {
+  color: #f2f6ff;
+}
+
+.login-card .brand small,
+.login-card > p:not(.eyebrow),
+.login-card .muted {
+  color: #b5c2d9;
+}
+
+.login-card h1 {
+  font-size: clamp(30px, 5vw, 42px);
+  line-height: 1.08;
+  letter-spacing: -.04em;
+}
+
+.login-card label {
+  color: #dbe5f6;
+  line-height: 1.4;
+}
+
+.login-card input,
+.login-card select,
+.login-card textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 12px 14px;
+  color: #f2f6ff;
+  border: 1px solid rgb(165 187 225 / 28%);
+  border-radius: 11px;
+  background: rgb(4 10 23 / 72%);
+}
+
+.login-card input:focus,
+.login-card select:focus,
+.login-card textarea:focus {
+  border-color: var(--seldrune-mint);
+  box-shadow: 0 0 0 3px rgb(135 239 213 / 13%);
+  outline: none;
+}
+
+.login-card form button,
+.login-card .primary,
+.login-card button[type="submit"] {
+  min-height: 48px;
+  padding: 12px 18px;
+  color: #071a19;
+  border: 1px solid rgb(205 255 238 / 50%);
+  border-radius: 11px;
+  background: linear-gradient(110deg, #92f1d9, #b9e8ff);
+  box-shadow: 0 10px 26px rgb(70 219 194 / 17%);
+  font-weight: 800;
+  transition: filter .18s ease, transform .18s ease;
+}
+
+.login-card form button:hover,
+.login-card .primary:hover,
+.login-card button[type="submit"]:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.login-card .back-link,
+.login-card .console-link,
+.login-card a:not(.mail-brand) {
+  color: #9ae9dd;
+}
+
+.login-card .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.login-card .form-grid label {
+  min-width: 0;
+}
+
+body.seldrune-products > header {
+  z-index: 20;
+  min-height: 68px;
+  padding-inline: clamp(18px, 5vw, 72px);
+  border-bottom-color: rgb(194 213 255 / 12%);
+  background: rgb(6 12 25 / 72%);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+body.seldrune-products > main {
+  width: min(1320px, 100%);
+  padding: clamp(34px, 6vw, 82px) clamp(18px, 5vw, 68px);
+}
+
+body.seldrune-products .hero {
+  max-width: 900px;
+  padding: clamp(18px, 3vw, 38px) 0 clamp(40px, 6vw, 72px);
+}
+
+body.seldrune-products .hero h1 {
+  max-width: 11ch;
+  font-size: clamp(42px, 7.3vw, 88px);
+  line-height: .98;
+  letter-spacing: -.06em;
+  text-wrap: balance;
+}
+
+body.seldrune-products .hero p {
+  max-width: 66ch;
+  text-wrap: pretty;
+}
+
+body.seldrune-products .grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(12px, 2vw, 20px);
+}
+
+body.seldrune-products .card {
+  min-width: 0;
+  min-height: 240px;
+  padding: clamp(20px, 3vw, 32px);
+  border-color: rgb(180 202 255 / 16%);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgb(18 29 51 / 87%), rgb(9 16 32 / 83%));
+  box-shadow: 0 20px 58px rgb(0 0 0 / 21%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+body.seldrune-products .card h2 {
+  margin-top: clamp(28px, 4vw, 48px);
+  font-size: clamp(22px, 3vw, 30px);
+  line-height: 1.12;
+}
+
+body.seldrune-products .card p {
+  max-width: 62ch;
+}
+
+body.seldrune-products .card:focus-visible {
+  border-color: var(--seldrune-mint);
+  outline: 2px solid var(--seldrune-mint);
+  outline-offset: 3px;
+}
+
+.seldrune-console-page {
+  background-color: var(--seldrune-night);
+  background-image:
+    linear-gradient(145deg, rgb(5 11 24 / 68%), rgb(5 10 22 / 82%)),
+    url("/console-assets/seldrune-celestial-hero.png");
+}
+
+.seldrune-console-page .brief-shell,
+.seldrune-console-page .monitor-shell,
+.seldrune-console-page .org-shell {
+  width: min(1320px, 100%);
+  padding: clamp(24px, 4vw, 54px) clamp(16px, 3.4vw, 42px) 64px;
+}
+
+.seldrune-console-page .brief-head,
+.seldrune-console-page .monitor-head,
+.seldrune-console-page .org-head {
+  align-items: center;
+  gap: clamp(18px, 3vw, 34px);
+}
+
+.seldrune-console-page .brief-head > div:first-child,
+.seldrune-console-page .monitor-head > div:first-child,
+.seldrune-console-page .org-head > div:first-child {
+  min-width: 0;
+  flex: 1 1 580px;
+}
+
+.seldrune-console-page .brief-head h1,
+.seldrune-console-page .monitor-head h1,
+.seldrune-console-page .org-head h1 {
+  max-width: 14ch;
+  line-height: 1.04;
+  text-wrap: balance;
+}
+
+.seldrune-console-page .brief-actions,
+.seldrune-console-page .monitor-actions,
+.seldrune-console-page .actions {
+  align-items: center;
+  flex: 0 1 auto;
+}
+
+.seldrune-console-page .brief-actions a,
+.seldrune-console-page .brief-actions button,
+.seldrune-console-page .monitor-actions a,
+.seldrune-console-page .actions a,
+.seldrune-console-page .actions button {
+  min-height: 42px;
+}
+
+.seldrune-console-page .summary {
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+}
+
+.seldrune-console-page .monitor-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(10px, 1.5vw, 16px);
+}
+
+.seldrune-console-page .monitor-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.seldrune-console-page .board {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.seldrune-console-page .layout {
+  grid-template-columns: minmax(0, 1.28fr) minmax(280px, .72fr);
+  align-items: start;
+}
+
+.seldrune-console-page .health {
+  align-items: stretch;
+}
+
+.seldrune-console-page .card,
+.seldrune-console-page .panel,
+.seldrune-console-page .item,
+.seldrune-console-page .monitor-summary article,
+.seldrune-console-page .monitor-card {
+  min-width: 0;
+  border-radius: 18px;
+}
+
+.seldrune-console-page .panel input,
+.seldrune-console-page .panel select,
+.seldrune-console-page .panel textarea {
+  min-height: 42px;
+  padding: 10px 12px;
+}
+
+.seldrune-console-page .panel textarea {
+  min-height: 88px;
+}
+
+.topbar {
+  background: rgb(6 12 25 / 80%);
+  border-bottom-color: rgb(194 213 255 / 12%);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.topbar .brand,
+.topbar .product-mark,
+.topbar .top-link {
+  min-width: 0;
+}
+
+.topbar .top-link {
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+
+.topbar .top-link:hover {
+  border-color: rgb(135 239 213 / 22%);
+  background: rgb(135 239 213 / 7%);
+}
+
+.shell {
+  width: min(1440px, 100%);
+  padding: clamp(18px, 3vw, 40px) clamp(14px, 3vw, 42px) 52px;
+}
+
+.intro.panel {
+  grid-template-columns: minmax(0, 1.2fr) minmax(220px, .8fr);
+  gap: clamp(18px, 3vw, 36px);
+  align-items: center;
+  padding: clamp(20px, 3.5vw, 38px);
+}
+
+.intro h1 {
+  max-width: 17ch;
+  font-size: clamp(30px, 4.2vw, 50px);
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+.intro-copy {
+  max-width: 66ch;
+  text-wrap: pretty;
+}
+
+.gateway-state,
+.intro .notice {
+  justify-self: end;
+  width: min(100%, 420px);
+}
+
+.quality-strip {
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 10px;
+  margin-block: 16px 18px;
+}
+
+.quality-strip > div,
+.controls,
+.media-panel {
+  min-width: 0;
+}
+
+.controls,
+.media-panel {
+  padding: clamp(16px, 2.4vw, 26px);
+}
+
+.controls label,
+.controls input,
+.controls select,
+.controls textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 980px) {
+  .seldrune-console-page .monitor-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .seldrune-console-page .monitor-head {
+    align-items: flex-start;
+  }
+
+  .seldrune-console-page .org-head,
+  .seldrune-console-page .brief-head {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 820px) {
+  body.seldrune-products > header {
+    padding-inline: 20px;
+  }
+
+  body.seldrune-products > main {
+    padding: 42px 20px 56px;
+  }
+
+  body.seldrune-products .grid,
+  .seldrune-console-page .board,
+  .seldrune-console-page .layout,
+  .seldrune-console-page .health {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.seldrune-products .featured {
+    grid-column: auto;
+  }
+
+  .seldrune-console-page .monitor-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .seldrune-console-page .brief-head,
+  .seldrune-console-page .monitor-head,
+  .seldrune-console-page .org-head {
+    display: block;
+  }
+
+  .seldrune-console-page .brief-actions,
+  .seldrune-console-page .monitor-actions,
+  .seldrune-console-page .actions {
+    margin-top: 14px;
+  }
+
+  .intro.panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gateway-state,
+  .intro .notice {
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .studio-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    position: sticky;
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    height: auto;
+    min-height: 58px;
+    gap: 8px 12px;
+    padding: 10px 14px;
+  }
+
+  .topbar .brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .topbar .product-mark {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    text-align: right;
+    font-size: .62rem;
+  }
+
+  .topbar .top-link {
+    grid-row: 2;
+    justify-self: start;
+    padding: 7px 9px;
+    font-size: .72rem;
+  }
+
+  .shell {
+    padding: 16px 12px 36px;
+  }
+
+  .intro.panel {
+    padding: 19px;
+  }
+
+  .quality-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .section-heading {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .studio-grid {
+    gap: 12px;
+  }
+
+  .faceswap-output {
+    min-height: 220px;
+  }
+
+  .faceswap-output video {
+    max-height: 56vh;
+  }
+}
+
+@media (max-width: 520px) {
+  .login-card .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .login-shell {
+    padding: 18px;
+  }
+
+  .owner-portal .owner-home-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .owner-portal .owner-home-actions .portal-quick-card {
+    min-height: 88px;
+    padding: 13px;
+  }
+
+  .seldrune-console-page .monitor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .seldrune-console-page .brief-shell,
+  .seldrune-console-page .monitor-shell,
+  .seldrune-console-page .org-shell {
+    padding-inline: 14px;
+  }
+
+  .intro h1 {
+    font-size: clamp(28px, 9vw, 38px);
+  }
+
+  .quality-strip {
+    gap: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .login-card form button,
+  body.seldrune-products .card,
+  .topbar .top-link {
+    transition: none;
+  }
+}
