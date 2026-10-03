@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Seldrune STI · Aethelion Command Nexus</title><link rel="stylesheet" href="/console-assets/console.css"><link rel="stylesheet" href="/console-assets/console-cinematic.css"><link rel="stylesheet" href="/console-assets/dragon-booster.css"><link rel="stylesheet" href="/console-assets/console-mobile-nav.css"><link rel="stylesheet" href="/console-assets/sti-runtime.css"><link rel="stylesheet" href="/console-assets/console-action-inbox.css"><link rel="stylesheet" href="/console-assets/console-cosmic-tabs.css"><link rel="stylesheet" href="/console-assets/console-agents.css"><link rel="stylesheet" href="/console-assets/console-tools.css"><link rel="stylesheet" href="/console-assets/console-portal.css"><link rel="stylesheet" href="/console-assets/seldrune-gpt-studio.css"><link rel="stylesheet" href="/console-assets/cognitive-mission.css"><link rel="stylesheet" href="/console-assets/console-nexus-arena.css"></head><body>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Seldrune · Owner Portal</title><link rel="stylesheet" href="/console-assets/console.css"><link rel="stylesheet" href="/console-assets/sti-runtime.css"><link rel="stylesheet" href="/console-assets/console-action-inbox.css"><link rel="stylesheet" href="/console-assets/console-cosmic-tabs.css"><link rel="stylesheet" href="/console-assets/console-agents.css"><link rel="stylesheet" href="/console-assets/console-tools.css"><link rel="stylesheet" href="/console-assets/console-portal.css"><link rel="stylesheet" href="/console-assets/console-clean.css"><link rel="stylesheet" href="/console-assets/seldrune-gpt-studio.css"><link rel="stylesheet" href="/console-assets/cognitive-mission.css"></head><body>
 <div id="bootstrap-view" class="login-shell hidden"><section class="login-card onboarding-card"><div class="brand dark"><span>SE</span><div>Seldrune<small>Owner Onboarding</small></div></div><p class="eyebrow">ONE-TIME SECURE SETUP</p><h1>Create the founding owner.</h1><p>This screen closes permanently after your organization is created.</p><form id="bootstrap-form"><div class="form-grid"><label>Your name<input id="bootstrap-name" type="text" autocomplete="name" required maxlength="200"></label><label>Owner email<input id="bootstrap-email" type="email" autocomplete="username" required></label><label>Organization name<input id="organization-name" type="text" required maxlength="200" value="Seldrune"></label><label>Organization slug<input id="organization-slug" type="text" required minlength="2" maxlength="100" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value="seldrune"></label><label>Password<input id="bootstrap-password" type="password" autocomplete="new-password" required minlength="12" maxlength="128"></label><label>Confirm password<input id="bootstrap-confirm" type="password" autocomplete="new-password" required minlength="12" maxlength="128"></label></div><button type="submit">Create owner account <span>→</span></button><p id="bootstrap-error" class="risk" role="alert"></p></form></section></div>
 <div id="login-view" class="login-shell hidden"><section class="login-card"><div class="brand dark"><span>SE</span><div>Seldrune STI<small>Aethelion Intelligence Foundry</small></div></div><p class="eyebrow">SECURE OWNER ACCESS</p><h1>Enter the Aethelion Intelligence Foundry.</h1><p>Sign in with your Seldrune owner account. Your access expires automatically.</p><form id="login-form"><label>Email<input id="email" type="email" autocomplete="username" required></label><label>Password<input id="password" type="password" autocomplete="current-password" required></label><button type="submit">Sign in securely <span>→</span></button><p id="login-error" class="risk" role="alert"></p></form></section></div>
 <div id="console-view" class="app-shell hidden"><aside><div class="brand"><span>SE</span><div>Seldrune STI<small>Aethelion Intelligence Foundry</small></div></div><nav><a class="active" data-console-tab="overview" href="#overview">Overview</a><a data-console-tab="mission" href="#cognitive-mission">Mission</a><a data-console-tab="gpt" href="#seldrune-gpt">Seldrune AI</a><a data-console-tab="runtime" href="#sti-runtime">STI Runtime</a><a data-console-tab="face" href="#face-v01-mission">Face</a><a data-console-tab="liveshift" href="#liveshift-mission">LiveShift</a><a data-console-tab="actions" href="#action-inbox">Action inbox</a><a href="/mail">Seldrune Mail</a><a data-console-tab="tools" href="#tool-control">Tools</a><a href="/console-assets/organization-board.html">Organization board</a></nav><div class="secure">Signed in as<br><b id="owner-name"></b><button id="logout" class="link">Sign out</button></div></aside>
@@ -104,8 +104,8 @@
 <div class="gpt-studio-head">
   <div>
     <p class="eyebrow">SELD RUNE GPT · OWNER STUDIO</p>
-    <h2 id="seldrune-gpt-title">Ask, create, and build with Seldrune.</h2>
-    <p>One conversational workspace for questions, files, creative work, coding, and supported actions. Seldrune routes each request to chat or connected tools and reports what was saved or verified. Sensitive actions still ask for your confirmation. Attach one PDF and describe the change to edit it directly.</p>
+    <h2 id="seldrune-gpt-title">Seldrune AI · text chat</h2>
+    <p>Ask questions, analyze files, and get clear text responses. Audio and video jobs live in Media; Seldrune reports whether a real media file was rendered or only a text plan was returned.</p>
   </div>
   <div class="gpt-studio-runtime">
     <span>MODEL</span>
@@ -121,26 +121,20 @@
     <button type="button" class="gpt-quick-prompt" data-gpt-prompt="Inspect the Seldrune repository state and summarize the safest next engineering action.">Repository check</button>
     <button type="button" class="gpt-quick-prompt" data-gpt-prompt="Review current operations and identify blocked, failed, or approval-pending work.">Operations review</button>
     <button type="button" class="gpt-quick-prompt" data-gpt-prompt="Analyze the attached files and extract the most important findings, risks, and next actions.">Analyze attachments</button>
-    <section class="gpt-creation-forge" aria-labelledby="gpt-creation-title">
-      <p class="eyebrow">CREATION FORGE</p>
-      <h3 id="gpt-creation-title">Create anything</h3>
-      <p>Pick a type if useful, describe the result, and send it once. Text and rendered files appear in Outputs.</p>
-      <div class="gpt-creation-modes" role="group" aria-label="Creation type">
-        <button type="button" class="gpt-creation-mode active" data-creation-mode="any" aria-pressed="true">Anything</button>
-        <button type="button" class="gpt-creation-mode" data-creation-mode="app" aria-pressed="false">App</button>
-        <button type="button" class="gpt-creation-mode" data-creation-mode="game" aria-pressed="false">Game</button>
-        <button type="button" class="gpt-creation-mode" data-creation-mode="song" aria-pressed="false">Song</button>
+    <section class="gpt-creation-forge" id="seldrune-media-creation" aria-labelledby="gpt-creation-title">
+      <p class="eyebrow">MEDIA CREATION</p>
+      <h3 id="gpt-creation-title">Create audio or video</h3>
+      <p>Choose a format, describe what you want in Seldrune AI, and submit it. A rendered file requires a connected media provider; otherwise Seldrune returns a text plan.</p>
+      <div class="gpt-creation-modes" role="group" aria-label="Media creation type">
+        <button type="button" class="gpt-creation-mode active" data-creation-mode="song" aria-pressed="true">Audio</button>
         <button type="button" class="gpt-creation-mode" data-creation-mode="video" aria-pressed="false">Video</button>
-        <button type="button" class="gpt-creation-mode" data-creation-mode="visual" aria-pressed="false">Visual / 3D</button>
       </div>
       <div class="gpt-creation-presets">
-        <button type="button" class="gpt-quick-prompt" data-creation-mode="app" data-gpt-prompt="Create a polished, responsive app for this idea. Return a runnable source structure, key screens, core behavior, and focused tests. Use enabled development tools when available, and report what was actually saved and verified.">App prototype</button>
-        <button type="button" class="gpt-quick-prompt" data-creation-mode="game" data-gpt-prompt="Create a small playable game for this idea. Include the game loop, controls, accessible feedback, and focused tests. Use enabled development tools when available, and report what was actually saved and verified.">Playable game</button>
-        <button type="button" class="gpt-quick-prompt" data-creation-mode="song" data-gpt-prompt="Create an original song for this idea. Provide lyrics, chords, tempo, structure, and production notes. If an audio-generation tool is enabled, render audio and include its receipt; otherwise clearly say the audio is not rendered.">Original song</button>
-        <button type="button" class="gpt-quick-prompt" data-creation-mode="video" data-gpt-prompt="Create an original video for this idea. Provide the script, storyboard, shot list, and edit cues. If a video-generation tool is enabled, render the video and include its receipt; otherwise clearly say the video is not rendered.">Video storyboard</button>
-        <button type="button" class="gpt-quick-prompt" data-creation-mode="visual" data-gpt-prompt="Create an original visual or 3D scene for this idea. Provide the art direction, composition, asset list, and a ready-to-use generation prompt. If an image or 3D generation tool is enabled, render the asset and include its receipt; otherwise clearly say no render was produced.">Visual / 3D asset</button>
+        <button type="button" class="gpt-quick-prompt" data-creation-mode="song" data-gpt-prompt="Create an original audio piece for this brief. If a compatible audio provider is connected, render the audio file and return its receipt. If not, return a clearly labeled text production plan and do not claim audio was rendered.">Start an audio brief</button>
+        <button type="button" class="gpt-quick-prompt" data-creation-mode="video" data-gpt-prompt="Create an original video for this brief. If a compatible video provider is connected, render the video file and return its receipt. If not, return a clearly labeled script and storyboard and do not claim video was rendered.">Start a video brief</button>
       </div>
-      <small id="seldrune-gpt-creation-status" class="gpt-creation-status" aria-live="polite">Anything · Seldrune will infer the deliverable and use configured tools. Media rendering depends on an enabled media provider.</small>
+      <button type="button" class="ghost" data-open-portal="operator">Describe your media request in Seldrune AI →</button>
+      <small id="seldrune-gpt-creation-status" class="gpt-creation-status" aria-live="polite">Audio and video generation require a connected provider.</small>
     </section>
     <div class="gpt-capability-note">
       <span>ATTACHMENTS</span>
@@ -151,12 +145,12 @@
   </aside>
   <div class="gpt-studio-main">
     <div id="seldrune-gpt-thread" class="gpt-thread" aria-live="polite">
-      <div class="empty">Ask Seldrune anything. One message can start a conversation, create a file, or route work through connected tools. Attach a PDF and describe the edit.</div>
+      <div class="empty">Ask for a text response, analysis, or plan. Use Media for audio and video creation.</div>
     </div>
     <form id="seldrune-gpt-form" class="gpt-composer">
       <div id="seldrune-gpt-dropzone" class="gpt-dropzone">
         <div id="seldrune-gpt-attachments" class="gpt-attachments" aria-live="polite"></div>
-        <textarea id="seldrune-gpt-input" minlength="1" maxlength="20000" required placeholder="Ask Seldrune anything: create, code, analyze, or take action…"></textarea>
+        <textarea id="seldrune-gpt-input" minlength="1" maxlength="20000" required placeholder="Ask Seldrune a question or request a text analysis…"></textarea>
         <div class="gpt-composer-bar">
           <div class="gpt-composer-tools">
             <input id="seldrune-gpt-files" type="file" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,text/csv,application/json,.docx,.xlsx,.pptx">
@@ -172,7 +166,7 @@
                 <option value="anthropic">Anthropic</option>
               </select>
             </label>
-            <span id="seldrune-gpt-mode" class="gpt-mode-pill">Seldrune AI</span>
+            <span id="seldrune-gpt-mode" class="gpt-mode-pill">Text chat</span>
             <label id="seldrune-gpt-pdf-password-wrap" class="gpt-pdf-password hidden">
               <span>PDF password</span>
               <input id="seldrune-gpt-pdf-password" type="password" maxlength="256"
@@ -188,7 +182,7 @@
     </form>
     <div class="gpt-studio-foot">
       <p id="seldrune-gpt-status">Ready.</p>
-      <p>Routine reversible tasks can run under owner policy. Sensitive actions remain confirmation-gated, and external success requires provider evidence.</p>
+      <p>Chat replies are text. Media jobs are handled from the Media workspace and require a connected provider for a rendered file.</p>
     </div>
   </div>
 </div>
@@ -196,5 +190,5 @@
 <section id="face-external-test" class="panel" aria-labelledby="face-external-test-title"><div class="section-head"><div><p class="eyebrow">LIVESHIFT EXTERNAL FACE TEST</p><h2 id="face-external-test-title">Consent-gated transformation proof</h2><p>Uses your signed-in owner session. Images stay in the request path and the Replicate token remains server-side.</p></div></div><form id="face-test-form"><div class="form-grid"><label>Reference/source face<input id="face-source-file" type="file" accept="image/jpeg,image/png,image/webp" required></label><label>Target image<input id="face-target-file" type="file" accept="image/jpeg,image/png,image/webp" required></label></div><label class="policy-toggle"><input id="face-consent" type="checkbox" required><span>I confirm both images are authorized for this transformation test.</span></label><button type="submit">Run external Face test</button></form><p id="face-test-status">Waiting for an authorized test.</p><div id="face-test-output"></div></section>
 
 <section id="commands"><div class="section-head"><div><p class="eyebrow">LIVE PORTFOLIO</p><h2>Strategic commands</h2><p>Complete governed command history, newest first.</p></div></div><div id="command-list" class="list"></div></section></main></div>
-<dialog id="brief"><button class="close" aria-label="Close">×</button><p class="eyebrow">DECISION BRIEF</p><div id="brief-body"></div></dialog><div id="toast"></div><script src="/console-assets/console.js" defer></script><script src="/console-assets/console-action-inbox.js" defer></script><script src="/console-assets/sti-runtime.js" defer></script><script src="/console-assets/owner-push-subscriptions.js" defer></script><script src="/console-assets/face-test.js" defer></script><script src="/console-assets/seldrune-gpt.js" defer></script><script src="/console-assets/console-tools.js" defer></script><script src="/console-assets/console-cosmic-tabs.js" defer></script><script src="/console-assets/console-system-sense.js" defer></script><script src="/console-assets/console-connections.js" defer></script><script src="/console-assets/console-agents.js" defer></script><script src="/console-assets/console-portal-settings.js" defer></script><script src="/console-assets/cognitive-mission.js" defer></script><script src="/console-assets/console-nexus-arena.js" defer></script></body></html>
+<dialog id="brief"><button class="close" aria-label="Close">×</button><p class="eyebrow">DECISION BRIEF</p><div id="brief-body"></div></dialog><div id="toast"></div><script src="/console-assets/console.js" defer></script><script src="/console-assets/console-action-inbox.js" defer></script><script src="/console-assets/sti-runtime.js" defer></script><script src="/console-assets/owner-push-subscriptions.js" defer></script><script src="/console-assets/face-test.js" defer></script><script src="/console-assets/seldrune-gpt.js" defer></script><script src="/console-assets/console-tools.js" defer></script><script src="/console-assets/console-cosmic-tabs.js" defer></script><script src="/console-assets/console-system-sense.js" defer></script><script src="/console-assets/console-connections.js" defer></script><script src="/console-assets/console-agents.js" defer></script><script src="/console-assets/console-portal-settings.js" defer></script><script src="/console-assets/cognitive-mission.js" defer></script></body></html>
 
