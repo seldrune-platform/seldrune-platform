@@ -22,7 +22,7 @@ body {
   overflow-x: hidden;
   background-color: var(--seldrune-night);
   background-image:
-    linear-gradient(145deg, rgb(5 11 24 / 76%), rgb(5 10 22 / 88%)),
+    linear-gradient(145deg, rgb(5 11 24 / 84%), rgb(5 10 22 / 91%)),
     url("/console-assets/seldrune-celestial-hero.png");
   background-position: center, center 42%;
   background-size: cover, cover;
@@ -92,10 +92,11 @@ body.owner-portal #console-view {
   min-height: 100svh;
   background-color: var(--seldrune-night);
   background-image:
-    linear-gradient(115deg, rgb(5 10 22 / 78%), rgb(5 10 22 / 48%)),
+    linear-gradient(115deg, rgb(5 10 22 / 78%), rgb(5 10 22 / 58%)),
+    radial-gradient(ellipse 50% 48% at 50% 48%, rgb(5 10 22 / 64%) 18%, rgb(5 10 22 / 38%) 62%, transparent 100%),
     url("/console-assets/seldrune-celestial-hero.png");
-  background-position: center, center 44%;
-  background-size: cover, cover;
+  background-position: center, center, center 44%;
+  background-size: cover, cover, cover;
   background-repeat: no-repeat;
 }
 
@@ -233,8 +234,8 @@ body.seldrune-products .hero {
 }
 
 body.seldrune-products .hero h1 {
-  max-width: 11ch;
-  font-size: clamp(42px, 7.3vw, 88px);
+  max-width: 100%;
+  font-size: clamp(38px, 6vw, 76px);
   line-height: .98;
   letter-spacing: -.06em;
   text-wrap: balance;
