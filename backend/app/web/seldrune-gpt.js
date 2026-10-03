@@ -751,7 +751,9 @@
     button.addEventListener('click', () => {
       if (button.dataset.creationMode) setCreationMode(button.dataset.creationMode);
       input.value = button.dataset.gptPrompt || '';
-      input.focus();
+      const startedFromMedia = Boolean(button.closest('#seldrune-media-creation'));
+      if (startedFromMedia) window.seldrunePortal?.activate('operator');
+      requestAnimationFrame(() => input.focus());
     });
   });
 
@@ -795,7 +797,10 @@
       return codeDelivery && /^(?:can you|could you|please|i want you to)\b/i.test(text);
     }
     const kind = classifyOutputKind(text, mode);
-    if (['song', 'video', 'visual'].includes(kind)) return mediaToolReady(kind);
+    if (['song', 'video', 'visual'].includes(kind)) {
+      // Media creation is opt-in from the Media workspace; ordinary chat stays text-only.
+      return mode !== 'any' && mediaToolReady(kind);
+    }
     return directExternalAction || codeDelivery;
   }
 
