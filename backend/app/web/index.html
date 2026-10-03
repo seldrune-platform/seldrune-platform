@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Seldrune · Owner Portal</title><link rel="stylesheet" href="/console-assets/console.css"><link rel="stylesheet" href="/console-assets/sti-runtime.css"><link rel="stylesheet" href="/console-assets/console-action-inbox.css"><link rel="stylesheet" href="/console-assets/console-cosmic-tabs.css"><link rel="stylesheet" href="/console-assets/console-agents.css"><link rel="stylesheet" href="/console-assets/console-tools.css"><link rel="stylesheet" href="/console-assets/console-portal.css"><link rel="stylesheet" href="/console-assets/seldrune-gpt-studio.css"><link rel="stylesheet" href="/console-assets/cognitive-mission.css"><link rel="stylesheet" href="/console-assets/console-clean.css">  <link rel="stylesheet" href="/console-assets/seldrune-experience.css?v=1">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Seldrune · Owner Portal</title><link rel="stylesheet" href="/console-assets/console.css"><link rel="stylesheet" href="/console-assets/sti-runtime.css"><link rel="stylesheet" href="/console-assets/console-action-inbox.css"><link rel="stylesheet" href="/console-assets/console-cosmic-tabs.css"><link rel="stylesheet" href="/console-assets/console-agents.css"><link rel="stylesheet" href="/console-assets/console-tools.css"><link rel="stylesheet" href="/console-assets/console-portal.css"><link rel="stylesheet" href="/console-assets/seldrune-gpt-studio.css?v=2"><link rel="stylesheet" href="/console-assets/cognitive-mission.css"><link rel="stylesheet" href="/console-assets/console-clean.css">  <link rel="stylesheet" href="/console-assets/seldrune-experience.css?v=2">
 </head><body>
 <div id="bootstrap-view" class="login-shell hidden"><section class="login-card onboarding-card"><div class="brand dark"><span>SE</span><div>Seldrune<small>Owner Onboarding</small></div></div><p class="eyebrow">ONE-TIME SECURE SETUP</p><h1>Create the founding owner.</h1><p>This screen closes permanently after your organization is created.</p><form id="bootstrap-form"><div class="form-grid"><label>Your name<input id="bootstrap-name" type="text" autocomplete="name" required maxlength="200"></label><label>Owner email<input id="bootstrap-email" type="email" autocomplete="username" required></label><label>Organization name<input id="organization-name" type="text" required maxlength="200" value="Seldrune"></label><label>Organization slug<input id="organization-slug" type="text" required minlength="2" maxlength="100" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value="seldrune"></label><label>Password<input id="bootstrap-password" type="password" autocomplete="new-password" required minlength="12" maxlength="128"></label><label>Confirm password<input id="bootstrap-confirm" type="password" autocomplete="new-password" required minlength="12" maxlength="128"></label></div><button type="submit">Create owner account <span>→</span></button><p id="bootstrap-error" class="risk" role="alert"></p></form></section></div>
 <div id="login-view" class="login-shell hidden"><section class="login-card"><div class="brand dark"><span>SE</span><div>Seldrune STI<small>Aethelion Intelligence Foundry</small></div></div><p class="eyebrow">SECURE OWNER ACCESS</p><h1>Enter the Aethelion Intelligence Foundry.</h1><p>Sign in with your Seldrune owner account. Your access expires automatically.</p><form id="login-form"><label>Email<input id="email" type="email" autocomplete="username" required></label><label>Password<input id="password" type="password" autocomplete="current-password" required></label><button type="submit">Sign in securely <span>→</span></button><p id="login-error" class="risk" role="alert"></p></form></section></div>
@@ -101,87 +101,116 @@
 <section id="tool-control" class="panel tool-control" aria-labelledby="tool-control-title"><div class="section-head"><div><p class="eyebrow">INTEGRATIONS &amp; CREATION TOOLS</p><h2 id="tool-control-title">Connections, adapters, and activity</h2><p>Connect supported services in one place. Verified credentials are encrypted in the organization vault; Seldrune registers the available provider actions and reports their real status.</p></div><div class="tool-head-actions"><button id="tool-control-refresh" type="button" class="ghost">Refresh integrations</button><details class="tool-advanced-actions"><summary>More actions</summary><div><button id="tool-auto-activate" type="button">Activate configured providers</button><button id="tool-provider-preflight" type="button" class="ghost">Verify provider access</button><button id="tool-clean-invalid" type="button" class="ghost">Remove invalid credentials</button></div></details></div></div><details class="tool-diagnostics"><summary>Provider readiness and verification</summary><div id="tool-provider-readiness" class="tool-readiness"><div class="empty">Checking configured providers…</div></div><div id="tool-provider-preflight-results" class="tool-readiness"><div class="empty">Remote provider access has not been verified in this session.</div></div></details><details class="tool-administration"><summary>Advanced setup, manual references, custom tools, and execution receipts</summary><div class="tool-control-summary"><article><small>Adapters</small><strong id="tool-adapter-count">—</strong></article><article><small>Credentials</small><strong id="tool-secret-count">—</strong></article><article><small>Tools</small><strong id="tool-definition-count">—</strong></article><article><small>Pending approvals</small><strong id="tool-pending-count">—</strong></article></div><div class="tool-control-grid"><article class="tool-console-card"><h3>Provider adapters</h3><p class="policy-status">Built-in actions registered by the running Seldrune service.</p><div id="tool-adapter-list" class="tool-stack"><div class="empty">Loading adapters…</div></div></article><article class="tool-console-card"><h3>Advanced manual references</h3><p class="policy-status">Optional advanced mode: reference a credential stored in an environment variable or AWS Secrets Manager. Existing references can be removed below when they are no longer in use.</p><form id="secret-reference-form" class="tool-form"><label>Name<input id="tool-secret-name" required maxlength="160" placeholder="GitHub API token"></label><label>Slug<input id="tool-secret-slug" required maxlength="100" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="github-api-token"></label><label>Secret provider<select id="tool-secret-provider"><option value="env">Environment</option><option value="aws-secrets-manager">AWS Secrets Manager</option></select></label><label>Locator<input id="tool-secret-locator" required maxlength="240" placeholder="GITHUB_TOOL_TOKEN"></label><button type="submit">Create reference</button></form><div id="secret-reference-list" class="tool-stack"><div class="empty">No credential references loaded.</div></div></article><article class="tool-console-card"><h3>Register tool</h3><form id="tool-definition-form" class="tool-form"><label>Adapter<select id="tool-adapter-select" required></select></label><label>Tool name<input id="tool-definition-name" required maxlength="160" placeholder="Send owner email"></label><label>Tool slug<input id="tool-definition-slug" required maxlength="100" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="send-owner-email"></label><label>Credential<select id="tool-credential-select"><option value="">No credential</option></select></label><label>Risk<select id="tool-risk-level"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label><pre id="tool-input-schema" class="tool-schema">Select an adapter.</pre><button type="submit">Register tool</button></form><div id="tool-definition-list" class="tool-stack"><div class="empty">No tools loaded.</div></div></article><article class="tool-console-card"><h3>Run and verify</h3><form id="tool-run-form" class="tool-form"><label>Tool<select id="tool-run-select" required></select></label><label>Input JSON<textarea id="tool-run-input" rows="7" spellcheck="false">{}</textarea></label><button type="submit">Run tool</button></form><div id="tool-run-list" class="tool-stack"><div class="empty">No execution receipts loaded.</div></div></article></div></details><p id="tool-control-status" class="policy-status">Connections and tool status load when this workspace opens.</p></section>
 <section class="governance-policy panel" aria-labelledby="policy-title"><div><p class="eyebrow">GOVERNANCE POLICY CENTER</p><h2 id="policy-title">Execution boundaries</h2><p>Set enforceable limits for every owner command and delivery project.</p></div><form id="policy-form"><label>Maximum command steps<input id="policy-max-steps" type="number" min="1" max="100" required></label><label>Maximum project budget (USD)<input id="policy-max-budget" type="number" min="0" max="1000000" step="0.01" required></label><label class="policy-toggle"><input id="policy-autonomous" type="checkbox"><span>Allow autonomous execution</span></label><div class="policy-actions"><button id="policy-preview-button" type="button" class="ghost">Preview impact</button><button type="submit">Save policy</button></div></form><div id="policy-preview" class="policy-preview hidden" role="status"></div><div class="policy-history-heading"><strong>Policy history</strong><span>Restore any audited revision</span></div><div id="policy-history" class="policy-history"><div class="empty">No policy revisions yet.</div></div><p id="policy-status" class="policy-status">Loading governance policy…</p></section>
 <section class="audit-center panel" aria-labelledby="audit-title"><div class="audit-heading"><div><p class="eyebrow">GOVERNANCE AUDIT CENTER</p><h2 id="audit-title">Decision history</h2><p><span id="audit-count">0 events</span> · newest first</p></div><div class="audit-tools"><label>Filter<select id="audit-filter"><option value="">All activity</option><option value="owner_command">Owner commands</option><option value="organization_project">Projects</option><option value="orchestration">Execution</option><option value="task">Tasks</option></select></label><button id="download-audit" type="button">Download evidence</button><input id="verify-audit-file" type="file" accept="application/json,.json" class="hidden"><button id="verify-audit" type="button" class="ghost">Verify evidence</button></div></div><div id="audit-verification" class="audit-verification hidden" role="status"></div><div id="audit-list" class="audit-list"><div class="empty">No governance events yet.</div></div></section>
-<section id="seldrune-gpt" class="panel gpt-studio" aria-labelledby="seldrune-gpt-title">
-<div class="gpt-studio-head">
-  <div>
-    <p class="eyebrow">SELD RUNE GPT · OWNER STUDIO</p>
-    <h2 id="seldrune-gpt-title">Seldrune AI · text chat</h2>
-    <p>Ask questions, analyze files, and get clear text responses. Audio and video jobs live in Media; Seldrune reports whether a real media file was rendered or only a text plan was returned.</p>
-  </div>
-  <div class="gpt-studio-runtime">
-    <span>MODEL</span>
-    <strong id="seldrune-gpt-model">GPT</strong>
-    <span id="seldrune-gpt-capabilities" class="gpt-mode-pill" aria-live="polite" data-state="checking">Checking cognitive runtime…</span>
-    <button id="seldrune-gpt-open-tools" type="button" class="ghost hidden">Open Tools</button>
-    <button id="seldrune-gpt-new" type="button" class="ghost">New conversation</button>
-  </div>
-</div>
-<div class="gpt-studio-body">
-  <aside class="gpt-studio-sidebar">
-    <button type="button" class="gpt-quick-prompt" data-gpt-prompt="Check production readiness, active tools, provider configuration, and any owner attention items.">Production check</button>
-    <button type="button" class="gpt-quick-prompt" data-gpt-prompt="Inspect the Seldrune repository state and summarize the safest next engineering action.">Repository check</button>
-    <button type="button" class="gpt-quick-prompt" data-gpt-prompt="Review current operations and identify blocked, failed, or approval-pending work.">Operations review</button>
-    <button type="button" class="gpt-quick-prompt" data-gpt-prompt="Analyze the attached files and extract the most important findings, risks, and next actions.">Analyze attachments</button>
-    <section class="gpt-creation-forge" id="seldrune-media-creation" aria-labelledby="gpt-creation-title">
-      <p class="eyebrow">MEDIA CREATION</p>
-      <h3 id="gpt-creation-title">Create audio or video</h3>
-      <p>Choose Audio or Video, then describe your brief in the text composer. Any rendered file is saved in Outputs.</p>
-      <div class="gpt-creation-modes" role="group" aria-label="Media creation type">
-        <button type="button" class="gpt-creation-mode" data-creation-mode="song" aria-pressed="false">Audio</button>
-        <button type="button" class="gpt-creation-mode" data-creation-mode="video" aria-pressed="false">Video</button>
-      </div>
-      <small id="seldrune-gpt-creation-status" class="gpt-creation-status" aria-live="polite">Rendered audio or video requires a connected provider; otherwise Seldrune returns a text plan.</small>
-    </section>
-    <div class="gpt-capability-note">
-      <span>ATTACHMENTS</span>
-      <small>Chat attachments: up to 6 files · 8 MB each · 20 MB total</small>
-      <small>PNG · JPG · WEBP · GIF · PDF · TXT · MD · CSV · JSON · DOCX · XLSX · PPTX</small>
-      <small>AI PDF Editor: attach one PDF up to 25 MB and describe the change. Seldrune chooses the editing method automatically—no coordinates or manual edit tools.</small>
+<section id="seldrune-gpt" class="panel gpt-workspace" aria-labelledby="seldrune-gpt-title">
+  <aside class="gpt-sidebar" aria-label="Seldrune GPT navigation">
+    <div class="gpt-sidebar-brand">
+      <span class="gpt-brand-mark" aria-hidden="true">SE</span>
+      <span><strong>Seldrune GPT</strong><small>Owner workspace</small></span>
+    </div>
+    <button id="seldrune-gpt-new" class="gpt-new-chat" type="button"><span aria-hidden="true">＋</span> New chat</button>
+    <nav class="gpt-workspace-nav" aria-label="Chat pages">
+      <button type="button" class="active" data-gpt-view="chat" aria-pressed="true"><span aria-hidden="true">✦</span> Chat</button>
+      <button type="button" data-gpt-view="history" aria-pressed="false"><span aria-hidden="true">◷</span> History</button>
+      <button type="button" data-gpt-view="tools" aria-pressed="false"><span aria-hidden="true">⊞</span> Tools &amp; plugins</button>
+    </nav>
+    <div class="gpt-history-shortcut">
+      <div class="gpt-sidebar-label"><span>Recent chats</span><button type="button" data-gpt-view="history">View all</button></div>
+      <label class="gpt-history-search"><span aria-hidden="true">⌕</span><input id="seldrune-gpt-history-search" type="search" placeholder="Search chats" aria-label="Search chat history"></label>
+      <div id="seldrune-gpt-history-list" class="gpt-history-list" aria-label="Recent conversations"><p class="gpt-history-empty">Loading saved chats…</p></div>
+    </div>
+    <div class="gpt-sidebar-bottom">
+      <span id="seldrune-gpt-capabilities" class="gpt-mode-pill" aria-live="polite" data-state="checking">Checking connected tools…</span>
+      <button id="seldrune-gpt-open-tools" type="button" class="gpt-sidebar-link hidden">Provider setup</button>
+      <button type="button" class="gpt-sidebar-link" data-open-portal="connections"><span aria-hidden="true">⛓</span> Connections</button>
+      <a class="gpt-sidebar-link" href="/media"><span aria-hidden="true">◉</span> Media studio</a>
     </div>
   </aside>
-  <div class="gpt-studio-main">
-    <div id="seldrune-gpt-thread" class="gpt-thread" aria-live="polite">
-      <div class="empty">Ask for a text response, analysis, or plan. Use Media for audio and video creation.</div>
-    </div>
-    <form id="seldrune-gpt-form" class="gpt-composer">
-      <div id="seldrune-gpt-dropzone" class="gpt-dropzone">
-        <div id="seldrune-gpt-attachments" class="gpt-attachments" aria-live="polite"></div>
-        <textarea id="seldrune-gpt-input" minlength="1" maxlength="20000" required placeholder="Ask Seldrune a question or request a text analysis…"></textarea>
-        <div class="gpt-composer-bar">
-          <div class="gpt-composer-tools">
-            <input id="seldrune-gpt-files" type="file" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,text/csv,application/json,.docx,.xlsx,.pptx">
-            <button id="seldrune-gpt-attach" type="button" class="ghost">＋ Attach</button>
-            <span id="seldrune-gpt-attachment-summary">No attachments</span>
-            <label class="gpt-provider-control">
-              <span>Text model</span>
-              <select id="seldrune-gpt-provider" aria-label="Choose Seldrune text model">
-                <option value="auto">Seldrune Auto</option>
-                <option value="openai">OpenAI</option>
-                <option value="openai_compatible">OpenAI-compatible</option>
-                <option value="gemini">Gemini</option>
-                <option value="anthropic">Anthropic</option>
-              </select>
-            </label>
-            <span id="seldrune-gpt-mode" class="gpt-mode-pill">Text chat</span>
-            <label id="seldrune-gpt-pdf-password-wrap" class="gpt-pdf-password hidden">
-              <span>PDF password</span>
-              <input id="seldrune-gpt-pdf-password" type="password" maxlength="256"
-                     autocomplete="off" placeholder="Optional">
-            </label>
-          </div>
-          <div class="gpt-composer-actions">
-            <button id="seldrune-gpt-chat" type="submit">Send to Seldrune <span>→</span></button>
-            
+  <button type="button" id="seldrune-gpt-sidebar-scrim" class="gpt-sidebar-scrim hidden" aria-label="Close chat navigation"></button>
+  <main class="gpt-main">
+    <header class="gpt-topbar">
+      <button type="button" id="seldrune-gpt-sidebar-toggle" class="gpt-mobile-menu" aria-label="Open chat navigation" aria-expanded="false" aria-controls="seldrune-gpt-sidebar">☰</button>
+      <div class="gpt-top-title">
+        <p class="gpt-top-eyebrow">SELDRUNE · AI WORKSPACE</p>
+        <h1 id="seldrune-gpt-title">Seldrune GPT</h1>
+      </div>
+      <div class="gpt-top-actions">
+        <span class="gpt-provider-label">Model</span>
+        <strong id="seldrune-gpt-model">Seldrune Auto</strong>
+        <button type="button" class="gpt-top-tool-button" data-gpt-view="tools">Tools &amp; plugins</button>
+      </div>
+    </header>
+    <section class="gpt-page-view gpt-chat-page active" data-gpt-page="chat" aria-label="Chat">
+      <div id="seldrune-gpt-thread" class="gpt-thread" aria-live="polite">
+        <div class="gpt-welcome empty">
+          <span class="gpt-welcome-mark" aria-hidden="true">✦</span>
+          <p class="gpt-welcome-kicker">A clearer place to think and build</p>
+          <h2>What would you like to work on?</h2>
+          <p class="gpt-welcome-copy">Ask a question, explore an idea, or bring in a file. Your chats stay in your history.</p>
+          <div class="gpt-suggestions" aria-label="Try a prompt">
+            <button type="button" data-gpt-prompt="Check production readiness, active tools, provider configuration, and owner attention items."><span>◈</span><strong>Review system status</strong><small>Check runtime and connected tools</small></button>
+            <button type="button" data-gpt-prompt="Inspect the Seldrune repository state and summarize the safest next engineering action."><span>⌘</span><strong>Review a codebase</strong><small>Find the next useful engineering step</small></button>
+            <button type="button" data-gpt-prompt="Analyze the attached files and extract the most important findings, risks, and next actions."><span>▤</span><strong>Analyze a file</strong><small>Attach a document to get started</small></button>
           </div>
         </div>
       </div>
-    </form>
-    <div class="gpt-studio-foot">
-      <p id="seldrune-gpt-status">Ready.</p>
-      <p>Chat replies are text. Media jobs are handled from the Media workspace and require a connected provider for a rendered file. Sensitive actions remain confirmation-gated.</p>
+      <form id="seldrune-gpt-form" class="gpt-composer">
+        <div id="seldrune-gpt-dropzone" class="gpt-dropzone">
+          <div id="seldrune-gpt-attachments" class="gpt-attachments" aria-live="polite"></div>
+          <textarea id="seldrune-gpt-input" minlength="1" maxlength="20000" required placeholder="Message Seldrune GPT"></textarea>
+          <div class="gpt-composer-bar">
+            <div class="gpt-composer-tools">
+              <input id="seldrune-gpt-files" type="file" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,text/csv,application/json,.docx,.xlsx,.pptx">
+              <button id="seldrune-gpt-attach" type="button" class="gpt-tool-button" aria-label="Attach a file"><span aria-hidden="true">＋</span> Attach</button>
+              <span id="seldrune-gpt-attachment-summary">No attachments</span>
+              <label class="gpt-provider-control"><span>Text model</span>
+                <select id="seldrune-gpt-provider" aria-label="Choose Seldrune text model">
+                  <option value="auto">Seldrune Auto</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="openai_compatible">OpenAI-compatible</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="anthropic">Anthropic</option>
+                </select>
+              </label>
+              <span id="seldrune-gpt-mode" class="gpt-mode-pill">Text chat</span>
+              <label id="seldrune-gpt-pdf-password-wrap" class="gpt-pdf-password hidden"><span>PDF password</span><input id="seldrune-gpt-pdf-password" type="password" maxlength="256" autocomplete="off" placeholder="Optional"></label>
+            </div>
+            <div class="gpt-composer-actions"><button id="seldrune-gpt-chat" type="submit"><span>Send</span><span aria-hidden="true">↑</span></button></div>
+          </div>
+        </div>
+      </form>
+    </section>
+    <section class="gpt-page-view gpt-history-page" data-gpt-page="history" aria-labelledby="gpt-history-title" hidden>
+      <div class="gpt-page-heading">
+        <div><p class="gpt-top-eyebrow">YOUR SELDRUNE GPT CHATS</p><h2 id="gpt-history-title">Chat history</h2><p>Open any saved conversation and pick up where you left off.</p></div>
+        <button type="button" id="seldrune-gpt-history-new" class="gpt-new-chat compact">＋ New chat</button>
+      </div>
+      <label class="gpt-history-search gpt-history-page-search"><span aria-hidden="true">⌕</span><input type="search" data-gpt-history-filter placeholder="Search saved chats" aria-label="Filter saved chats"></label>
+      <div id="seldrune-gpt-history-page-list" class="gpt-history-page-list"></div>
+    </section>
+    <section class="gpt-page-view gpt-tools-page" data-gpt-page="tools" aria-labelledby="gpt-tools-title" hidden>
+      <div class="gpt-page-heading">
+        <div><p class="gpt-top-eyebrow">CONNECTED CAPABILITIES</p><h2 id="gpt-tools-title">Tools &amp; plugins</h2><p>Tools connected to your Seldrune workspace appear here with their current status.</p></div>
+        <button type="button" class="gpt-new-chat compact" data-open-portal="connections">Manage connections</button>
+      </div>
+      <div class="gpt-tool-panels">
+        <section class="gpt-tool-panel"><p class="gpt-sidebar-label">AI providers</p><div id="seldrune-gpt-provider-list" class="gpt-provider-list"><p class="gpt-history-empty">Checking provider status…</p></div></section>
+        <section class="gpt-tool-panel"><p class="gpt-sidebar-label">Available tools</p><div id="seldrune-gpt-tool-list" class="gpt-tool-list"><p class="gpt-history-empty">Checking connected tools…</p></div></section>
+      </div>
+      <p class="gpt-tools-note">Connection settings and permission grants are managed in Seldrune Connections. Chat will only use capabilities that are configured for this owner workspace.</p>
+    </section>
+    <footer class="gpt-status-bar"><span id="seldrune-gpt-status" role="status">Ready.</span><span>Responses are text. Media files are created in the Media workspace when a provider is connected.</span></footer>
+    <div hidden>
+      <section class="gpt-creation-forge" id="seldrune-media-creation" aria-labelledby="gpt-creation-title">
+        <p class="eyebrow">MEDIA CREATION</p><h3 id="gpt-creation-title">Create audio or video</h3>
+        <p>Choose Audio or Video, then describe your brief in the text composer. Any rendered file is saved in Outputs.</p>
+        <div class="gpt-creation-modes" role="group" aria-label="Media creation type">
+          <button type="button" class="gpt-creation-mode" data-creation-mode="song" aria-pressed="false">Audio</button>
+          <button type="button" class="gpt-creation-mode" data-creation-mode="video" aria-pressed="false">Video</button>
+        </div>
+        <small id="seldrune-gpt-creation-status" class="gpt-creation-status" aria-live="polite">Rendered audio or video requires a connected provider; otherwise Seldrune returns a text plan.</small>
+      </section>
     </div>
-  </div>
-</div>
+  </main>
 </section>
 <section id="face-external-test" class="panel" aria-labelledby="face-external-test-title"><div class="section-head"><div><p class="eyebrow">LIVESHIFT EXTERNAL FACE TEST</p><h2 id="face-external-test-title">Consent-gated transformation proof</h2><p>Uses your signed-in owner session. Images stay in the request path and the Replicate token remains server-side.</p></div></div><form id="face-test-form"><div class="form-grid"><label>Reference/source face<input id="face-source-file" type="file" accept="image/jpeg,image/png,image/webp" required></label><label>Target image<input id="face-target-file" type="file" accept="image/jpeg,image/png,image/webp" required></label></div><label class="policy-toggle"><input id="face-consent" type="checkbox" required><span>I confirm both images are authorized for this transformation test.</span></label><button type="submit">Run external Face test</button></form><p id="face-test-status">Waiting for an authorized test.</p><div id="face-test-output"></div></section>
 
