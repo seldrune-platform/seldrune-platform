@@ -122,6 +122,14 @@ body.owner-portal #console-view {
   width: min(760px, 100%);
 }
 
+.login-shell > .login-card > .brand {
+  margin-bottom: 28px;
+}
+
+.login-view > .login-card > .mail-brand {
+  margin-bottom: 34px;
+}
+
 .login-card .brand,
 .login-card .brand div,
 .login-card h1,
