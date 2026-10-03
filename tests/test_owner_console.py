@@ -7,7 +7,7 @@ def test_owner_console_is_served() -> None:
     with TestClient(app) as client:
         response = client.get("/console")
         assert response.status_code == 200
-        assert "Seldrune STI · Aethelion Command Nexus" in response.text
+        assert "<title>Seldrune · Owner Portal</title>" in response.text
         assert "/console-assets/console.css" in response.text
         assert 'id="seldrune-gpt"' in response.text
         assert "Organization board" in response.text
