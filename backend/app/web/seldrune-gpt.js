@@ -871,6 +871,7 @@
       }
       openToolsButton?.classList.toggle('hidden', !needsSetup);
       renderCodingProviderStatus();
+      renderToolCatalog();
     } catch (error) {
       if (capabilityStatus) {
         capabilityStatus.dataset.state = 'attention';
@@ -879,6 +880,7 @@
       }
       openToolsButton?.classList.remove('hidden');
       renderCodingProviderStatus(error.message);
+      renderToolCatalog();
     }
   }
 
