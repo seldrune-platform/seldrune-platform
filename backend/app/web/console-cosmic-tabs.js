@@ -1,15 +1,20 @@
 (() => {
   const WORKSPACES = [
-    ["home", "NEXUS", "⌂"],
-    ["operator", "SELDRUNE AI", "✦"],
+    ["home", "HOME", "⌂"],
+    ["operator", "AI CHAT", "✦"],
     ["outputs", "OUTPUTS", "▣"],
     ["coding", "CODING LAB", "⌘"],
-    ["operations", "MISSIONS", "⌘"],
+    ["operations", "WORKSPACE", "□"],
     ["media", "MEDIA", "◉"],
     ["intelligence", "SYSTEM", "⚙"],
     ["connections", "CONNECT", "↗"],
     ["sense", "SENSE", "◉"],
+    ["contact", "CONTACT", "✉"],
   ];
+
+  const PRIMARY_WORKSPACES = new Set([
+    "home", "operator", "media", "connections", "contact",
+  ]);
 
   const DESCRIPTIONS = {
     home: "Seldrune command nexus for AI, saved outputs, coding, missions, and system health.",
@@ -20,7 +25,8 @@
     media: "Seldrune Media camera, microphone, face and voice transformation workspace.",
     intelligence: "Agents, owner decisions, budgets, execution evidence, and system policies.",
     connections: "Connect verified AI, code, email, and deployment services; manage creation tools in one place.",
-    sense: "Always-on internal health signals and owner-controlled continuity preferences.",
+    sense: "System health, provider status, and owner continuity preferences.",
+    contact: "Contact Seldrune or report a portal issue.",
   };
 
   function initOwnerPortal() {
@@ -35,7 +41,7 @@
     bar.className = "cosmic-command-bar owner-portal-bar";
     bar.innerHTML = `
       <div class="cosmic-brand owner-portal-brand">
-        <div class="cosmic-brand-mark" aria-hidden="true"><span>👽</span></div>
+        <div class="cosmic-brand-mark" aria-hidden="true"><span>SE</span></div>
         <div>
           <strong>SELDRUNE</strong>
           <small>AETHELION INTELLIGENCE FOUNDRY</small>
@@ -56,6 +62,11 @@
     main.prepend(bar);
 
     const tabList = bar.querySelector(".owner-portal-tabs");
+    const moreTabs = document.createElement("details");
+    moreTabs.className = "owner-portal-more-tabs";
+    moreTabs.innerHTML = '<summary>More</summary><div class="owner-portal-more-menu" aria-label="More workspaces"></div>';
+    bar.insertBefore(moreTabs, bar.querySelector(".owner-portal-actions"));
+    const moreTabList = moreTabs.querySelector(".owner-portal-more-menu");
     const root = document.createElement("div");
     root.id = "owner-portal-root";
     root.className = "owner-portal-root";
@@ -73,7 +84,7 @@
       button.innerHTML =
         `<span class="cosmic-tab-icon">${icon}</span>` +
         `<span class="cosmic-tab-label">${label}</span>`;
-      tabList.append(button);
+      (PRIMARY_WORKSPACES.has(id) ? tabList : moreTabList).append(button);
 
       const panel = document.createElement("section");
       panel.id = `portal-panel-${id}`;
@@ -103,133 +114,37 @@
     };
 
     const home = document.createElement("section");
-    home.className = "owner-portal-home portal-depth-scene";
+    home.className = "owner-portal-home";
     home.dataset.portalScene = "true";
     home.innerHTML = `
-      <div class="neural-grid-layer" aria-hidden="true">
-        <i></i><i></i><i></i><i></i><i></i><i></i>
+      <div class="owner-home-intro">
+        <span>SELDRUNE · OWNER PORTAL</span>
+        <h2>Your workspace, without the clutter.</h2>
+        <p>Chat with Seldrune, create media, manage connections, and review work from one simple navigation bar.</p>
       </div>
-
-      <button class="portal-quick-card portal-quick-gpt" type="button"
-              data-open-portal="operator" data-depth="1.05">
-        <span class="portal-quick-icon">✦</span>
-        <span><strong>SELDRUNE AI</strong><small>Ask, create, and build</small></span>
-        <b>→</b>
-      </button>
-      <button class="portal-quick-card portal-quick-sense" type="button"
-              data-open-portal="sense" data-depth="1.2">
-        <span class="portal-quick-icon">◉</span>
-        <span><strong>SYSTEM SENSE</strong><small>Live health and owner continuity</small></span>
-        <b>→</b>
-      </button>
-
-      <article class="portal-gateway-card" data-depth="1.35">
-        <div class="portal-gateway-copy">
-          <span>SELDRUNE STI · AETHELION COMMAND NEXUS</span>
-          <h2>Ask Seldrune anything</h2>
-          <p>One AI workspace routes questions, creation, coding, and supported actions through connected tools, then reports what it actually did.</p>
-        </div>
-        <button class="portal-gateway" type="button" data-open-portal="operator"
-                aria-label="Open Seldrune AI beneath the alien and hunter scene">
-          <span class="portal-aura"></span>
-          <span class="portal-ring portal-ring-outer"></span>
-          <span class="portal-ring portal-ring-mid"></span>
-          <span class="portal-ring portal-ring-inner"></span>
-          <span class="portal-fractal">
-            <i></i><i></i><i></i><i></i><i></i><i></i>
-          </span>
-          <span class="portal-core">
-            <b>STI</b>
-            <small>ENTER</small>
-          </span>
-          <span class="portal-particles" aria-hidden="true"></span>
+      <div class="owner-home-actions" aria-label="Quick actions">
+        <button class="portal-quick-card" type="button" data-open-portal="operator">
+          <span class="portal-quick-icon">✦</span>
+          <span><strong>AI CHAT</strong><small>Questions and text responses</small></span><b>→</b>
         </button>
-        <div class="portal-live-strip">
-          <span><i></i><strong id="portal-runtime-inline">Runtime checking</strong></span>
-          <span><strong id="portal-attention-value">Checking</strong><small id="portal-attention-detail">Owner attention</small></span>
-        </div>
-      </article>
-
-      <button class="portal-quick-card portal-quick-connect" type="button"
-              data-open-portal="connections" data-depth="1.0">
-        <span class="portal-quick-icon">↗</span>
-        <span><strong>CONNECTIONS</strong><small>Connect & secure keys</small></span>
-        <b>→</b>
-      </button>
-
-      <button class="portal-quick-card portal-quick-files" type="button"
-              data-open-portal="outputs"
-              data-depth="1.1">
-        <span class="portal-quick-icon">▣</span>
-        <span><strong>OUTPUTS</strong><small>Your created files</small></span>
-        <b>→</b>
-      </button>
-
-      <button class="portal-quick-card portal-quick-coding" type="button"
-              data-open-portal="coding" data-depth=".95">
-        <span class="portal-quick-icon">⌘</span>
-        <span><strong>CODING LAB</strong><small>Build · test · preview</small></span>
-        <b>→</b>
-      </button>
-
-      <article class="portal-status-card" data-depth=".55">
-        <span>Cognitive Engine</span>
-        <strong id="portal-tools-value">Agent fabric</strong>
-        <small>Seldrune coordinates configured agents; model and spend limits remain active.</small>
-        <button type="button" class="ghost" data-open-portal="operations">View missions</button>
-      </article>`;
+        <button class="portal-quick-card" type="button" data-open-portal="media">
+          <span class="portal-quick-icon">◉</span>
+          <span><strong>MEDIA</strong><small>Audio, video, and live studio</small></span><b>→</b>
+        </button>
+        <button class="portal-quick-card" type="button" data-open-portal="connections">
+          <span class="portal-quick-icon">↗</span>
+          <span><strong>CONNECTIONS</strong><small>Providers and integrations</small></span><b>→</b>
+        </button>
+        <button class="portal-quick-card" type="button" data-open-portal="contact">
+          <span class="portal-quick-icon">✉</span>
+          <span><strong>CONTACT</strong><small>Get help or report an issue</small></span><b>→</b>
+        </button>
+      </div>
+      <div class="owner-home-status" role="status">
+        <span><strong id="portal-runtime-inline">Runtime checking</strong></span>
+        <span><strong id="portal-attention-value">Checking</strong> · <small id="portal-attention-detail">Owner attention</small></span>
+      </div>`;
     panels.get("home")?.querySelector(".owner-portal-heading")?.after(home);
-
-    const particleRoot = home.querySelector(".portal-particles");
-    if (particleRoot) {
-      const particleCount = matchMedia("(max-width: 760px), (prefers-reduced-motion: reduce)").matches ? 0 : 22;
-      for (let index = 0; index < particleCount; index += 1) {
-        const particle = document.createElement("i");
-        particle.style.setProperty("--particle-index", String(index));
-        particle.style.setProperty("--particle-angle", `${(index * 16.36).toFixed(2)}deg`);
-        particle.style.setProperty("--particle-duration", `${(7 + index * .18).toFixed(2)}s`);
-        particle.style.setProperty("--particle-scale", (0.65 + index / 44).toFixed(2));
-        particle.style.setProperty("--particle-opacity", (0.25 + index / 40).toFixed(2));
-        particleRoot.append(particle);
-      }
-    }
-
-    const scene = home;
-    const gateway = home.querySelector(".portal-gateway");
-    const motionReduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const finePointer = matchMedia("(hover: hover) and (pointer: fine)").matches;
-    if (!motionReduced && finePointer) {
-      scene.addEventListener("pointermove", event => {
-        const bounds = scene.getBoundingClientRect();
-        const x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
-        const y = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
-        scene.style.setProperty("--cursor-x", `${(x * 100).toFixed(2)}%`);
-        scene.style.setProperty("--cursor-y", `${(y * 100).toFixed(2)}%`);
-        scene.style.setProperty("--cursor-shift-x", `${((x - .5) * 16).toFixed(2)}px`);
-        scene.style.setProperty("--cursor-shift-y", `${((y - .5) * 12).toFixed(2)}px`);
-        scene.style.setProperty("--portal-tilt-x", `${((.5 - y) * 8).toFixed(2)}deg`);
-        scene.style.setProperty("--portal-tilt-y", `${((x - .5) * 10).toFixed(2)}deg`);
-        scene.querySelectorAll("[data-depth]").forEach(node => {
-          const depth = Number(node.dataset.depth || 1);
-          const dx = (x - .5) * 16 * depth;
-          const dy = (y - .5) * 12 * depth;
-          node.style.setProperty("--depth-x", `${dx.toFixed(2)}px`);
-          node.style.setProperty("--depth-y", `${dy.toFixed(2)}px`);
-        });
-      });
-      scene.addEventListener("pointerleave", () => {
-        scene.style.setProperty("--cursor-shift-x", "0px");
-        scene.style.setProperty("--cursor-shift-y", "0px");
-        scene.style.setProperty("--portal-tilt-x", "0deg");
-        scene.style.setProperty("--portal-tilt-y", "0deg");
-        scene.querySelectorAll("[data-depth]").forEach(node => {
-          node.style.setProperty("--depth-x", "0px");
-          node.style.setProperty("--depth-y", "0px");
-        });
-      });
-    }
-    gateway?.addEventListener("focus", () => scene.classList.add("portal-keyboard-focus"));
-    gateway?.addEventListener("blur", () => scene.classList.remove("portal-keyboard-focus"));
 
     move("#overview", "home");
     move("#seldrune-gpt", "operator");
@@ -245,6 +160,24 @@
     move("#face-v01-mission", "media");
     move("#liveshift-mission", "media");
     move("#face-external-test", "media");
+
+    const mediaDiagnostics = document.createElement("details");
+    mediaDiagnostics.className = "media-advanced-details";
+    mediaDiagnostics.innerHTML = "<summary>Live transformation status and advanced diagnostics</summary>";
+    ["#face-v01-mission", "#liveshift-mission", "#face-external-test"].forEach(selector => {
+      const section = grid("media")?.querySelector(selector);
+      if (section) mediaDiagnostics.append(section);
+    });
+    grid("media")?.append(mediaDiagnostics);
+
+    const mediaForge = document.querySelector("#seldrune-gpt .gpt-creation-forge");
+    if (mediaForge) {
+      const mediaForgeHost = document.createElement("section");
+      mediaForgeHost.id = "media-creation-host";
+      mediaForgeHost.className = "panel media-create-panel";
+      mediaForgeHost.append(mediaForge);
+      grid("media")?.prepend(mediaForgeHost);
+    }
 
     const mediaStudio = document.createElement("section");
     mediaStudio.id = "seldrune-media-live-studio";
@@ -282,7 +215,11 @@
     };
     resizeMediaStudioFrame();
     window.addEventListener("resize", resizeMediaStudioFrame, {passive: true});
-    grid("media")?.prepend(mediaStudio);
+    const liveMediaDetails = document.createElement("details");
+    liveMediaDetails.className = "media-advanced-details";
+    liveMediaDetails.innerHTML = "<summary>Open live camera and microphone studio</summary>";
+    liveMediaDetails.append(mediaStudio);
+    grid("media")?.append(liveMediaDetails);
 
 
     move(".agent-observatory", "intelligence");
@@ -390,9 +327,46 @@
     const footer = document.createElement("footer");
     footer.className = "cosmic-footer owner-portal-footer";
     footer.innerHTML =
-      "<span>SELDRUNE STI · COMMAND NEXUS</span>" +
-      "<span>Cognitive execution · active tools · evidence first</span>";
+      "<span>SELDRUNE · OWNER PORTAL</span>" +
+      '<span><a href="/mail">Contact by email</a> · <a href="https://github.com/seldrune-platform/seldrune-platform/issues/new" target="_blank" rel="noopener noreferrer">Report an issue</a></span>';
     root.after(footer);
+
+    const contactPanel = document.createElement("section");
+    contactPanel.id = "seldrune-contact-panel";
+    contactPanel.className = "panel";
+    contactPanel.setAttribute("aria-labelledby", "seldrune-contact-title");
+    contactPanel.innerHTML = `
+      <p class="eyebrow">CONTACT SELDRUNE</p>
+      <h2 id="seldrune-contact-title">How can we help?</h2>
+      <p>Use Seldrune Mail to send a message, or report a portal problem through the project issue tracker.</p>
+      <div class="contact-options">
+        <a class="contact-option" href="/mail">
+          <strong>Open Seldrune Mail →</strong>
+          <span>Compose and send through a connected email provider.</span>
+        </a>
+        <a class="contact-option" href="https://github.com/seldrune-platform/seldrune-platform/issues/new" target="_blank" rel="noopener noreferrer">
+          <strong>Report a portal issue →</strong>
+          <span>Open a new issue with the Seldrune project.</span>
+        </a>
+        <a class="contact-option" id="seldrune-contact-email-link" href="#" hidden>
+          <strong>Email Seldrune →</strong>
+          <span id="seldrune-contact-email-address"></span>
+        </a>
+      </div>
+      <p id="seldrune-contact-note" class="policy-status" role="status"></p>`;
+    grid("contact")?.append(contactPanel);
+    const contactEmail = document.querySelector('meta[name="seldrune-contact-email"]')?.content?.trim() || "";
+    const contactEmailLink = contactPanel.querySelector("#seldrune-contact-email-link");
+    const contactEmailNote = contactPanel.querySelector("#seldrune-contact-note");
+    const emailLooksValid = contactEmail.includes("@") && contactEmail.lastIndexOf(".") > contactEmail.indexOf("@");
+    if (emailLooksValid) {
+      contactEmailLink.href = "mailto:" + contactEmail;
+      contactEmailLink.hidden = false;
+      contactPanel.querySelector("#seldrune-contact-email-address").textContent = contactEmail;
+      contactEmailNote.textContent = "Direct support email is configured.";
+    } else {
+      contactEmailNote.textContent = "Direct support email is not configured for this portal yet.";
+    }
 
     let currentWorkspace = "home";
     let portalHistoryDepth = 0;
@@ -458,10 +432,14 @@
       }
     }
 
-    tabList.addEventListener("click", event => {
+    const activateTabFromClick = event => {
       const button = event.target.closest("[data-portal-tab]");
-      if (button) activate(button.dataset.portalTab, {historyMode: "push"});
-    });
+      if (!button) return;
+      activate(button.dataset.portalTab, {historyMode: "push"});
+      moreTabs.open = false;
+    };
+    tabList.addEventListener("click", activateTabFromClick);
+    moreTabList.addEventListener("click", activateTabFromClick);
 
     tabList.addEventListener("keydown", event => {
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
