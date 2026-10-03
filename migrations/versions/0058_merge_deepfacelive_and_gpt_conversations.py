@@ -4,8 +4,6 @@ Revision ID: 0058_merge_deepfacelive_and_gpt_conversations
 Revises: 0057_deepfacelive_bridge, 0057_seldrune_gpt_conversations
 """
 
-from alembic import op
-
 
 revision = "0058_merge_deepfacelive_and_gpt_conversations"
 down_revision = (
