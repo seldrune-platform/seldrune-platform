@@ -160,3 +160,31 @@ def test_pdf_editor_rejects_plan_when_target_is_missing() -> None:
         )
 
     assert exc_info.value.status_code == 422
+
+
+def test_gpt_request_accepts_conversation_id() -> None:
+    from uuid import UUID
+
+    from backend.app.api.routes.seldrune_gpt import SeldruneGPTRequest
+
+    conversation_id = UUID("00000000-0000-0000-0000-000000000123")
+    request = SeldruneGPTRequest(
+        message="Continue this chat.",
+        conversation_id=conversation_id,
+    )
+
+    assert request.conversation_id == conversation_id
+
+
+def test_gpt_conversation_summary_supports_legacy_history() -> None:
+    from backend.app.api.routes.seldrune_gpt import SeldruneGPTConversationSummary
+
+    summary = SeldruneGPTConversationSummary(
+        id=None,
+        title="Earlier saved history",
+        updated_at=None,
+        legacy=True,
+    )
+
+    assert summary.id is None
+    assert summary.legacy is True
