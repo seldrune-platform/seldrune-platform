@@ -4,7 +4,7 @@ Revision ID: 0057_seldrune_gpt_conversations
 Revises: 0056_mcp_bridge_oauth
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from alembic import op
@@ -86,7 +86,7 @@ def upgrade() -> None:
         .where(messages.c.conversation_id.is_(None))
         .distinct()
     ).all()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for organization_id, user_id in legacy_owners:
         conversation_id = uuid4()
         bind.execute(
