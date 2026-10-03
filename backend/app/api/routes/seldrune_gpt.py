@@ -1,8 +1,9 @@
 import base64
-from dataclasses import replace
 import binascii
 import json
 import re
+from dataclasses import replace
+from datetime import datetime, timezone
 
 from typing import Annotated, Literal
 from uuid import UUID
@@ -24,6 +25,7 @@ from backend.app.core.modeling import ModelFileInput, ModelImageInput, ModelProv
 from backend.app.core.rbac import Permission, Role
 from backend.app.models.membership import Membership
 from backend.app.models.orchestration import OrchestrationStep
+from backend.app.models.seldrune_gpt_conversation import SeldruneGPTConversation
 from backend.app.models.seldrune_gpt_message import SeldruneGPTMessage
 from backend.app.models.task import Task
 from backend.app.models.tool_definition import ToolDefinition
@@ -200,6 +202,46 @@ def _require_owner_role(membership: Membership) -> None:
         raise HTTPException(status_code=403, detail="Owner role required")
 
 
+def _conversation_title(value: str) -> str:
+    normalized = " ".join(value.split())
+    if not normalized:
+        return "New chat"
+    return normalized[:77] + ("…" if len(normalized) > 77 else "")
+
+
+def _resolve_gpt_conversation(
+    session: SessionDep,
+    *,
+    organization_id: UUID,
+    user_id: UUID,
+    conversation_id: UUID | None,
+    title_hint: str = "",
+) -> SeldruneGPTConversation:
+    if conversation_id is not None:
+        conversation = session.scalar(
+            select(SeldruneGPTConversation).where(
+                SeldruneGPTConversation.id == conversation_id,
+                SeldruneGPTConversation.organization_id == organization_id,
+                SeldruneGPTConversation.user_id == user_id,
+            )
+        )
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="Seldrune GPT chat not found")
+    else:
+        conversation = SeldruneGPTConversation(
+            organization_id=organization_id,
+            user_id=user_id,
+            title=_conversation_title(title_hint),
+        )
+        session.add(conversation)
+        session.flush()
+
+    if conversation.title == "New chat" and title_hint.strip():
+        conversation.title = _conversation_title(title_hint)
+    conversation.updated_at = datetime.now(timezone.utc)
+    return conversation
+
+
 class SeldruneGPTAttachment(BaseModel):
     name: str = Field(min_length=1, max_length=180)
     media_type: str = Field(min_length=3, max_length=160)
@@ -208,6 +250,7 @@ class SeldruneGPTAttachment(BaseModel):
 
 class SeldruneGPTRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20000)
+    conversation_id: UUID | None = None
     attachments: list[SeldruneGPTAttachment] = Field(default_factory=list, max_length=6)
     provider: Literal["auto", "openai", "openai_compatible", "gemini", "anthropic"] = "auto"
     model: str | None = Field(default=None, min_length=1, max_length=120)
@@ -282,6 +325,7 @@ def _model_attachments(
 
 class SeldruneGPTPDFEditRequest(BaseModel):
     instruction: str = Field(min_length=3, max_length=12000)
+    conversation_id: UUID | None = None
     pdf: SeldruneGPTAttachment
     password: str | None = Field(default=None, max_length=256)
 
@@ -420,6 +464,7 @@ def _apply_pdf_edit_plan(
 
 class SeldruneGPTOperatorRequest(BaseModel):
     order: str = Field(min_length=5, max_length=8000)
+    conversation_id: UUID | None = None
     command_id: UUID | None = None
     confirm_sensitive_action: bool = False
     stop_on_failure: bool = True
@@ -428,6 +473,7 @@ class SeldruneGPTOperatorRequest(BaseModel):
 
 
 class SeldruneGPTOperatorResponse(BaseModel):
+    conversation_id: UUID | None = None
     status: Literal[
         "completed",
         "partial",
@@ -463,6 +509,13 @@ class SeldruneGPTCapabilitiesResponse(BaseModel):
     configuration_hints: list[str] = Field(default_factory=list)
 
 
+class SeldruneGPTConversationSummary(BaseModel):
+    id: UUID | None = None
+    title: str
+    updated_at: datetime | None = None
+    legacy: bool = False
+
+
 class SeldruneGPTHistoryMessage(BaseModel):
     role: str
     content: str
@@ -470,6 +523,7 @@ class SeldruneGPTHistoryMessage(BaseModel):
 
 
 class SeldruneGPTResponse(BaseModel):
+    conversation_id: UUID | None = None
     model: str
     response: str
     response_id: str | None
@@ -559,12 +613,20 @@ def seldrune_gpt(
                 "Choose Seldrune Auto or OpenAI for attachments."
             ),
         )
+    conversation = _resolve_gpt_conversation(
+        session,
+        organization_id=organization_id,
+        user_id=current_user.id,
+        conversation_id=payload.conversation_id,
+        title_hint=payload.message,
+    )
     history = list(
         session.scalars(
             select(SeldruneGPTMessage)
             .where(
                 SeldruneGPTMessage.organization_id == organization_id,
                 SeldruneGPTMessage.user_id == current_user.id,
+                SeldruneGPTMessage.conversation_id == conversation.id,
             )
             .order_by(SeldruneGPTMessage.created_at.desc())
             .limit(8)
@@ -740,6 +802,7 @@ def seldrune_gpt(
         SeldruneGPTMessage(
             organization_id=organization_id,
             user_id=current_user.id,
+            conversation_id=conversation.id,
             role="user",
             content=(
                 payload.message
@@ -755,6 +818,7 @@ def seldrune_gpt(
         SeldruneGPTMessage(
             organization_id=organization_id,
             user_id=current_user.id,
+            conversation_id=conversation.id,
             role="assistant",
             content=result.output_text,
             model=result.model,
@@ -769,6 +833,7 @@ def seldrune_gpt(
     )
     session.commit()
     return SeldruneGPTResponse(
+        conversation_id=conversation.id,
         model=result.model,
         response=result.output_text,
         response_id=result.response_id,
@@ -793,6 +858,13 @@ def edit_seldrune_gpt_pdf(
     current_user: CurrentUserDep,
     session: SessionDep,
 ) -> SeldruneGPTPDFEditResponse:
+    conversation = _resolve_gpt_conversation(
+        session,
+        organization_id=organization_id,
+        user_id=current_user.id,
+        conversation_id=payload.conversation_id,
+        title_hint=payload.instruction,
+    )
     if payload.pdf.media_type.lower().strip() != "application/pdf":
         raise HTTPException(status_code=422, detail="PDF editor accepts one PDF file")
 
@@ -873,6 +945,7 @@ def edit_seldrune_gpt_pdf(
             SeldruneGPTMessage(
                 organization_id=organization_id,
                 user_id=current_user.id,
+                conversation_id=conversation.id,
                 role="user",
                 content=f"{payload.instruction}\n[Local PDF edit: {payload.pdf.name}]",
             )
@@ -881,6 +954,7 @@ def edit_seldrune_gpt_pdf(
             SeldruneGPTMessage(
                 organization_id=organization_id,
                 user_id=current_user.id,
+                conversation_id=conversation.id,
                 role="assistant",
                 content=(
                     f"{summary} Created {output_name} locally with "
@@ -1369,6 +1443,7 @@ def edit_seldrune_gpt_pdf(
         SeldruneGPTMessage(
             organization_id=organization_id,
             user_id=current_user.id,
+            conversation_id=conversation.id,
             role="user",
             content=f"{payload.instruction}\n[AI PDF edit: {payload.pdf.name}]",
         )
@@ -1377,6 +1452,7 @@ def edit_seldrune_gpt_pdf(
         SeldruneGPTMessage(
             organization_id=organization_id,
             user_id=current_user.id,
+            conversation_id=conversation.id,
             role="assistant",
             content=(
                 f"{summary} Created {output_name} with "
@@ -1545,6 +1621,13 @@ def operate_seldrune_gpt(
     session: SessionDep,
 ) -> SeldruneGPTOperatorResponse:
     _require_owner_role(membership)
+    conversation = _resolve_gpt_conversation(
+        session,
+        organization_id=organization_id,
+        user_id=current_user.id,
+        conversation_id=payload.conversation_id,
+        title_hint=payload.order,
+    )
     ensure_configured_external_tools(
         session,
         organization_id=organization_id,
@@ -1572,6 +1655,7 @@ def operate_seldrune_gpt(
             SeldruneGPTMessage(
                 organization_id=organization_id,
                 user_id=current_user.id,
+                conversation_id=conversation.id,
                 role="assistant",
                 content=(
                     "Operator configuration required. Missing executable tools: "
@@ -1688,6 +1772,7 @@ def operate_seldrune_gpt(
             SeldruneGPTMessage(
                 organization_id=organization_id,
                 user_id=current_user.id,
+                conversation_id=conversation.id,
                 role="assistant",
                 content=message,
                 model=settings.model_default,
@@ -1721,6 +1806,7 @@ def operate_seldrune_gpt(
             SeldruneGPTMessage(
                 organization_id=organization_id,
                 user_id=current_user.id,
+                conversation_id=conversation.id,
                 role="assistant",
                 content=(
                     "Operator command created. Explicit owner confirmation is required for: "
@@ -1805,6 +1891,7 @@ def operate_seldrune_gpt(
         SeldruneGPTMessage(
             organization_id=organization_id,
             user_id=current_user.id,
+            conversation_id=conversation.id,
             role="assistant",
             content=(
                 f"Operator {status_value}: {report.executed_steps} steps executed, "
@@ -1831,12 +1918,122 @@ def operate_seldrune_gpt(
     )
 
 
+@router.post(
+    "/{organization_id}/gpt/conversations",
+    response_model=SeldruneGPTConversationSummary,
+)
+def create_seldrune_gpt_conversation(
+    organization_id: UUID,
+    _membership: AgentsRunDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> SeldruneGPTConversationSummary:
+    conversation = SeldruneGPTConversation(
+        organization_id=organization_id,
+        user_id=current_user.id,
+        title="New chat",
+    )
+    session.add(conversation)
+    session.commit()
+    session.refresh(conversation)
+    return SeldruneGPTConversationSummary(
+        id=conversation.id,
+        title=conversation.title,
+        updated_at=conversation.updated_at,
+    )
+
+
+@router.get(
+    "/{organization_id}/gpt/conversations",
+    response_model=list[SeldruneGPTConversationSummary],
+)
+def list_seldrune_gpt_conversations(
+    organization_id: UUID,
+    _membership: AgentsRunDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> list[SeldruneGPTConversationSummary]:
+    conversations = list(
+        session.scalars(
+            select(SeldruneGPTConversation)
+            .where(
+                SeldruneGPTConversation.organization_id == organization_id,
+                SeldruneGPTConversation.user_id == current_user.id,
+            )
+            .order_by(
+                SeldruneGPTConversation.updated_at.desc(),
+                SeldruneGPTConversation.created_at.desc(),
+            )
+            .limit(100)
+        )
+    )
+    result = [
+        SeldruneGPTConversationSummary(
+            id=item.id,
+            title=item.title,
+            updated_at=item.updated_at,
+        )
+        for item in conversations
+    ]
+    legacy_message = session.scalar(
+        select(SeldruneGPTMessage.id)
+        .where(
+            SeldruneGPTMessage.organization_id == organization_id,
+            SeldruneGPTMessage.user_id == current_user.id,
+            SeldruneGPTMessage.conversation_id.is_(None),
+        )
+        .limit(1)
+    )
+    if legacy_message is not None:
+        result.append(
+            SeldruneGPTConversationSummary(
+                id=None,
+                title="Earlier saved history",
+                updated_at=None,
+                legacy=True,
+            )
+        )
+    return result
+
+
+@router.delete(
+    "/{organization_id}/gpt/conversations/{conversation_id}",
+    status_code=204,
+)
+def delete_seldrune_gpt_conversation(
+    organization_id: UUID,
+    conversation_id: UUID,
+    _membership: AgentsRunDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> None:
+    conversation = session.scalar(
+        select(SeldruneGPTConversation).where(
+            SeldruneGPTConversation.id == conversation_id,
+            SeldruneGPTConversation.organization_id == organization_id,
+            SeldruneGPTConversation.user_id == current_user.id,
+        )
+    )
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Seldrune GPT chat not found")
+    session.execute(
+        delete(SeldruneGPTMessage).where(
+            SeldruneGPTMessage.conversation_id == conversation.id,
+            SeldruneGPTMessage.organization_id == organization_id,
+            SeldruneGPTMessage.user_id == current_user.id,
+        )
+    )
+    session.delete(conversation)
+    session.commit()
+
+
 @router.get("/{organization_id}/gpt/history", response_model=list[SeldruneGPTHistoryMessage])
 def seldrune_gpt_history(
     organization_id: UUID,
     _membership: AgentsRunDep,
     current_user: CurrentUserDep,
     session: SessionDep,
+    conversation_id: UUID | None = None,
 ) -> list[SeldruneGPTHistoryMessage]:
     messages = list(
         session.scalars(
@@ -1844,6 +2041,7 @@ def seldrune_gpt_history(
             .where(
                 SeldruneGPTMessage.organization_id == organization_id,
                 SeldruneGPTMessage.user_id == current_user.id,
+                SeldruneGPTMessage.conversation_id == conversation_id,
             )
             .order_by(SeldruneGPTMessage.created_at.asc())
             .limit(100)
@@ -1866,6 +2064,12 @@ def clear_seldrune_gpt_history(
         delete(SeldruneGPTMessage).where(
             SeldruneGPTMessage.organization_id == organization_id,
             SeldruneGPTMessage.user_id == current_user.id,
+        )
+    )
+    session.execute(
+        delete(SeldruneGPTConversation).where(
+            SeldruneGPTConversation.organization_id == organization_id,
+            SeldruneGPTConversation.user_id == current_user.id,
         )
     )
     session.commit()
