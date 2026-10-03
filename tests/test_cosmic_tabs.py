@@ -21,6 +21,7 @@ def test_owner_portal_uses_compact_navigation_and_flat_home():
     assert 'href="/mail"' in script
     assert "perspective: none !important" in clean
     assert "owner-portal-more-menu" in clean
+    assert "seldrune-celestial-hero.png" in clean
     assert "console-clean.css" in html
     assert "console-cinematic.css" not in html
     assert "console-nexus-arena.css" not in html
