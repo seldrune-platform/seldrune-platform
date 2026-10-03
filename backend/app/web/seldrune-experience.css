@@ -22,7 +22,7 @@ body {
   overflow-x: hidden;
   background-color: var(--seldrune-night);
   background-image:
-    linear-gradient(145deg, rgb(5 11 24 / 84%), rgb(5 10 22 / 91%)),
+    linear-gradient(145deg, rgb(5 11 24 / 76%), rgb(5 10 22 / 88%)),
     url("/console-assets/seldrune-celestial-hero.png");
   background-position: center, center 42%;
   background-size: cover, cover;
@@ -230,7 +230,10 @@ body.seldrune-products > main {
 
 body.seldrune-products .hero {
   max-width: 900px;
-  padding: clamp(18px, 3vw, 38px) 0 clamp(40px, 6vw, 72px);
+  margin-left: clamp(-28px, -2vw, -18px);
+  padding: clamp(18px, 3vw, 32px) clamp(18px, 2vw, 28px) clamp(40px, 6vw, 72px);
+  border-radius: 22px;
+  background: linear-gradient(105deg, rgb(5 10 22 / 72%), rgb(5 10 22 / 50%) 68%, rgb(5 10 22 / 12%));
 }
 
 body.seldrune-products .hero h1 {
