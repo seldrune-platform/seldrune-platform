@@ -624,3 +624,7 @@ body.seldrune-products .card:focus-visible {
     transition: none;
   }
 }
+
+.seldrune-profiles .shell {
+  width: min(1040px, 100%);
+}
