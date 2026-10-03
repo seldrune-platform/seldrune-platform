@@ -171,10 +171,10 @@
                   <option value="anthropic">Anthropic</option>
                 </select>
               </label>
-              <span id="seldrune-gpt-mode" class="gpt-mode-pill">Text chat</span>
+              <span id="seldrune-gpt-mode" class="gpt-mode-pill">Seldrune AI · text chat</span>
               <label id="seldrune-gpt-pdf-password-wrap" class="gpt-pdf-password hidden"><span>PDF password</span><input id="seldrune-gpt-pdf-password" type="password" maxlength="256" autocomplete="off" placeholder="Optional"></label>
             </div>
-            <div class="gpt-composer-actions"><button id="seldrune-gpt-chat" type="submit"><span>Send</span><span aria-hidden="true">↑</span></button></div>
+            <div class="gpt-composer-actions"><button id="seldrune-gpt-chat" type="submit" aria-label="Send to Seldrune"><span>Send</span><span aria-hidden="true">↑</span></button></div>
           </div>
         </div>
       </form>
@@ -198,7 +198,7 @@
       </div>
       <p class="gpt-tools-note">Connection settings and permission grants are managed in Seldrune Connections. Chat will only use capabilities that are configured for this owner workspace.</p>
     </section>
-    <footer class="gpt-status-bar"><span id="seldrune-gpt-status" role="status">Ready.</span><span>Responses are text. Media files are created in the Media workspace when a provider is connected.</span></footer>
+    <footer class="gpt-status-bar"><span id="seldrune-gpt-status" role="status">Ready.</span><span>Chat replies are text. For PDFs, give the AI PDF Editor an instruction; it uses no coordinates or manual edit tools.</span></footer>
     <div hidden>
       <section class="gpt-creation-forge" id="seldrune-media-creation" aria-labelledby="gpt-creation-title">
         <p class="eyebrow">MEDIA CREATION</p><h3 id="gpt-creation-title">Create audio or video</h3>
