@@ -48,6 +48,11 @@
   background: linear-gradient(135deg, rgb(41 62 119 / 98%), rgb(24 67 105 / 98%)) !important;
 }
 
+#seldrune-gpt .gpt-dropzone textarea {
+  color: #f4f7ff !important;
+  caret-color: #f4f7ff;
+}
+
 #seldrune-gpt .gpt-thread .command-card[data-role="assistant"] {
   background: rgb(4 11 25 / 96%) !important;
 }
