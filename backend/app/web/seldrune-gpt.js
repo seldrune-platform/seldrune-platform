@@ -1062,6 +1062,8 @@
     if (mode === 'app' || mode === 'game') return true;
     const text = String(request || '').trim();
     const mediaIntent = /\b(create|generate|make|compose|produce|render)\b.{0,70}\b(audio|song|music|video|film|movie|clip)\b/i.test(text);
+    const unrealAction = /\b(download|install|set\s+up|setup|check|inspect|show|get|verify)\b.{0,90}\b(unreal(?:\s+engine)?|ue[45](?:\.\d+)?)\b/i.test(text);
+    if (unrealAction) return true;
     const inferredMediaKind = classifyOutputKind(text, 'any');
     if (['song', 'video', 'visual'].includes(mode)) {
       return mediaIntent && inferredMediaKind === mode && mediaToolReady(mode);
