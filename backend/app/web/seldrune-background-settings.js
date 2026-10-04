@@ -1,8 +1,8 @@
 (() => {
   const PREFS = {
-    background: "seldrune.appearance.background.v2",
+    background: "seldrune.appearance.background",
     shade: "seldrune.appearance.shade.v2",
-    font: "seldrune.appearance.font.v2",
+    font: "seldrune.appearance.font",
   };
   const DB_NAME = "seldrune-appearance";
   const DB_STORE = "images";
