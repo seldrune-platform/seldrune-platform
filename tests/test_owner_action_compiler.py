@@ -241,3 +241,25 @@ def test_deploy_status_does_not_trigger_a_new_deploy() -> None:
     assert len(steps) == 1
     assert steps[0].tool_slug == "render-deploy-status"
     assert steps[0].tool_input == {"deploy_id": "dep-abc123"}
+
+
+def test_unreal_worker_intents_map_to_registered_tools() -> None:
+    assert required_external_tool_actions("Check Unreal Engine status") == [
+        ("unreal", "engine-status")
+    ]
+    assert required_external_tool_actions("Download Unreal Engine 5.4") == [
+        ("unreal", "install-engine")
+    ]
+
+
+def test_direct_unreal_install_sends_only_the_requested_version() -> None:
+    tool = _tool("unreal-engine-install", "unreal", "install-engine", [])
+    steps, metadata = compile_required_external_action_steps(
+        "Download Unreal Engine 5.4.4",
+        available_tools=[tool],
+        planned_steps=_generic_plan(),
+    )
+    assert metadata["mode"] == "direct-tool-plan"
+    assert metadata["added_tool_slugs"] == ["unreal-engine-install"]
+    assert len(steps) == 1
+    assert steps[0].tool_input == {"version": "5.4.4"}
