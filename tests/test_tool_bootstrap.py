@@ -50,6 +50,7 @@ def test_tool_bootstrap_status_reports_missing_provider_secrets(
         "portable-ci",
         "render",
         "runpod",
+        "unreal",
     }
     assert providers["gmail"]["credential_env_locator"] == (
         "SELDRUNE_GMAIL_TOOL_CREDENTIAL"
@@ -59,6 +60,7 @@ def test_tool_bootstrap_status_reports_missing_provider_secrets(
     )
     assert providers["render"]["credential_env_locator"] == "SELDRUNE_RENDER_API_KEY"
     assert providers["runpod"]["credential_env_locator"] == "SELDRUNE_RUNPOD_API_KEY"
+    assert providers["unreal"]["credential_env_locator"] == "SELDRUNE_UNREAL_WORKER_CREDENTIAL"
     assert providers["portable-ci"]["credential_env_locator"] == (
         "SELDRUNE_CI_RECEIPT_HMAC_KEY"
     )
