@@ -364,6 +364,7 @@
       loadedAt = 0;
       if (!MODEL_PROVIDERS.has(provider)) await window.seldruneTools?.refresh();
       await refreshStatus(true);
+      window.dispatchEvent(new CustomEvent("seldrune:integrations-updated"));
     } catch (error) {
       message.textContent = "Credential not saved: " + error.message;
     } finally {
@@ -381,6 +382,11 @@
     input.type = reveal ? "text" : "password";
     event.currentTarget.textContent = reveal ? "Hide" : "Show";
   }
+
+  window.seldruneConnections = {
+    refresh: refreshStatus,
+    selectProvider,
+  };
 
   document.addEventListener("seldrune:portal-ready", mount);
   document.addEventListener("seldrune:console-ready", () => {
