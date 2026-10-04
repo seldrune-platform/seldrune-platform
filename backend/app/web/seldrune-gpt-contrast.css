@@ -1,13 +1,17 @@
-/* Improve legibility in the dark GPT workspace, especially on phones. */
-#seldrune-gpt {
-  color: #f4f7ff !important;
+/* High-contrast Seldrune GPT cards that stay legible over every background. */
+#seldrune-gpt,
+#seldrune-gpt .gpt-page-view,
+#seldrune-gpt .gpt-thread,
+#seldrune-gpt .gpt-studio-main {
+  color: #17243a !important;
   opacity: 1 !important;
   filter: none !important;
 }
 
 #seldrune-gpt .gpt-sidebar {
-  color: #f0f5ff !important;
-  background: rgb(3 8 19 / 96%) !important;
+  color: #f3f7ff !important;
+  background: #07111f !important;
+  opacity: 1 !important;
 }
 
 #seldrune-gpt .gpt-sidebar :is(button, a, label, small, input),
@@ -16,7 +20,7 @@
 #seldrune-gpt .gpt-history-empty,
 #seldrune-gpt .gpt-creation-status,
 #seldrune-gpt .gpt-sidebar-bottom {
-  color: #dce8f8 !important;
+  color: #e8f0ff !important;
   opacity: 1 !important;
 }
 
@@ -28,66 +32,89 @@
 
 #seldrune-gpt .gpt-sidebar :is(button, a, label),
 #seldrune-gpt .gpt-sidebar-label {
-  font-size: 13px;
+  font-size: 14px !important;
 }
 
 #seldrune-gpt .gpt-history-search input::placeholder,
 #seldrune-gpt .gpt-dropzone textarea::placeholder {
-  color: #c2d0e3 !important;
+  color: #c8d6ec !important;
   opacity: 1 !important;
 }
 
 #seldrune-gpt .gpt-thread .command-card {
-  color: #f4f7ff !important;
-  border-color: rgb(181 207 255 / 38%) !important;
-  background: rgb(4 11 25 / 96%) !important;
-}
-
-#seldrune-gpt .gpt-thread .command-card[data-role="user"] {
-  border-color: rgb(180 199 255 / 55%) !important;
-  background: linear-gradient(135deg, rgb(41 62 119 / 98%), rgb(24 67 105 / 98%)) !important;
-}
-
-#seldrune-gpt .gpt-dropzone textarea {
-  color: #f4f7ff !important;
-  caret-color: #f4f7ff;
+  width: min(88%, 900px);
+  color: #182741 !important;
+  opacity: 1 !important;
+  filter: none !important;
+  border: 1px solid #cbd7e8 !important;
+  background: #f8fbff !important;
+  box-shadow: 0 8px 26px rgb(7 19 38 / 16%) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 #seldrune-gpt .gpt-thread .command-card[data-role="assistant"] {
-  background: rgb(4 11 25 / 96%) !important;
+  color: #182741 !important;
+  background: #f8fbff !important;
 }
 
-#seldrune-gpt .gpt-thread .command-card :is(p, li, td, th, blockquote, span) {
-  color: #f2f6ff !important;
+#seldrune-gpt .gpt-thread .command-card[data-role="assistant"] :is(p, li, td, th, blockquote, span, small, em) {
+  color: #182741 !important;
   font-size: 16px !important;
-  line-height: 1.65 !important;
+  line-height: 1.68 !important;
+  opacity: 1 !important;
 }
 
-#seldrune-gpt .gpt-thread .command-card :is(strong, b, h1, h2, h3, h4) {
-  color: #ffffff !important;
+#seldrune-gpt .gpt-thread .command-card[data-role="assistant"] :is(strong, b, h1, h2, h3, h4) {
+  color: #10213d !important;
 }
 
-#seldrune-gpt .gpt-thread .command-card a {
-  color: #9feaff !important;
+#seldrune-gpt .gpt-thread .command-card[data-role="assistant"] a {
+  color: #064e9b !important;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-#seldrune-gpt .gpt-thread .command-card :is(pre, code) {
-  color: #f5f7ff !important;
-  background-color: rgb(0 3 12 / 58%);
+#seldrune-gpt .gpt-thread .command-card[data-role="assistant"] :is(pre, code) {
+  color: #f5f8ff !important;
+  background: #14233b !important;
+}
+
+#seldrune-gpt .gpt-thread .command-card[data-role="user"] {
+  color: #ffffff !important;
+  border-color: #244a80 !important;
+  background: linear-gradient(135deg, #294b82, #1c5777) !important;
+}
+
+#seldrune-gpt .gpt-thread .command-card[data-role="user"] :is(p, li, td, th, blockquote, span, small, em, strong, b) {
+  color: #ffffff !important;
+  opacity: 1 !important;
+  font-size: 16px !important;
+  line-height: 1.6 !important;
+}
+
+#seldrune-gpt .gpt-thread .command-card[data-role="user"] a {
+  color: #c9f3ff !important;
+}
+
+#seldrune-gpt .gpt-dropzone textarea {
+  color: #f4f7ff !important;
+  caret-color: #ffffff;
+  font-size: 16px !important;
+  opacity: 1 !important;
 }
 
 #seldrune-gpt .gpt-topbar,
 #seldrune-gpt .gpt-status-bar {
-  color: #dce8f8 !important;
-  background-color: rgb(3 8 19 / 90%);
+  color: #f0f5ff !important;
+  background: #07111f !important;
+  opacity: 1 !important;
 }
 
 #seldrune-gpt .gpt-provider-control,
 #seldrune-gpt .gpt-mode-pill,
 #seldrune-gpt .gpt-status-bar span {
-  color: #dce8f8 !important;
+  color: #e5efff !important;
 }
 
 #seldrune-gpt .gpt-tool-button,
@@ -95,23 +122,15 @@
   opacity: 1 !important;
 }
 
-#seldrune-gpt .gpt-composer-actions button:disabled {
-  opacity: .9 !important;
-}
-
 @media (max-width: 760px) {
   #seldrune-gpt .gpt-thread .command-card {
-    width: min(100%, 900px);
-    padding: 15px;
+    width: min(96%, 900px);
+    padding: 14px;
   }
 
-  #seldrune-gpt .gpt-thread .command-card :is(p, li, td, th, blockquote, span) {
-    font-size: 15px !important;
-    line-height: 1.6 !important;
-  }
-
-  #seldrune-gpt .gpt-sidebar :is(button, a, label),
-  #seldrune-gpt .gpt-sidebar-label {
-    font-size: 13px;
+  #seldrune-gpt .gpt-thread .command-card[data-role="assistant"] :is(p, li, td, th, blockquote, span, small, em),
+  #seldrune-gpt .gpt-thread .command-card[data-role="user"] :is(p, li, td, th, blockquote, span, small, em, strong, b) {
+    font-size: 16px !important;
+    line-height: 1.62 !important;
   }
 }
