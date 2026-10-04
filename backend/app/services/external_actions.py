@@ -1303,7 +1303,10 @@ def unreal_engine_status(
     return {
         "engine": safe,
         "evidence": {
-            "receipt_id": f"unreal-engine-status:{safe.get('version', 'unknown')}:{safe.get('status', 'unknown')}",
+            "receipt_id": (
+                f"unreal-engine-status:{safe.get('version', 'unknown')}:"
+                f"{safe.get('status', 'unknown')}"
+            ),
             "provider": "unreal",
         },
     }
