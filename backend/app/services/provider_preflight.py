@@ -15,6 +15,10 @@ from backend.app.services.external_actions import (
     default_external_action_catalog,
 )
 from backend.app.services.tool_gateway import ToolGatewayError
+from backend.app.services.unreal_worker_client import (
+    UnrealWorkerError,
+    request_unreal_worker,
+)
 from backend.app.services.secret_vault import SecretVaultError, resolve_secret
 from backend.app.services.tool_input_defaults import production_runtime_targets
 
@@ -349,6 +353,49 @@ def _render_preflight(credential: str) -> dict[str, Any]:
     )
 
 
+def _unreal_preflight(credential: str) -> dict[str, Any]:
+    try:
+        health = request_unreal_worker(
+            credential,
+            method="GET",
+            path="/v1/healthz",
+        )
+    except UnrealWorkerError as exc:
+        status = (
+            "credential_invalid"
+            if exc.http_status in {401, 403}
+            else "provider_error"
+            if exc.http_status is not None
+            else "network_error"
+        )
+        return _result(
+            "unreal",
+            status=status,
+            verified=False,
+            detail=str(exc),
+            http_status=exc.http_status,
+        )
+    if (
+        health.get("service") != "seldrune-unreal-worker"
+        or health.get("status") not in {"ok", "ready"}
+    ):
+        return _result(
+            "unreal",
+            status="provider_error",
+            verified=False,
+            detail="Endpoint is reachable but does not implement the Seldrune Unreal worker API.",
+            http_status=200,
+        )
+    return _result(
+        "unreal",
+        status="verified",
+        verified=True,
+        detail="Authenticated Seldrune Unreal worker is ready.",
+        identity={"service": "seldrune-unreal-worker"},
+        http_status=200,
+    )
+
+
 def _runpod_preflight(credential: str) -> dict[str, Any]:
     response = httpx.get(
         "https://api.runpod.io/v2/pods",
@@ -475,6 +522,7 @@ _PREFLIGHT_HANDLERS = {
     "github": _github_preflight,
     "render": _render_preflight,
     "runpod": _runpod_preflight,
+    "unreal": _unreal_preflight,
     "openai": _openai_preflight,
     "gemini": _gemini_preflight,
     "anthropic": _anthropic_preflight,
