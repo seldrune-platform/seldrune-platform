@@ -1,6 +1,6 @@
 /* Clear, changeable Seldrune backgrounds for every owner workspace. */
 :root {
-  --seldrune-background-shade: .08;
+  --seldrune-background-shade: 0;
 }
 
 body.owner-portal {
@@ -21,6 +21,7 @@ body.owner-portal::before {
   z-index: -1;
   pointer-events: none;
   opacity: 1;
+  filter: saturate(1.18) contrast(1.06) brightness(1.03);
   background-image:
     linear-gradient(145deg,
       rgb(3 8 18 / var(--seldrune-background-shade, .08)),
