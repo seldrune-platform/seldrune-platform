@@ -1,13 +1,13 @@
 (() => {
   const PREFS = {
-    background: "seldrune.appearance.background",
-    shade: "seldrune.appearance.shade",
-    font: "seldrune.appearance.font",
+    background: "seldrune.appearance.background.v2",
+    shade: "seldrune.appearance.shade.v2",
+    font: "seldrune.appearance.font.v2",
   };
   const DB_NAME = "seldrune-appearance";
   const DB_STORE = "images";
   const DB_KEY = "custom-background";
-  const DEFAULTS = {background: "celestial", shade: 8, font: "modern"};
+  const DEFAULTS = {background: "celestial", shade: 0, font: "modern"};
   const root = document.documentElement;
   let customUrl = "";
   let customAvailable = false;
@@ -204,8 +204,8 @@
       '<div class="seldrune-appearance-controls">' +
         '<label class="seldrune-appearance-control" for="seldrune-background-shade">' +
           '<span>Background visibility</span>' +
-          '<small>Lower shade shows more of the artwork; the default keeps text cards clear.</small>' +
-          '<span class="seldrune-shade-row"><input id="seldrune-background-shade" type="range" min="0" max="28" step="1"><output id="seldrune-background-shade-value" for="seldrune-background-shade">8%</output></span>' +
+          '<small>Lower shade shows more of the artwork; the default shows the artwork at full brightness.</small>' +
+          '<span class="seldrune-shade-row"><input id="seldrune-background-shade" type="range" min="0" max="28" step="1"><output id="seldrune-background-shade-value" for="seldrune-background-shade">0%</output></span>' +
         '</label>' +
         '<label class="seldrune-appearance-control" for="seldrune-font-choice">' +
           '<span>Typography</span>' +
