@@ -85,7 +85,7 @@ def test_provider_preflight_is_non_destructive_and_redacts_credentials(
     assert response.status_code == 200
     body = response.json()
     assert body["verified"] == 2
-    assert body["total"] == 5
+    assert body["total"] == 6
 
     providers = {item["provider"]: item for item in body["providers"]}
     assert providers["gmail"]["status"] == "scope_limited"
@@ -99,6 +99,7 @@ def test_provider_preflight_is_non_destructive_and_redacts_credentials(
     assert providers["render"]["identity"]["id"] == "usr-c123"
     assert providers["portable-ci"]["status"] == "not_configured"
     assert providers["runpod"]["status"] == "not_configured"
+    assert providers["unreal"]["status"] == "not_configured"
 
     assert {
         url
