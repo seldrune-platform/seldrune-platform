@@ -247,6 +247,12 @@ def test_unreal_worker_intents_map_to_registered_tools() -> None:
     assert required_external_tool_actions("Check Unreal Engine status") == [
         ("unreal", "engine-status")
     ]
+    assert required_external_tool_actions("Check Unreal Engine") == [
+        ("unreal", "engine-status")
+    ]
+    assert required_external_tool_actions("Is Unreal Engine connected?") == [
+        ("unreal", "engine-status")
+    ]
     assert required_external_tool_actions("Download Unreal Engine 5.4") == [
         ("unreal", "install-engine")
     ]
