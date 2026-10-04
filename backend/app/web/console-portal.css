@@ -1248,7 +1248,7 @@ html[data-portal-motion="reduced"] *::after{animation:none!important;scroll-beha
 }
 
 /* SETTINGS AND TREASURY LIVE WITH THE SYSTEM CONTROLS */
-#portal-panel-intelligence #portal-settings{
+#portal-panel-settings #portal-settings{
   grid-column:span 6;
 }
 #portal-panel-intelligence .treasury{
@@ -1312,7 +1312,7 @@ html[data-portal-motion="reduced"] *::after{animation:none!important;scroll-beha
   #portal-panel-media #liveshift-mission,
   #portal-panel-intelligence .incident-center,
   #portal-panel-intelligence .audit-center,
-  #portal-panel-intelligence #portal-settings,
+  #portal-panel-settings #portal-settings,
   #portal-panel-intelligence .treasury{
     grid-column:span 12;
   }
@@ -1341,7 +1341,7 @@ html[data-portal-motion="reduced"] *::after{animation:none!important;scroll-beha
   #portal-panel-intelligence .incident-center,
   #portal-panel-intelligence .audit-center,
   #portal-panel-intelligence #evidence-truth,
-  #portal-panel-intelligence #portal-settings,
+  #portal-panel-settings #portal-settings,
   #portal-panel-intelligence .treasury,
   #portal-panel-intelligence .governance-policy{
     padding:16px!important;
