@@ -45,6 +45,8 @@
   let creationMode = 'any';
   let registeredTools = [];
   let providerReadiness = {};
+  let externalToolProviders = [];
+  let unrealStatusError = '';
   let outputDatabasePromise = null;
   let outputFilter = 'all';
   let outputSearch = '';
@@ -805,6 +807,22 @@
     }
   }
 
+  function openUnrealConnections() {
+    window.seldrunePortal?.activate?.('connections');
+    window.setTimeout(() => {
+      window.seldruneConnections?.selectProvider?.('unreal');
+    }, 150);
+  }
+
+  function addUnrealConnectionButton(card, label = 'Connect Unreal worker') {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'gpt-unreal-connect';
+    button.textContent = label;
+    button.addEventListener('click', openUnrealConnections);
+    card.append(button);
+  }
+
   function renderToolCatalog() {
     if (providerList) {
       providerList.replaceChildren();
@@ -827,26 +845,59 @@
         });
       }
     }
-    if (toolList) {
-      toolList.replaceChildren();
-      if (!registeredTools.length) {
-        const empty = document.createElement('p');
-        empty.className = 'gpt-history-empty';
-        empty.textContent = 'No tools are currently connected to this workspace.';
-        toolList.append(empty);
-      } else {
-        registeredTools.forEach(slug => {
-          const card = document.createElement('div');
-          card.className = 'gpt-tool-card';
-          const title = document.createElement('strong');
-          title.textContent = String(slug).replaceAll('_', ' ').replaceAll('-', ' ');
-          const state = document.createElement('small');
+    if (!toolList) return;
+    toolList.replaceChildren();
+    if (!registeredTools.length) {
+      const empty = document.createElement('p');
+      empty.className = 'gpt-history-empty';
+      empty.textContent = 'No tools are currently connected to this workspace.';
+      toolList.append(empty);
+    } else {
+      registeredTools.forEach(slug => {
+        const card = document.createElement('div');
+        card.className = 'gpt-tool-card';
+        const title = document.createElement('strong');
+        title.textContent = String(slug).replaceAll('_', ' ').replaceAll('-', ' ');
+        const state = document.createElement('small');
+        const normalizedSlug = String(slug).toLowerCase().replaceAll('_', '-');
+        if (normalizedSlug.startsWith('unreal-engine-')) {
+          const actionName = normalizedSlug.endsWith('install') ? 'install-engine' : 'engine-status';
+          const worker = externalToolProviders.find(item => item.provider === 'unreal');
+          const action = worker?.actions?.find(item => item.action_name === actionName);
+          state.textContent = action?.ready
+            ? 'Connected · ready'
+            : worker?.secret_available ? 'Connection needs attention' : 'Connect worker';
+        } else {
           state.textContent = 'Available';
-          card.append(title, state);
-          toolList.append(card);
-        });
-      }
+        }
+        card.append(title, state);
+        toolList.append(card);
+      });
     }
+
+    const worker = externalToolProviders.find(item => item.provider === 'unreal');
+    const actions = Array.isArray(worker?.actions) ? worker.actions : [];
+    const readyActions = actions.filter(item => item.ready);
+    const card = document.createElement('div');
+    card.className = 'gpt-tool-card gpt-unreal-tool-card';
+    card.dataset.state = worker?.ready ? 'ready' : 'setup';
+    const title = document.createElement('strong');
+    title.textContent = 'Unreal Engine worker';
+    const state = document.createElement('small');
+    state.textContent = worker?.ready
+      ? 'Connected · ' + readyActions.length + ' actions ready'
+      : worker?.secret_available ? 'Connection needs attention' : 'Not connected';
+    const detail = document.createElement('p');
+    detail.textContent = worker?.ready
+      ? 'Worker health is verified. GPT can check engine status and queue install jobs.'
+      : worker?.secret_available
+        ? 'A worker credential is saved, but its supported GPT actions are not ready yet. Open Connections to refresh the verification.'
+        : unrealStatusError
+          ? 'Worker status could not be refreshed. Open Connections to see the current verification result.'
+          : 'Connect a compatible HTTPS worker in Connections to enable engine checks and install jobs.';
+    card.append(title, state, detail);
+    addUnrealConnectionButton(card, worker?.secret_available ? 'Manage connection' : 'Connect Unreal worker');
+    toolList.append(card);
   }
 
   async function loadCapabilities() {
@@ -860,6 +911,16 @@
         ? capabilities.registered_tools
         : [];
       providerReadiness = capabilities.provider_readiness || {};
+      externalToolProviders = [];
+      unrealStatusError = '';
+      try {
+        const toolStatus = await api('/tool-bootstrap/status');
+        externalToolProviders = Array.isArray(toolStatus.providers)
+          ? toolStatus.providers
+          : [];
+      } catch (error) {
+        unrealStatusError = error.message || 'Worker status could not be loaded.';
+      }
       updateModelProviderOptions(capabilities.model_providers || []);
       const providers = Object.entries(capabilities.provider_readiness || {});
       const readyProviders = providers.filter(([, ready]) => Boolean(ready)).length;
@@ -881,6 +942,8 @@
       renderCodingProviderStatus();
       renderToolCatalog();
     } catch (error) {
+      externalToolProviders = [];
+      unrealStatusError = error.message || 'Worker status could not be loaded.';
       if (capabilityStatus) {
         capabilityStatus.dataset.state = 'attention';
         capabilityStatus.textContent = 'Cognitive runtime status unavailable';
@@ -1219,9 +1282,13 @@
       if (result.status === 'configuration_required') {
         const missing = (result.missing_tools || []).join(', ');
         const hints = (result.configuration_hints || []).join(', ');
-        const setupMessage = `No external action started. Required provider tools are not configured: ${missing || 'provider tool'}`
-          + (hints ? `. Configure: ${hints}.` : '.');
-        addMessage('Seldrune AI', setupMessage);
+        const needsUnreal = /unreal/i.test(missing + ' ' + hints);
+        const setupMessage = needsUnreal
+          ? 'Unreal Engine is integrated with Seldrune GPT. Connect a compatible worker in Connections once to enable engine checks and install jobs.'
+          : `No external action started. Required provider tools are not configured: ${missing || 'provider tool'}`
+            + (hints ? `. Configure: ${hints}.` : '.');
+        const setupCard = addMessage('Seldrune AI', setupMessage);
+        if (needsUnreal) addUnrealConnectionButton(setupCard);
         let draft = null;
         if (fallbackKind) {
           try {
@@ -1243,7 +1310,14 @@
       }
       if (result.status === 'failed' && result.halted_reason === 'required_external_tool_not_planned') {
         const missing = (result.missing_tools || []).join(', ');
-        addMessage('Seldrune AI', `Stopped before the external action because required tool inputs were unresolved: ${missing || 'see command evidence'}.`);
+        const missingUnreal = /unreal/i.test(missing);
+        const haltedCard = addMessage(
+          'Seldrune AI',
+          missingUnreal
+            ? 'Unreal Engine is integrated with Seldrune GPT. Connect and verify its worker in Connections to run this action.'
+            : `Stopped before the external action because required tool inputs were unresolved: ${missing || 'see command evidence'}.`,
+        );
+        if (missingUnreal) addUnrealConnectionButton(haltedCard);
         const receipt = result.command_id ? await saveOperatorReceipt(request, result, label) : null;
         if (receipt) outputShortcut(thread.lastElementChild);
         let draft = null;
@@ -1457,6 +1531,20 @@
   }
 
   async function runUniversalMessage(request, outgoingAttachments, attachmentNames) {
+    const connectUnreal = /\b(connect|configure|set\s+up|setup)\b.{0,80}\bunreal(?:\s+engine)?\b/i.test(request);
+    if (connectUnreal && !outgoingAttachments.length) {
+      addMessage('You', request, 'user');
+      input.value = '';
+      clearAttachments();
+      const card = addMessage(
+        'Seldrune AI',
+        'Unreal Engine is connected to Seldrune GPT as a worker integration. I’m opening its secure connection form; once verified, GPT can check engine status and queue installs.',
+      );
+      addUnrealConnectionButton(card, 'Open secure Unreal connection');
+      status.textContent = 'Opening Unreal Engine connection setup…';
+      openUnrealConnections();
+      return;
+    }
     const kind = classifyOutputKind(request);
     const useTools = requestNeedsAction(request, creationMode, outgoingAttachments.length > 0);
     if (useTools) {
@@ -1589,6 +1677,9 @@
     }
   });
 
+  document.addEventListener('seldrune:integrations-updated', () => {
+    void loadCapabilities();
+  });
   document.addEventListener('seldrune:portal-ready', () => {
     initializeOutputLibrary();
     initializeCodingLab();
