@@ -39,6 +39,7 @@ _CREDENTIAL_ENV_ALIASES: dict[str, tuple[str, ...]] = {
     ),
     "render": ("SELDRUNE_RENDER_API_KEY", "RENDER_API_KEY"),
     "runpod": ("SELDRUNE_RUNPOD_API_KEY", "RUNPOD_API_KEY"),
+    "unreal": ("SELDRUNE_UNREAL_WORKER_CREDENTIAL",),
 }
 
 
