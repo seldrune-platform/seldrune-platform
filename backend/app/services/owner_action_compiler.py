@@ -75,6 +75,27 @@ _TOOL_INTENTS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
             re.I,
         ),
     ),
+    (
+        "unreal",
+        "engine-status",
+        re.compile(
+            r"\b(check|inspect|show|get|verify|is)\b.{0,60}\b"
+            r"(unreal(?:\s+engine)?|ue[45](?:\.\d+)?)\b.{0,60}\b"
+            r"(status|ready|installed|version|worker)\b"
+            r"|\b(is|check|verify)\b.{0,40}\b"
+            r"(unreal(?:\s+engine)?|ue[45])\b.{0,30}\binstalled\b",
+            re.I,
+        ),
+    ),
+    (
+        "unreal",
+        "install-engine",
+        re.compile(
+            r"\b(download|install|set\s+up|setup|prepare)\b.{0,80}\b"
+            r"(unreal(?:\s+engine)?|ue[45](?:\.\d+)?)\b",
+            re.I,
+        ),
+    ),
 )
 
 
@@ -253,6 +274,17 @@ def _input_for_action(
         deploy_id = _deploy_id(order)
         return {"deploy_id": deploy_id} if deploy_id else {}
 
+    if provider == "unreal" and action_name == "engine-status":
+        return {}
+
+    if provider == "unreal" and action_name == "install-engine":
+        version = re.search(
+            r"\b(?:unreal(?:\s+engine)?|ue)\s*v?(\d+(?:\.\d+){1,2})\b",
+            order,
+            re.I,
+        )
+        return {"version": version.group(1)} if version is not None else {}
+
     if provider != "github":
         return {}
 
@@ -332,7 +364,9 @@ _DIRECT_ACTION_ORDER = re.compile(
     r"check\b|inspect\b|show\b|read\b|verify\b|"
     r"create\s+(?:an?\s+)?(?:issue|bug|pull request|pr|branch)\b|"
     r"open\s+(?:an?\s+)?(?:issue|bug|pull request|pr)\b|"
-    r"comment\b|reply\b|trigger\b|dispatch\b|run\s+(?:the\s+)?workflow\b"
+    r"comment\b|reply\b|trigger\b|dispatch\b|run\s+(?:the\s+)?workflow\b|"
+    r"download\b.{0,80}\b(?:unreal(?:\s+engine)?|ue[45])\b|"
+    r"install\b.{0,80}\b(?:unreal(?:\s+engine)?|ue[45])\b"
     r")",
     re.I,
 )
