@@ -115,6 +115,7 @@ def test_portal_controller_defines_owner_workspaces_and_fixed_home():
         "operations",
         "media",
         "intelligence",
+        "settings",
         "connections",
         "sense",
     ):
@@ -141,7 +142,7 @@ def test_portal_controller_defines_owner_workspaces_and_fixed_home():
     assert 'panel.hidden = panelId !== id' in js
     assert 'event.key === "Home"' in js
     assert 'portalSettings.id = "portal-settings"' in js
-    assert 'grid("intelligence")?.append(portalSettings)' in js
+    assert 'grid("settings")?.append(portalSettings)' in js
     assert '["contact", "CONTACT", "✉"]' in js
     assert "PRIMARY_WORKSPACES" in js
     assert 'workspace: "home", depth: 0' in js
@@ -193,7 +194,7 @@ def test_every_owner_workspace_uses_portal_visual_system():
         '#portal-panel-intelligence .agent-observatory',
         '#portal-panel-intelligence .audit-center',
         '#portal-panel-connections #tool-control',
-        '#portal-panel-intelligence #portal-settings',
+        '#portal-panel-settings #portal-settings',
         '#portal-panel-intelligence .governance-policy',
         '#portal-panel-intelligence #action-inbox',
     ):
