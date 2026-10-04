@@ -15,6 +15,10 @@ import httpx
 import jwt
 
 from backend.app.services.tool_gateway import ToolGatewayError, register_external_action
+from backend.app.services.unreal_worker_client import (
+    request_unreal_worker,
+    validate_engine_version,
+)
 
 
 _REQUEST_TIMEOUT_SECONDS = 20.0
@@ -1279,6 +1283,64 @@ def runpod_stop_pod(payload: dict[str, Any], credential: str | None) -> dict[str
     return _runpod_pod_action(payload, credential, action="stop")
 
 
+def unreal_engine_status(
+    payload: dict[str, Any],
+    credential: str | None,
+) -> dict[str, Any]:
+    del payload
+    data = request_unreal_worker(
+        credential,
+        method="GET",
+        path="/v1/engine/status",
+    )
+    safe = {
+        key: data[key]
+        for key in ("status", "installed", "version", "storage_available_gb")
+        if isinstance(data.get(key), (str, bool, int, float))
+    }
+    if not safe:
+        raise ToolGatewayError("Unreal worker did not return engine status fields")
+    return {
+        "engine": safe,
+        "evidence": {
+            "receipt_id": f"unreal-engine-status:{safe.get('version', 'unknown')}:{safe.get('status', 'unknown')}",
+            "provider": "unreal",
+        },
+    }
+
+
+def unreal_install_engine(
+    payload: dict[str, Any],
+    credential: str | None,
+) -> dict[str, Any]:
+    version = validate_engine_version(payload.get("version"))
+    body = {"version": version} if version else {}
+    data = request_unreal_worker(
+        credential,
+        method="POST",
+        path="/v1/engine/install",
+        json_body=body,
+    )
+    job_id = data.get("job_id") or data.get("id")
+    if not isinstance(job_id, str) or not job_id.strip():
+        raise ToolGatewayError("Unreal worker did not return a download job id")
+    job_status = data.get("status")
+    if not isinstance(job_status, str):
+        job_status = "queued"
+    selected_version = data.get("version") or version
+    if selected_version is not None and not isinstance(selected_version, str):
+        selected_version = version
+    return {
+        "job_id": job_id,
+        "status": job_status,
+        "version": selected_version,
+        "evidence": {
+            "receipt_id": f"unreal-engine-install:{job_id}:{job_status}",
+            "provider": "unreal",
+        },
+    }
+
+
 DEFAULT_EXTERNAL_ACTION_CATALOG: tuple[dict[str, Any], ...] = (
     {
         "provider": "gmail",
@@ -1673,6 +1735,41 @@ DEFAULT_EXTERNAL_ACTION_CATALOG: tuple[dict[str, Any], ...] = (
             "required": ["service_id"],
         },
     },
+    {
+        "provider": "unreal",
+        "action_name": "engine-status",
+        "name": "Unreal Engine · Status",
+        "default_tool_slug": "unreal-engine-status",
+        "credential_slug": "unreal-worker-credential",
+        "credential_name": "Unreal worker connection",
+        "credential_env_locator": "SELDRUNE_UNREAL_WORKER_CREDENTIAL",
+        "description": "Read installed Unreal Engine version and worker storage status.",
+        "risk_level": "low",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "provider": "unreal",
+        "action_name": "install-engine",
+        "name": "Unreal Engine · Queue install",
+        "default_tool_slug": "unreal-engine-install",
+        "credential_slug": "unreal-worker-credential",
+        "credential_name": "Unreal worker connection",
+        "credential_env_locator": "SELDRUNE_UNREAL_WORKER_CREDENTIAL",
+        "description": (
+            "Queue an Unreal Engine download/install on the connected worker. "
+            "This uses worker storage and bandwidth and always requires Owner approval."
+        ),
+        "risk_level": "high",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "version": {
+                    "type": "string",
+                    "pattern": "^\\d{1,2}\\.\\d+(?:\\.\\d+)?$",
+                }
+            },
+        },
+    },
 )
 
 
@@ -1704,6 +1801,8 @@ def register_default_external_actions() -> None:
     register_external_action("runpod", "get-pod", runpod_get_pod)
     register_external_action("runpod", "start-pod", runpod_start_pod)
     register_external_action("runpod", "stop-pod", runpod_stop_pod)
+    register_external_action("unreal", "engine-status", unreal_engine_status)
+    register_external_action("unreal", "install-engine", unreal_install_engine)
 
 
 def default_external_action_catalog() -> list[dict[str, Any]]:
