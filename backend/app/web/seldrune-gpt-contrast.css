@@ -134,3 +134,186 @@
     line-height: 1.62 !important;
   }
 }
+
+
+/* Let the selected Seldrune wallpaper show through and keep every GPT control legible. */
+#seldrune-gpt,
+#seldrune-gpt .gpt-main,
+#seldrune-gpt .gpt-page-view,
+#seldrune-gpt .gpt-chat-page,
+#seldrune-gpt .gpt-history-page,
+#seldrune-gpt .gpt-tools-page,
+#seldrune-gpt .gpt-thread {
+  color: #17243a !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  opacity: 1 !important;
+}
+
+#seldrune-gpt .gpt-sidebar {
+  color: #1b2b44 !important;
+  background: rgb(245 249 255 / 88%) !important;
+  border-color: rgb(255 255 255 / 76%) !important;
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+}
+
+#seldrune-gpt .gpt-sidebar :is(button, a, label, small, input),
+#seldrune-gpt .gpt-sidebar-label,
+#seldrune-gpt .gpt-history-open,
+#seldrune-gpt .gpt-history-empty,
+#seldrune-gpt .gpt-creation-status,
+#seldrune-gpt .gpt-sidebar-bottom,
+#seldrune-gpt .gpt-sidebar-brand strong,
+#seldrune-gpt .gpt-sidebar-brand small {
+  color: #203552 !important;
+  opacity: 1 !important;
+}
+
+#seldrune-gpt .gpt-sidebar :is(button, a) {
+  background-color: rgb(255 255 255 / 78%) !important;
+  border-color: #cad7e8 !important;
+}
+
+#seldrune-gpt .gpt-sidebar .gpt-workspace-nav button.active,
+#seldrune-gpt .gpt-sidebar .gpt-history-open[aria-current="page"] {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #2458a7, #16788d) !important;
+  border-color: #2458a7 !important;
+}
+
+#seldrune-gpt .gpt-topbar,
+#seldrune-gpt .gpt-status-bar {
+  color: #17243a !important;
+  background: rgb(248 251 255 / 91%) !important;
+  border-color: #cbd7e8 !important;
+  opacity: 1 !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+#seldrune-gpt .gpt-topbar :is(h1, p, span, strong, button),
+#seldrune-gpt .gpt-status-bar :is(span, small) {
+  color: #203552 !important;
+  opacity: 1 !important;
+}
+
+#seldrune-gpt .gpt-topbar :is(button, .gpt-top-tool-button) {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid #c5d3e6 !important;
+  border-radius: 10px;
+  background: #ffffff !important;
+}
+
+#seldrune-gpt .gpt-dropzone {
+  color: #17243a !important;
+  background: rgb(251 253 255 / 97%) !important;
+  border: 1px solid #b7c8dc !important;
+  box-shadow: 0 10px 30px rgb(15 35 62 / 18%) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+#seldrune-gpt .gpt-dropzone textarea {
+  color: #17243a !important;
+  caret-color: #17243a !important;
+}
+
+#seldrune-gpt .gpt-dropzone textarea::placeholder,
+#seldrune-gpt .gpt-history-search input::placeholder {
+  color: #5b6c83 !important;
+  opacity: 1 !important;
+}
+
+#seldrune-gpt .gpt-composer-bar {
+  border-color: #d3deea !important;
+}
+
+#seldrune-gpt .gpt-composer-tools :is(span, label),
+#seldrune-gpt .gpt-provider-control,
+#seldrune-gpt .gpt-provider-control span,
+#seldrune-gpt .gpt-mode-pill,
+#seldrune-gpt .gpt-status-bar span {
+  color: #314660 !important;
+}
+
+#seldrune-gpt .gpt-dropzone :is(button, select, input) {
+  color: #203552 !important;
+  background-color: #ffffff !important;
+  border-color: #c6d3e3 !important;
+}
+
+#seldrune-gpt .gpt-dropzone .gpt-composer-actions button {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #2458a7, #16788d) !important;
+  border-color: #2458a7 !important;
+}
+
+#seldrune-gpt .gpt-page-heading,
+#seldrune-gpt .gpt-page-heading :is(h2, p, small),
+#seldrune-gpt .gpt-tools-note,
+#seldrune-gpt .gpt-welcome :is(h2, p) {
+  color: #203552 !important;
+}
+
+#seldrune-gpt .gpt-welcome,
+#seldrune-gpt .gpt-tool-panel,
+#seldrune-gpt .gpt-provider-card,
+#seldrune-gpt .gpt-tool-card {
+  color: #203552 !important;
+  background: rgb(249 252 255 / 94%) !important;
+  border: 1px solid #c9d6e6 !important;
+  box-shadow: 0 8px 24px rgb(15 35 62 / 14%) !important;
+}
+
+#seldrune-gpt .gpt-welcome :is(h2, p, strong, small),
+#seldrune-gpt .gpt-tool-panel :is(p, h2, h3, small, strong),
+#seldrune-gpt .gpt-provider-card :is(small, strong),
+#seldrune-gpt .gpt-tool-card :is(small, strong) {
+  color: #203552 !important;
+  opacity: 1 !important;
+}
+
+#seldrune-gpt .gpt-suggestions button {
+  color: #203552 !important;
+  background: #ffffff !important;
+  border-color: #c9d6e6 !important;
+}
+
+#seldrune-gpt .gpt-suggestions button :is(strong, small, span) {
+  color: #203552 !important;
+  opacity: 1 !important;
+}
+
+#seldrune-gpt .gpt-tool-card.gpt-unreal-tool-card {
+  grid-column: 1 / -1;
+  border-color: #7ca6d6 !important;
+}
+
+#seldrune-gpt .gpt-unreal-tool-card[data-state="ready"] {
+  border-color: #39a987 !important;
+}
+
+#seldrune-gpt .gpt-unreal-tool-card button {
+  min-height: 40px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  color: #ffffff !important;
+  font-weight: 700;
+  background: linear-gradient(135deg, #2458a7, #16788d) !important;
+  border: 0 !important;
+  border-radius: 10px;
+}
+
+@media (max-width: 760px) {
+  #seldrune-gpt .gpt-topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  #seldrune-gpt .gpt-thread .command-card {
+    width: min(96%, 900px);
+  }
+}
