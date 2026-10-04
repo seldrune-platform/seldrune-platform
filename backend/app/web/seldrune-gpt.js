@@ -1125,7 +1125,8 @@
     if (mode === 'app' || mode === 'game') return true;
     const text = String(request || '').trim();
     const mediaIntent = /\b(create|generate|make|compose|produce|render)\b.{0,70}\b(audio|song|music|video|film|movie|clip)\b/i.test(text);
-    const unrealAction = /\b(download|install|set\s+up|setup|check|inspect|show|get|verify)\b.{0,90}\b(unreal(?:\s+engine)?|ue[45](?:\.\d+)?)\b/i.test(text);
+    const unrealAction = /\b(download|install|set\s+up|setup|check|inspect|show|get|verify|is)\b.{0,90}\b(unreal(?:\s+engine)?|ue[45](?:\.\d+)?)\b/i.test(text)
+      || /\b(unreal(?:\s+engine)?|ue[45](?:\.\d+)?)\b.{0,40}\b(status|ready|installed|version|worker|connection|connected)\b/i.test(text);
     if (unrealAction) return true;
     const inferredMediaKind = classifyOutputKind(text, 'any');
     if (['song', 'video', 'visual'].includes(mode)) {
@@ -1538,7 +1539,7 @@
       clearAttachments();
       const card = addMessage(
         'Seldrune AI',
-        'Unreal Engine is connected to Seldrune GPT as a worker integration. I’m opening its secure connection form; once verified, GPT can check engine status and queue installs.',
+        'Unreal Engine worker setup is built into Seldrune GPT. I’m opening its secure connection form; once a worker verifies, GPT can check engine status and queue installs.',
       );
       addUnrealConnectionButton(card, 'Open secure Unreal connection');
       status.textContent = 'Opening Unreal Engine connection setup…';
