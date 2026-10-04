@@ -42,6 +42,11 @@
       kind: "external",
       help: "Use a Runpod API key. Verification only lists one Pod; start actions require Owner approval and can incur GPU charges.",
     },
+    unreal: {
+      label: "Unreal Engine Worker",
+      kind: "external",
+      help: "Connect an HTTPS Seldrune-compatible Unreal worker with its bearer token. Engine installation is queued on that worker and requires owner approval.",
+    },
   };
 
   function isConnectionsActive() {
@@ -65,8 +70,9 @@
         '<div><p class="eyebrow">ONE SECURE ADAPTOR</p><h3>Connect or rotate a credential</h3></div>' +
         '<label>Service<select id="integration-provider" required>' +
           '<optgroup label="AI model providers"><option value="openai">OpenAI API</option><option value="gemini">Google Gemini API</option><option value="anthropic">Anthropic API</option></optgroup>' +
-          '<optgroup label="Code, email, and deploy"><option value="github">GitHub</option><option value="gmail">Gmail</option><option value="render">Render</option></optgroup><optgroup label="GPU compute"><option value="runpod">Runpod</option></optgroup>' +
+          '<optgroup label="Code, email, and deploy"><option value="github">GitHub</option><option value="gmail">Gmail</option><option value="render">Render</option></optgroup><optgroup label="Cloud tools"><option value="runpod">Runpod</option><option value="unreal">Unreal Engine Worker</option></optgroup>' +
         '</select></label>' +
+        '<label id="integration-worker-url-wrap" hidden>Unreal worker HTTPS URL<input id="integration-worker-url" type="url" inputmode="url" autocomplete="url" placeholder="https://your-worker.example.com" disabled></label>' +
         '<label>Credential<input id="integration-key" type="password" required minlength="8" maxlength="20000" autocomplete="new-password" spellcheck="false" placeholder="Paste a provider API key or token"></label>' +
         '<div class="integration-form-actions"><button id="integration-save" type="submit">Verify and connect</button><button id="integration-toggle" type="button" class="ghost">Show</button></div>' +
         '<p id="integration-key-message" role="status" aria-live="polite">Seldrune makes a read-only model-list request before saving AI keys. Do not enter your account password. Credentials are encrypted in the organization vault and never shown again.</p>' +
@@ -101,11 +107,22 @@
     const config = INTEGRATIONS[provider];
     const message = document.querySelector("#integration-key-message");
     const input = document.querySelector("#integration-key");
+    const endpointWrap = document.querySelector("#integration-worker-url-wrap");
+    const endpointInput = document.querySelector("#integration-worker-url");
+    const needsWorkerUrl = provider === "unreal";
+    if (endpointWrap) endpointWrap.hidden = !needsWorkerUrl;
+    if (endpointInput) {
+      endpointInput.disabled = !needsWorkerUrl;
+      endpointInput.required = needsWorkerUrl;
+      if (!needsWorkerUrl) endpointInput.value = "";
+    }
     if (message && config) {
-      message.textContent = config.help + " Seldrune verifies access before encrypting the credential.";
+      message.textContent = config.help + " Seldrune checks the authenticated worker health endpoint before encrypting the connection.";
     }
     if (input && config) {
-      input.placeholder = config.kind === "model" ? "Paste the provider API key" : "Paste the provider token or API key";
+      input.placeholder = provider === "unreal"
+        ? "Paste the worker bearer API token"
+        : config.kind === "model" ? "Paste the provider API key" : "Paste the provider token or API key";
     }
   }
 
@@ -307,8 +324,22 @@
     const input = document.querySelector("#integration-key");
     const button = document.querySelector("#integration-save");
     const message = document.querySelector("#integration-key-message");
-    const secret = input?.value || "";
+    let secret = input?.value || "";
     if (!provider || !INTEGRATIONS[provider] || !secret) return;
+
+    if (provider === "unreal") {
+      const workerUrl = document.querySelector("#integration-worker-url")?.value?.trim() || "";
+      try {
+        const parsed = new URL(workerUrl);
+        if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search || parsed.hash) {
+          throw new Error("Use an HTTPS worker URL without embedded credentials, query, or fragment.");
+        }
+        secret = JSON.stringify({base_url: parsed.toString().replace(/\/$/, ""), token: secret});
+      } catch (error) {
+        message.textContent = error.message || "Enter a valid HTTPS Unreal worker URL.";
+        return;
+      }
+    }
 
     button.disabled = true;
     message.textContent = "Verifying " + INTEGRATIONS[provider].label + " access…";
@@ -326,6 +357,8 @@
       }
       input.value = "";
       input.type = "password";
+      const endpointInput = document.querySelector("#integration-worker-url");
+      if (endpointInput) endpointInput.value = "";
       document.querySelector("#integration-toggle").textContent = "Show";
       message.textContent = INTEGRATIONS[provider].label + " verified and connected. The credential is encrypted in Seldrune.";
       loadedAt = 0;
