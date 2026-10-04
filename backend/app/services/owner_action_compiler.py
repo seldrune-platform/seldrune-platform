@@ -80,8 +80,9 @@ _TOOL_INTENTS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
         "engine-status",
         re.compile(
             r"\b(check|inspect|show|get|verify|is)\b.{0,60}\b"
-            r"(unreal(?:\s+engine)?|ue[45](?:\.\d+)?)\b.{0,60}\b"
-            r"(status|ready|installed|version|worker)\b"
+            r"(unreal(?:\s+engine)?|ue[45](?:\.\d+)?)\b"
+            r"(?:.{0,60}\b(status|ready|installed|version|worker|connection|connected)\b"
+            r"|\s*[?.!]?$)"
             r"|\b(is|check|verify)\b.{0,40}\b"
             r"(unreal(?:\s+engine)?|ue[45])\b.{0,30}\binstalled\b",
             re.I,
