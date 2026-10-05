@@ -83,7 +83,9 @@ def test_creation_forge_app_intent_precedes_media_keyword_classification():
     )[1].split("\n  function titleFromRequest", 1)[0]
     game = classifier.index(r"/\b(game|playable|gameplay|level design)\b/.test(text)")
     app_intent = classifier.index("if (appIntent) return 'app';")
-    speech = classifier.index(r"/\b(narration|voiceover|voice over|spoken audio|speech)\b/.test(text)")
+    speech = classifier.index(
+        r"/\b(narration|voiceover|voice over|spoken audio|speech)\b/.test(text)"
+    )
     song = classifier.index(r"/\b(song|music|lyrics|soundtrack)\b/.test(text)")
     video = classifier.index(r"/\b(video|film|movie|clip|storyboard)\b/.test(text)")
     image = classifier.index(r"/\b(image|illustration|picture|poster|artwork)\b/.test(text)")

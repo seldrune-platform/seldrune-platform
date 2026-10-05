@@ -1707,11 +1707,9 @@ def create_seldrune_gpt_media(
         )
 
     if payload.kind == "image":
-        model = policy.image_model
         projected_cost = policy.image_job_max_usd
         estimated_cost = estimate_image_cost_usd(len(prompt))
     else:
-        model = policy.speech_model
         projected_cost = policy.speech_job_max_usd
         estimated_cost = estimate_speech_cost_usd(len(prompt))
     estimated_cost = min(estimated_cost, projected_cost)
