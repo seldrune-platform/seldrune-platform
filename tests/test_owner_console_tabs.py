@@ -50,15 +50,20 @@ def test_creation_forge_routes_typed_projects_through_the_cognitive_operator():
     script = (WEB / "seldrune-gpt.js").read_text()
     styles = (WEB / "seldrune-gpt-studio.css").read_text()
 
-    for mode in ("song", "video"):
+    for mode in ("image", "speech", "video"):
         assert f'data-creation-mode="{mode}"' in html
         assert f"    {mode}: {{" in script
-    for hidden_mode in ("app", "game", "visual"):
+    for hidden_mode in ("app", "game", "song", "visual"):
         assert f'data-creation-mode="{hidden_mode}"' not in html
     for mode in ("app", "game", "visual"):
         assert f"    {mode}: {{" in script
     assert 'id="seldrune-gpt-creation-status"' in html
+    assert "Create downloadable image and spoken-audio files" in html
+    assert "Video rendering is unavailable" in html
     assert "buildCreativeOrder(request)" in script
+    assert "api('/gpt/media'" in script
+    assert "No file was created." in script
+    assert "OpenAI-generated voice" in script or "AI-generated narration" in script
     assert '/console-assets/seldrune-media.js' in script
     assert 'data-default="true"' in script
     assert "authenticated Seldrune origin" in script
@@ -78,14 +83,14 @@ def test_creation_forge_app_intent_precedes_media_keyword_classification():
     )[1].split("\n  function titleFromRequest", 1)[0]
     game = classifier.index(r"/\b(game|playable|gameplay|level design)\b/.test(text)")
     app_intent = classifier.index("if (appIntent) return 'app';")
-    song = classifier.index(r"/\b(song|music|lyrics|soundtrack|audio)\b/.test(text)")
+    speech = classifier.index(r"/\b(narration|voiceover|voice over|spoken audio|speech)\b/.test(text)")
+    song = classifier.index(r"/\b(song|music|lyrics|soundtrack)\b/.test(text)")
     video = classifier.index(r"/\b(video|film|movie|clip|storyboard)\b/.test(text)")
-    visual = classifier.index(
-        r"/\b(image|illustration|picture|visual|poster|artwork|3d scene|3d model)\b/.test(text)"
-    )
-    assert game < app_intent < song
+    image = classifier.index(r"/\b(image|illustration|picture|poster|artwork)\b/.test(text)")
+    visual = classifier.index(r"/\b(visual|3d scene|3d model)\b/.test(text)")
+    assert game < app_intent < speech < song
     assert app_intent < video
-    assert app_intent < visual
+    assert app_intent < image < visual
 
     media_pattern = re.search(
         r"const mediaForExistingApp = /(.+)/\.test\(text\);", classifier

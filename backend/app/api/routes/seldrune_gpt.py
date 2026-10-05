@@ -4,9 +4,10 @@ import json
 import re
 from dataclasses import replace
 from datetime import UTC, datetime
+from os import getenv
 
 from typing import Annotated, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select
@@ -41,7 +42,11 @@ from backend.app.services.ai_cost_governor import (
     choose_cost_route,
     estimate_model_cost,
 )
-from backend.app.services.ai_media_budget import build_media_cost_policy
+from backend.app.services.ai_media_budget import (
+    build_media_cost_policy,
+    estimate_image_cost_usd,
+    estimate_speech_cost_usd,
+)
 from backend.app.services.ai_spend_guard import (
     AISpendBudgetExceeded,
     ai_spend_budget_status,
@@ -54,6 +59,11 @@ from backend.app.services.model_provider_registry import (
     configured_model_provider_vaults,
     get_model_provider_credential,
     model_provider_statuses,
+)
+from backend.app.services.media_generation import (
+    MediaGenerationError,
+    generate_image,
+    generate_speech,
 )
 from backend.app.services.secret_vault import SecretVaultError
 from backend.app.services.owner_action_compiler import required_external_tool_actions
@@ -507,6 +517,23 @@ class SeldruneGPTCapabilitiesResponse(BaseModel):
     provider_readiness: dict[str, bool] = Field(default_factory=dict)
     model_providers: list[dict] = Field(default_factory=list)
     configuration_hints: list[str] = Field(default_factory=list)
+
+
+class SeldruneGPTMediaRequest(BaseModel):
+    kind: Literal["image", "speech", "video"]
+    prompt: str = Field(min_length=1, max_length=4000)
+    conversation_id: UUID | None = None
+
+
+class SeldruneGPTMediaResponse(BaseModel):
+    conversation_id: UUID
+    kind: Literal["image", "speech"]
+    file_name: str
+    mime_type: str
+    data_base64: str
+    model: str
+    estimated_cost_usd: float
+    disclosure: str | None = None
 
 
 class SeldruneGPTConversationSummary(BaseModel):
@@ -1592,20 +1619,192 @@ def seldrune_gpt_capabilities(
             "monthly_remaining_usd": spend_status["monthly_remaining_usd"],
             "default_text_model": settings.model_economy,
             "image": {
+                "available": True,
                 "model": media_policy.image_model,
                 "quality": media_policy.image_quality,
                 "size": media_policy.image_size,
                 "job_max_usd": media_policy.image_job_max_usd,
             },
+            "speech": {
+                "available": True,
+                "model": media_policy.speech_model,
+                "voice": media_policy.speech_voice,
+                "max_chars": media_policy.speech_max_chars,
+                "job_max_usd": media_policy.speech_job_max_usd,
+            },
             "video": {
-                "model": media_policy.video_model,
-                "resolution": media_policy.video_resolution,
-                "default_seconds": media_policy.video_default_seconds,
-                "max_seconds": media_policy.video_max_seconds,
-                "job_max_usd": media_policy.video_job_max_usd,
-                "prefer_batch": media_policy.prefer_batch,
+                "available": media_policy.video_available,
+                "model": None,
+                "configuration_hint": "Connect a supported text-to-video renderer.",
             },
         },
+    )
+
+
+@router.post(
+    "/{organization_id}/gpt/media",
+    response_model=SeldruneGPTMediaResponse,
+)
+def create_seldrune_gpt_media(
+    organization_id: UUID,
+    payload: SeldruneGPTMediaRequest,
+    _membership: AgentsRunDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> SeldruneGPTMediaResponse:
+    if payload.kind == "video":
+        raise HTTPException(
+            status_code=501,
+            detail=(
+                "No video file was created. Seldrune does not currently have a supported "
+                "video renderer connected."
+            ),
+        )
+
+    prompt = payload.prompt.strip()
+    if not prompt:
+        raise HTTPException(status_code=422, detail="Enter a prompt before creating media.")
+
+    spend_status = ai_spend_budget_status(
+        session,
+        organization_id=organization_id,
+        settings=settings,
+    )
+    policy = build_media_cost_policy(
+        settings,
+        monthly_utilization=float(spend_status["monthly_utilization"]),
+    )
+    if payload.kind == "speech" and len(prompt) > policy.speech_max_chars:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Spoken audio is limited to {policy.speech_max_chars} characters per file."
+            ),
+        )
+
+    try:
+        saved_api_key = get_model_provider_credential(
+            session,
+            organization_id=organization_id,
+            provider="openai",
+        )
+    except SecretVaultError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "The saved OpenAI key could not be opened. Reconnect OpenAI in Seldrune "
+                "Connections."
+            ),
+        ) from exc
+    api_key = saved_api_key or getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Image and spoken-audio creation need an OpenAI connection. Connect OpenAI "
+                "in Seldrune Connections or configure OPENAI_API_KEY on the server."
+            ),
+        )
+
+    if payload.kind == "image":
+        model = policy.image_model
+        projected_cost = policy.image_job_max_usd
+        estimated_cost = estimate_image_cost_usd(len(prompt))
+    else:
+        model = policy.speech_model
+        projected_cost = policy.speech_job_max_usd
+        estimated_cost = estimate_speech_cost_usd(len(prompt))
+    estimated_cost = min(estimated_cost, projected_cost)
+    try:
+        enforce_ai_spend_budget(
+            session,
+            organization_id=organization_id,
+            settings=settings,
+            projected_usd=projected_cost,
+        )
+    except AISpendBudgetExceeded as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+
+    conversation = _resolve_gpt_conversation(
+        session,
+        organization_id=organization_id,
+        user_id=current_user.id,
+        conversation_id=payload.conversation_id,
+        title_hint=prompt,
+    )
+    try:
+        if payload.kind == "image":
+            generated = generate_image(
+                prompt,
+                api_key=api_key,
+                model=policy.image_model,
+                quality=policy.image_quality,
+                size=policy.image_size,
+            )
+            extension = "png"
+            disclosure = None
+        else:
+            generated = generate_speech(
+                prompt,
+                api_key=api_key,
+                model=policy.speech_model,
+                voice=policy.speech_voice,
+            )
+            extension = "mp3"
+            disclosure = "AI-generated narration. Do not present it as a real speaker's voice."
+    except MediaGenerationError as exc:
+        session.rollback()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    file_name = f"seldrune-{payload.kind}-{uuid4().hex[:12]}.{extension}"
+    session.add(
+        SeldruneGPTMessage(
+            organization_id=organization_id,
+            user_id=current_user.id,
+            conversation_id=conversation.id,
+            role="user",
+            content=f"Create {payload.kind}: {prompt}",
+        )
+    )
+    session.add(
+        SeldruneGPTMessage(
+            organization_id=organization_id,
+            user_id=current_user.id,
+            conversation_id=conversation.id,
+            role="assistant",
+            content=f"Created {payload.kind} file: {file_name}",
+            model=generated.model,
+            estimated_cost_usd=estimated_cost,
+            cost_tier="media",
+            model_calls=1,
+        )
+    )
+    record_audit(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+        action="seldrune_gpt.media_created",
+        resource_type="generated_media",
+        resource_id=file_name,
+        details={
+            "kind": payload.kind,
+            "model": generated.model,
+            "mime_type": generated.mime_type,
+            "bytes": len(generated.data),
+            "estimated_cost_usd": estimated_cost,
+            "spend_guard_max_usd": projected_cost,
+        },
+    )
+    session.commit()
+    return SeldruneGPTMediaResponse(
+        conversation_id=conversation.id,
+        kind=payload.kind,
+        file_name=file_name,
+        mime_type=generated.mime_type,
+        data_base64=base64.b64encode(generated.data).decode("ascii"),
+        model=generated.model,
+        estimated_cost_usd=estimated_cost,
+        disclosure=disclosure,
     )
 
 

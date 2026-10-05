@@ -203,13 +203,14 @@
     <footer class="gpt-status-bar"><span id="seldrune-gpt-status" role="status">Ready.</span><span>Chat replies are text. For PDFs, give the AI PDF Editor an instruction; it uses no coordinates or manual edit tools.</span></footer>
     <div hidden>
       <section class="gpt-creation-forge" id="seldrune-media-creation" aria-labelledby="gpt-creation-title">
-        <p class="eyebrow">MEDIA CREATION</p><h3 id="gpt-creation-title">Create audio or video</h3>
-        <p>Choose Audio or Video, then describe your brief in the text composer. Any rendered file is saved in Outputs.</p>
+        <p class="eyebrow">MEDIA CREATION</p><h3 id="gpt-creation-title">Create image, narration, or video</h3>
+        <p>Create downloadable image and spoken-audio files. Products are saved in Outputs. Video stays marked unavailable until a supported renderer is connected.</p>
         <div class="gpt-creation-modes" role="group" aria-label="Media creation type">
-          <button type="button" class="gpt-creation-mode" data-creation-mode="song" aria-pressed="false">Audio</button>
+          <button type="button" class="gpt-creation-mode" data-creation-mode="image" aria-pressed="false">Image</button>
+          <button type="button" class="gpt-creation-mode" data-creation-mode="speech" aria-pressed="false">Spoken audio</button>
           <button type="button" class="gpt-creation-mode" data-creation-mode="video" aria-pressed="false">Video</button>
         </div>
-        <small id="seldrune-gpt-creation-status" class="gpt-creation-status" aria-live="polite">Rendered audio or video requires a connected provider; otherwise Seldrune returns a text plan.</small>
+        <small id="seldrune-gpt-creation-status" class="gpt-creation-status" aria-live="polite">Images and spoken audio use the connected OpenAI provider. Video rendering is unavailable.</small>
       </section>
     </div>
   </main>
@@ -218,4 +219,3 @@
 
 <section id="commands"><div class="section-head"><div><p class="eyebrow">LIVE PORTFOLIO</p><h2>Strategic commands</h2><p>Complete governed command history, newest first.</p></div></div><div id="command-list" class="list"></div></section></main></div>
 <dialog id="brief"><button class="close" aria-label="Close">×</button><p class="eyebrow">DECISION BRIEF</p><div id="brief-body"></div></dialog><div id="toast"></div><script src="/console-assets/console.js?v=20261004-bright-unreal-status" defer></script><script src="/console-assets/console-action-inbox.js?v=20261004-bright-unreal-status" defer></script><script src="/console-assets/sti-runtime.js?v=20261004-bright-unreal-status" defer></script><script src="/console-assets/owner-push-subscriptions.js?v=20261004-bright-unreal-status" defer></script><script src="/console-assets/face-test.js?v=20261004-bright-unreal-status" defer></script><script src="/console-assets/seldrune-gpt.js?v=20261004-bright-unreal-status" defer></script><script src="/console-assets/console-tools.js?v=20261004-bright-unreal-status" defer></script><script src="/console-assets/console-cosmic-tabs.js?v=20261004-bright-unreal-status" defer></script><script src="/console-assets/seldrune-background-settings.js?v=20261004-bright-unreal-status" defer></script><script src="/console-assets/console-system-sense.js?v=20261004-bright-unreal-status" defer></script><script src="/console-assets/console-connections.js?v=20261004-bright-unreal-status" defer></script><script src="/console-assets/console-agents.js?v=20261004-bright-unreal-status" defer></script><script src="/console-assets/console-portal-settings.js?v=20261004-bright-unreal-status" defer></script><script src="/console-assets/cognitive-mission.js?v=20261004-bright-unreal-status" defer></script></body></html>
-

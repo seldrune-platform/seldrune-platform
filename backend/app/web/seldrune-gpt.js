@@ -70,13 +70,23 @@
     },
     song: {
       label: 'Song',
-      guidance: 'Create an original song package with lyrics, chords, tempo, structure, and production notes. Only claim rendered audio when an actual audio file and provider receipt are returned; otherwise label this as a text package.',
-      status: 'Song · lyrics and arrangement can be returned as text; rendered audio requires an enabled audio-generation provider.',
+      guidance: 'Do not substitute lyrics for a rendered song. Music generation is not connected in Seldrune yet.',
+      status: 'Music rendering is unavailable until a music-generation provider is connected.',
+    },
+    image: {
+      label: 'Image',
+      guidance: 'Create one image file from this brief. Return the image itself, not a text-only image plan.',
+      status: 'Image · creates a downloadable PNG with the connected OpenAI provider.',
+    },
+    speech: {
+      label: 'Spoken audio',
+      guidance: 'Create a spoken narration file from this text. Return the audio itself, not a text-only audio plan.',
+      status: 'Spoken audio · creates a downloadable MP3 using an AI-generated voice.',
     },
     video: {
       label: 'Video',
-      guidance: 'Create an original video package with script, storyboard, shot list, and edit cues. Only claim a rendered video when an actual video file and provider receipt are returned; otherwise label this as a text package.',
-      status: 'Video · script and storyboard can be returned as text; rendered video requires an enabled video-generation provider.',
+      guidance: 'Video rendering is not connected in Seldrune. Do not return a text plan as if it were a video file.',
+      status: 'Video · no supported video renderer is connected, so no video file will be created.',
     },
     visual: {
       label: 'Visual / 3D',
@@ -94,9 +104,22 @@
       button.setAttribute('aria-pressed', String(selected));
     });
     if (creationStatus) creationStatus.textContent = CREATION_MODES[next].status;
+    if (input && !input.disabled) {
+      input.placeholder = next === 'image'
+        ? 'Describe the image to create…'
+        : next === 'speech'
+          ? 'Enter narration text (up to 700 characters)…'
+          : next === 'video'
+            ? 'Describe the video you want; Seldrune will report renderer availability…'
+            : 'Ask Seldrune anything: create, code, analyze, or take action…';
+    }
     if (modePill) {
-      const mediaLabel = next === 'song' ? 'Media · Audio brief'
-        : next === 'video' ? 'Media · Video brief' : 'Text chat';
+      const mediaLabel = ({
+        song: 'Media · Music unavailable',
+        image: 'Media · Image',
+        speech: 'Media · Spoken audio',
+        video: 'Media · Video unavailable',
+      })[next] || 'Text chat';
       modePill.textContent = mediaLabel;
       modePill.classList.toggle('active', next !== 'any');
     }
@@ -134,6 +157,8 @@
     app: 'App source draft',
     game: 'Game source draft',
     song: 'Song package',
+    image: 'Generated image',
+    speech: 'Spoken audio',
     video: 'Video package',
     visual: 'Visual / 3D package',
     build: 'Coding build receipt',
@@ -226,9 +251,11 @@
     const mediaForExistingApp = /\b(song|music|lyrics|soundtrack|audio|video|film|movie|clip|storyboard|image|illustration|picture|visual|poster|artwork)\b.{0,60}\b(?:for|about)\s+(?:(?:my|our|the|an?)\s+)?(?:app|application|website|web app)\b/.test(text);
     const appIntent = /\b(app|application|website|web app|software|program|source code|coding)\b/.test(text) && !mediaForExistingApp;
     if (appIntent) return 'app';
-    if (/\b(song|music|lyrics|soundtrack|audio)\b/.test(text)) return 'song';
+    if (/\b(narration|voiceover|voice over|spoken audio|speech)\b/.test(text)) return 'speech';
+    if (/\b(song|music|lyrics|soundtrack)\b/.test(text)) return 'song';
     if (/\b(video|film|movie|clip|storyboard)\b/.test(text)) return 'video';
-    if (/\b(image|illustration|picture|visual|poster|artwork|3d scene|3d model)\b/.test(text)) return 'visual';
+    if (/\b(image|illustration|picture|poster|artwork)\b/.test(text)) return 'image';
+    if (/\b(visual|3d scene|3d model)\b/.test(text)) return 'visual';
     if (/\b(pdf|document|spreadsheet|presentation|report)\b/.test(text)) return 'document';
     if (/\b(build|test|preview|pipeline|repository|repo|feature|bug)\b/.test(text)) return 'build';
     return 'creative';
@@ -531,8 +558,12 @@
     pdfPasswordWrap?.classList.toggle('hidden', !hasPdf);
     dropzone?.classList.toggle('ai-pdf-mode', aiPdfMode);
     if (modePill) {
-      const mediaLabel = creationMode === 'song' ? 'Media · Audio brief'
-        : creationMode === 'video' ? 'Media · Video brief' : 'Text chat';
+      const mediaLabel = ({
+        song: 'Media · Music unavailable',
+        image: 'Media · Image',
+        speech: 'Media · Spoken audio',
+        video: 'Media · Video unavailable',
+      })[creationMode] || 'Text chat';
       modePill.textContent = aiPdfMode ? 'AI PDF Editor' : mediaLabel;
       modePill.classList.toggle('active', aiPdfMode || creationMode !== 'any');
     }
@@ -544,7 +575,11 @@
     if (input) {
       input.placeholder = aiPdfMode
         ? 'Tell Seldrune exactly what to change in this PDF…'
-        : 'Ask Seldrune anything: create, code, analyze, or take action…';
+        : creationMode === 'image'
+          ? 'Describe the image to create…'
+          : creationMode === 'speech'
+            ? 'Enter narration text (up to 700 characters)…'
+            : 'Ask Seldrune anything: create, code, analyze, or take action…';
     }
     if (aiPdfMode && !input.disabled) {
       status.textContent =
@@ -1531,6 +1566,147 @@
     return mode !== 'any' || /\b(create|build|write|generate|make|compose|draft|design|produce|draw|render)\b/i.test(request);
   }
 
+  function requestedMediaKind(request) {
+    if (['image', 'speech', 'video', 'song'].includes(creationMode)) return creationMode;
+    if (creationMode === 'visual') {
+      return /\b(3d model|3d scene)\b/i.test(request) ? 'visual3d' : 'image';
+    }
+    const text = String(request || '').trim();
+    const mediaForExistingApp = /\b(song|music|lyrics|soundtrack|audio|spoken audio|voiceover|video|film|movie|clip|trailer|storyboard|image|illustration|picture|visual|poster|artwork)\b.{0,60}\b(?:for|about|of)\s+(?:(?:my|our|the|an?)\s+)?(?:app|application|website|web app|game)\b/i.test(text);
+    const appRequest = /\b(app|application|website|web app|software|program|source code|coding|game)\b/i.test(text);
+    if (appRequest && !mediaForExistingApp) return null;
+    if (/\b(create|generate|make|render|produce)\b.{0,100}\b(video|film|movie|clip|trailer)\b/i.test(text)) {
+      return 'video';
+    }
+    if (/\b(create|generate|make|render|draw|produce)\b.{0,100}\b(image|illustration|picture|poster|artwork|visual)\b/i.test(text)) {
+      return 'image';
+    }
+    if (/\b(create|generate|make|produce|narrate|speak)\b.{0,100}\b(spoken audio|narration|voice ?over|speech|voice)\b/i.test(text)
+      || /\b(read|speak)\b.{0,40}\b(aloud|out loud)\b/i.test(text)) {
+      return 'speech';
+    }
+    if (/\b(create|generate|make|compose|produce|write)\b.{0,100}\b(song|music|soundtrack)\b/i.test(text)) {
+      return 'song';
+    }
+    if (/\b(create|generate|make|render|produce)\b.{0,100}\b(3d model|3d scene)\b/i.test(text)) {
+      return 'visual3d';
+    }
+    return null;
+  }
+
+  function showMediaUnavailable(kind, request, attachmentNames = []) {
+    addMessage(
+      'You',
+      request + (attachmentNames.length ? `\nAttachments: ${attachmentNames.join(', ')}` : ''),
+      'user',
+    );
+    input.value = '';
+    clearAttachments();
+    const messages = {
+      video: 'No video file was created. Seldrune does not have a supported video renderer connected yet.',
+      song: 'No music file was created. Seldrune does not have a music-generation provider connected yet.',
+      visual3d: 'No 3D file was created. Seldrune image generation creates 2D PNG images only.',
+    };
+    const card = addMessage('Seldrune AI', messages[kind] || 'No media file was created.');
+    if (kind === 'video' || kind === 'song') {
+      const connections = document.createElement('button');
+      connections.type = 'button';
+      connections.className = 'ghost';
+      connections.dataset.openPortal = 'connections';
+      connections.textContent = 'Open Connections';
+      card.append(connections);
+    }
+    status.textContent = messages[kind] || 'No media file was created.';
+  }
+
+  async function runMediaCreation(kind, request, outgoingAttachments, attachmentNames) {
+    addMessage(
+      'You',
+      request + (attachmentNames.length ? `\nAttachments: ${attachmentNames.join(', ')}` : ''),
+      'user',
+    );
+    input.value = '';
+    clearAttachments();
+    setBusy(true, `Creating ${kind === 'image' ? 'image' : 'spoken audio'} file…`);
+    try {
+      if (outgoingAttachments.length) {
+        throw new Error('Reference attachments are not supported for media creation yet.');
+      }
+      const result = await api('/gpt/media', {
+        method: 'POST',
+        body: JSON.stringify({
+          kind,
+          prompt: request,
+          conversation_id: activeConversationId,
+        }),
+      });
+      if (!result.data_base64 || !result.file_name || !result.mime_type) {
+        throw new Error('The provider did not return a downloadable file.');
+      }
+      if (result.conversation_id) activeConversationId = result.conversation_id;
+      model.textContent = `${result.model || 'OpenAI'} · ${kind === 'image' ? 'image' : 'speech'}`;
+      const blob = base64Blob(result.data_base64, result.mime_type);
+      const title = titleFromRequest(request, kind);
+      const fileName = result.file_name;
+      const previewUrl = URL.createObjectURL(blob);
+      const disclosure = result.disclosure ? ` ${result.disclosure}` : '';
+      const card = addMessage(
+        'Seldrune AI',
+        `Created ${kind === 'image' ? 'image' : 'spoken-audio'} file: ${fileName}.${disclosure}`,
+      );
+      const preview = kind === 'image'
+        ? document.createElement('img')
+        : document.createElement('audio');
+      preview.className = 'gpt-generated-media-preview';
+      preview.src = previewUrl;
+      if (kind === 'image') {
+        preview.alt = title;
+        preview.loading = 'lazy';
+        preview.style.maxWidth = '100%';
+        preview.style.maxHeight = '560px';
+      } else {
+        preview.controls = true;
+        preview.preload = 'metadata';
+        preview.style.width = 'min(100%, 480px)';
+      }
+      const download = document.createElement('a');
+      download.className = 'ghost';
+      download.href = previewUrl;
+      download.download = fileName;
+      download.textContent = `Download ${fileName}`;
+      card.append(preview, download);
+      outputShortcut(card);
+
+      const note = kind === 'image'
+        ? 'AI-generated PNG image.'
+        : `AI-generated narration. ${result.disclosure || ''}`.trim();
+      try {
+        await saveOutputRecord(createOutputRecord({
+          title,
+          kind,
+          fileName,
+          blob,
+          note,
+        }));
+        const cost = Number(result.estimated_cost_usd || 0).toFixed(4);
+        status.textContent = `${fileName} created and saved in Outputs · estimated cost USD ${cost}`;
+      } catch (error) {
+        status.textContent = `${fileName} was created and is downloadable here, but could not be saved to Outputs: ${error.message}`;
+      }
+      try {
+        await refreshConversations();
+      } catch (error) {
+        status.textContent = `${fileName} is created and saved; chat history could not refresh: ${error.message}`;
+      }
+    } catch (error) {
+      addMessage('Seldrune AI', `No downloadable file was returned. ${error.message}`);
+      status.textContent = `No downloadable file was returned. ${error.message}`;
+    } finally {
+      setBusy(false);
+      input.focus();
+    }
+  }
+
   async function runUniversalMessage(request, outgoingAttachments, attachmentNames) {
     const connectUnreal = /\b(connect|configure|set\s+up|setup)\b.{0,80}\bunreal(?:\s+engine)?\b/i.test(request);
     if (connectUnreal && !outgoingAttachments.length) {
@@ -1544,6 +1720,15 @@
       addUnrealConnectionButton(card, 'Open secure Unreal connection');
       status.textContent = 'Opening Unreal Engine connection setup…';
       openUnrealConnections();
+      return;
+    }
+    const mediaKind = requestedMediaKind(request);
+    if (mediaKind) {
+      if (mediaKind === 'image' || mediaKind === 'speech') {
+        await runMediaCreation(mediaKind, request, outgoingAttachments, attachmentNames);
+      } else {
+        showMediaUnavailable(mediaKind, request, attachmentNames);
+      }
       return;
     }
     const kind = classifyOutputKind(request);
@@ -1657,7 +1842,7 @@
     const message = input.value.trim();
     if (!message) return;
 
-    const mediaModeUsed = ['song', 'video'].includes(creationMode);
+    const mediaModeUsed = ['image', 'speech', 'song', 'video', 'visual'].includes(creationMode);
     try {
       const pdfAttachments = attachments.filter(
         item => item.media_type === 'application/pdf',

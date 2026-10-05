@@ -7,6 +7,15 @@ def test_seldrune_gpt_requires_auth(client):
     assert response.status_code in {401, 403}
 
 
+def test_seldrune_gpt_media_requires_auth(client):
+    organization_id = "00000000-0000-0000-0000-000000000001"
+    response = client.post(
+        f"/api/v1/organizations/{organization_id}/gpt/media",
+        json={"kind": "image", "prompt": "A blue mountain at sunrise"},
+    )
+    assert response.status_code in {401, 403}
+
+
 def test_gpt_response_schema_exposes_runtime_metadata():
     from backend.app.api.routes.seldrune_gpt import SeldruneGPTResponse
 
@@ -35,6 +44,18 @@ def test_gpt_request_accepts_explicit_openai_model() -> None:
 
     assert request.model == "gpt-6-astra"
     assert request.provider == "openai"
+
+
+def test_gpt_media_request_accepts_product_modes_and_bounded_prompt() -> None:
+    from backend.app.api.routes.seldrune_gpt import SeldruneGPTMediaRequest
+
+    image = SeldruneGPTMediaRequest(kind="image", prompt="A moonlit mountain")
+    speech = SeldruneGPTMediaRequest(kind="speech", prompt="Welcome to Seldrune.")
+    video = SeldruneGPTMediaRequest(kind="video", prompt="A short forest scene")
+
+    assert image.kind == "image"
+    assert speech.kind == "speech"
+    assert video.kind == "video"
 
 
 def test_gpt_attachment_parser_accepts_image_and_pdf() -> None:
