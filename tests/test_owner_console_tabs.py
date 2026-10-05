@@ -62,7 +62,7 @@ def test_creation_forge_routes_typed_projects_through_the_cognitive_operator():
     assert "Video rendering is unavailable" in html
     assert "buildCreativeOrder(request)" in script
     assert "api('/gpt/media'" in script
-    assert "No file was created." in script
+    assert "No downloadable file was returned." in script
     assert "OpenAI-generated voice" in script or "AI-generated narration" in script
     assert '/console-assets/seldrune-media.js' in script
     assert 'data-default="true"' in script
