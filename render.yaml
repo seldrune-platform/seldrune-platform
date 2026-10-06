@@ -65,7 +65,7 @@ services:
       - key: SELDRUNE_PDF_LOCAL_OCR_ENABLED
         value: true
       - key: SELDRUNE_PDF_EXTERNAL_FALLBACK_ENABLED
-        value: false
+        value: true
       - key: SELDRUNE_AI_IMAGE_DETAIL
         value: low
       - key: SELDRUNE_AI_PDF_DETAIL
