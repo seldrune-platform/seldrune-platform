@@ -56,7 +56,7 @@
     any: {
       label: 'Anything',
       guidance: '',
-      status: 'Text chat · use Media to start an audio or video job.',
+      status: 'Text chat · open Product Studio for image, narration, or PDF files.',
     },
     app: {
       label: 'App',
@@ -82,6 +82,11 @@
       label: 'Spoken audio',
       guidance: 'Create a spoken narration file from this text. Return the audio itself, not a text-only audio plan.',
       status: 'Spoken audio · creates a downloadable MP3 using an AI-generated voice.',
+    },
+    document: {
+      label: 'PDF document',
+      guidance: 'Write the requested document with a clear title, useful section headings, complete content, and readable lists. Seldrune will render the completed answer as a downloadable PDF file.',
+      status: 'PDF document · Seldrune creates a real, multi-page PDF from the completed answer and saves it in Outputs.',
     },
     video: {
       label: 'Video',
@@ -109,6 +114,8 @@
         ? 'Describe the image to create…'
         : next === 'speech'
           ? 'Enter narration text (up to 700 characters)…'
+          : next === 'document'
+            ? 'Describe the document to create as a PDF…'
           : next === 'video'
             ? 'Describe the video you want; Seldrune will report renderer availability…'
             : 'Ask Seldrune anything: create, code, analyze, or take action…';
@@ -118,6 +125,7 @@
         song: 'Media · Music unavailable',
         image: 'Media · Image',
         speech: 'Media · Spoken audio',
+        document: 'Product · PDF document',
         video: 'Media · Video unavailable',
       })[next] || 'Text chat';
       modePill.textContent = mediaLabel;
@@ -246,6 +254,7 @@
   }
 
   function classifyOutputKind(request, mode = creationMode) {
+    if (mode === 'document') return 'document';
     const text = `${mode === 'any' ? '' : mode} ${request}`.toLowerCase();
     if (/\b(game|playable|gameplay|level design)\b/.test(text)) return 'game';
     const mediaForExistingApp = /\b(song|music|lyrics|soundtrack|audio|video|film|movie|clip|storyboard|image|illustration|picture|visual|poster|artwork)\b.{0,60}\b(?:for|about)\s+(?:(?:my|our|the|an?)\s+)?(?:app|application|website|web app)\b/.test(text);
@@ -322,6 +331,67 @@
       blob,
       note,
     }));
+  }
+
+  async function createPdfOutput(request, content, card) {
+    const title = titleFromRequest(request, 'document');
+    const result = await api('/gpt/pdf/create', {
+      method: 'POST',
+      body: JSON.stringify({
+        title,
+        content,
+        conversation_id: activeConversationId,
+      }),
+    });
+    if (!result.data_base64 || !result.filename) {
+      throw new Error('The PDF renderer did not return a downloadable file.');
+    }
+    const record = await saveBinaryArtifact({
+      title,
+      kind: 'document',
+      fileName: result.filename,
+      dataBase64: result.data_base64,
+      mimeType: result.mime_type || 'application/pdf',
+      note: `PDF document · ${result.page_count || 1} page(s) · created from the Seldrune response.`,
+    });
+    const link = document.createElement('a');
+    link.className = 'ghost';
+    link.href = URL.createObjectURL(record.blob);
+    link.download = record.fileName;
+    link.dataset.outputDownload = 'pdf';
+    link.textContent = `Download ${record.fileName}`;
+    card.append(link);
+    outputShortcut(card);
+    return {record, pageCount: Number(result.page_count || 1)};
+  }
+
+  function addPdfExportButton(card, request, content) {
+    if (!card || card.querySelector('[data-create-pdf]')) return null;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ghost';
+    button.dataset.createPdf = 'true';
+    button.textContent = 'Create PDF';
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      button.textContent = 'Creating PDF…';
+      try {
+        const created = await createPdfOutput(request, content, card);
+        button.textContent = 'Create another PDF';
+        status.textContent = `${created.record.fileName} created · ${created.pageCount} page(s) · saved in Outputs.`;
+      } catch (error) {
+        button.textContent = 'Retry PDF';
+        status.textContent = `The answer is ready, but PDF creation failed: ${error.message}`;
+      } finally {
+        button.disabled = false;
+      }
+    });
+    card.append(button);
+    return button;
+  }
+
+  function requestNeedsPdf(request) {
+    return creationMode === 'document' || /\bpdf\b/i.test(String(request || ''));
   }
 
   async function renderOutputLibrary() {
@@ -1284,6 +1354,7 @@
       ? 'Seldrune AI · source draft · not committed or tested'
       : 'Seldrune AI · text package · media not rendered';
     const card = addMessage(label, draftText);
+    addPdfExportButton(card, request, draftText);
     const record = await saveTextArtifact(
       request,
       draftText,
@@ -1699,7 +1770,15 @@
         status.textContent = `${fileName} is created and saved; chat history could not refresh: ${error.message}`;
       }
     } catch (error) {
-      addMessage('Seldrune AI', `No downloadable file was returned. ${error.message}`);
+      const errorCard = addMessage('Seldrune AI', `No downloadable file was returned. ${error.message}`);
+      if (/connect openai|saved openai|openai.*connection|configure.*openai_api_key/i.test(error.message)) {
+        const connections = document.createElement('button');
+        connections.type = 'button';
+        connections.className = 'ghost';
+        connections.dataset.openPortal = 'connections';
+        connections.textContent = 'Open Connections';
+        errorCard.append(connections);
+      }
       status.textContent = `No downloadable file was returned. ${error.message}`;
     } finally {
       setBusy(false);
@@ -1772,6 +1851,7 @@
       if (result.conversation_id) activeConversationId = result.conversation_id;
       const responseText = result.response || '(No text returned)';
       const responseCard = addMessage('Seldrune AI', responseText);
+      const pdfExportButton = addPdfExportButton(responseCard, request, responseText);
       await refreshConversations();
       let savedOutput = null;
       if (shouldSaveTextOutput(request)) {
@@ -1796,6 +1876,15 @@
         ? ' · text package only; no media render'
         : '';
       status.textContent = `${result.provider || 'openai'} · ${result.model || 'model'} (${result.cost_tier || 'auto'}) · ${result.latency_ms || 0} ms · ${result.input_tokens || 0} input · ${result.output_tokens || 0} output${cached ? ` · ${cached} cached` : ''}${chatCost}${outputNote}${textOnlyNote}`;
+      if (requestNeedsPdf(request)) {
+        try {
+          const created = await createPdfOutput(request, responseText, responseCard);
+          if (pdfExportButton) pdfExportButton.textContent = 'Create another PDF';
+          status.textContent = `${created.record.fileName} created · ${created.pageCount} page(s) · saved in Outputs.`;
+        } catch (error) {
+          status.textContent = `Answer received; PDF creation failed: ${error.message}`;
+        }
+      }
     } catch (error) {
       addMessage('System', `Seldrune AI request failed: ${error.message}`);
       status.textContent = 'Request failed.';
@@ -1842,7 +1931,7 @@
     const message = input.value.trim();
     if (!message) return;
 
-    const mediaModeUsed = ['image', 'speech', 'song', 'video', 'visual'].includes(creationMode);
+    const mediaModeUsed = ['image', 'speech', 'song', 'video', 'visual', 'document'].includes(creationMode);
     try {
       const pdfAttachments = attachments.filter(
         item => item.media_type === 'application/pdf',
