@@ -1,13 +1,13 @@
 (() => {
   const PREFS = {
     background: "seldrune.appearance.background",
-    shade: "seldrune.appearance.shade.v2",
+    shade: "seldrune.appearance.shade.v3",
     font: "seldrune.appearance.font",
   };
   const DB_NAME = "seldrune-appearance";
   const DB_STORE = "images";
   const DB_KEY = "custom-background";
-  const DEFAULTS = {background: "celestial", shade: 0, font: "modern"};
+  const DEFAULTS = {background: "celestial", shade: 20, font: "modern"};
   const root = document.documentElement;
   let customUrl = "";
   let customAvailable = false;
