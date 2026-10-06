@@ -16,6 +16,15 @@ def test_seldrune_gpt_media_requires_auth(client):
     assert response.status_code in {401, 403}
 
 
+def test_seldrune_gpt_pdf_create_requires_auth(client):
+    organization_id = "00000000-0000-0000-0000-000000000001"
+    response = client.post(
+        f"/api/v1/organizations/{organization_id}/gpt/pdf/create",
+        json={"title": "Sample report", "content": "A readable PDF."},
+    )
+    assert response.status_code in {401, 403}
+
+
 def test_gpt_response_schema_exposes_runtime_metadata():
     from backend.app.api.routes.seldrune_gpt import SeldruneGPTResponse
 
