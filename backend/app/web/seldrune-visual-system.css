@@ -1,0 +1,631 @@
+/* Shared Seldrune visual system: high contrast, visible brand art, and touch-friendly layouts. */
+:root {
+  color-scheme: dark;
+  --sd-text: #fff8ec;
+  --sd-muted: #e1e8f4;
+  --sd-accent: #ffd166;
+  --sd-link: #6fe7ff;
+  --sd-positive: #9af5bc;
+  --sd-danger: #ff9bad;
+  --sd-line: rgb(149 188 224 / 52%);
+  --sd-surface: rgb(6 14 29 / 82%);
+  --sd-surface-raised: rgb(8 21 40 / 91%);
+  --sd-control: #11243a;
+  --sd-control-hover: #1b3653;
+  --sd-focus: #ffe08b;
+}
+
+html { min-height: 100%; background: #050b16; }
+body {
+  min-height: 100vh;
+  color: var(--sd-text) !important;
+  background-color: #050b16 !important;
+  background-image: none !important;
+  font-size: 16px;
+  line-height: 1.55;
+}
+body.seldrune-console-page,
+body:not(.seldrune-console-page) {
+  position: relative;
+  isolation: isolate;
+}
+body.seldrune-console-page::before,
+body:not(.seldrune-console-page)::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  opacity: 1;
+  filter: saturate(1.22) contrast(1.12) brightness(.96);
+  background-image:
+    linear-gradient(180deg, rgb(3 8 18 / .25), rgb(3 8 18 / .38)),
+    linear-gradient(145deg, rgb(3 8 18 / var(--seldrune-background-shade, .20)), rgb(3 8 18 / var(--seldrune-background-shade, .20))),
+    var(--seldrune-background-art, url("/console-assets/seldrune-celestial-hero.png"));
+  background-position: center, center, center 42%;
+  background-size: cover, cover, cover;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+html[data-seldrune-background="aurora"] body {
+  --seldrune-background-art:
+    radial-gradient(ellipse at 18% 20%, rgb(35 205 181 / 52%), transparent 38%),
+    radial-gradient(ellipse at 78% 28%, rgb(92 106 244 / 50%), transparent 42%),
+    linear-gradient(145deg, #061b2b 0%, #0b3a49 48%, #11112e 100%);
+}
+html[data-seldrune-background="nebula"] body {
+  --seldrune-background-art:
+    radial-gradient(ellipse at 25% 30%, rgb(183 73 246 / 56%), transparent 40%),
+    radial-gradient(ellipse at 78% 22%, rgb(42 123 235 / 47%), transparent 38%),
+    radial-gradient(ellipse at 55% 90%, rgb(233 70 143 / 30%), transparent 44%),
+    linear-gradient(145deg, #08091e 0%, #15143c 52%, #080a20 100%);
+}
+html[data-seldrune-background="ocean"] body {
+  --seldrune-background-art:
+    radial-gradient(ellipse at 20% 18%, rgb(31 171 219 / 45%), transparent 40%),
+    radial-gradient(ellipse at 78% 66%, rgb(23 113 148 / 50%), transparent 45%),
+    linear-gradient(145deg, #061725 0%, #073b54 48%, #071426 100%);
+}
+html[data-seldrune-background="eclipse"] body {
+  --seldrune-background-art:
+    radial-gradient(circle at 72% 24%, rgb(118 102 220 / 38%), transparent 26%),
+    radial-gradient(ellipse at 18% 85%, rgb(31 92 137 / 36%), transparent 42%),
+    linear-gradient(145deg, #090d1b 0%, #1b2037 54%, #080d19 100%);
+}
+html[data-seldrune-background="custom"] body {
+  --seldrune-background-art: var(--seldrune-custom-art, url("/console-assets/seldrune-celestial-hero.png"));
+}
+html[data-seldrune-font="humanist"] body {
+  font-family: "Avenir Next", "Trebuchet MS", "Segoe UI", sans-serif !important;
+}
+html[data-seldrune-font="editorial"] body {
+  font-family: "Aptos", "Segoe UI", system-ui, sans-serif !important;
+}
+
+body.seldrune-console-page .login-shell {
+  background: transparent !important;
+}
+body.seldrune-console-page.owner-portal #console-view,
+body.seldrune-console-page.owner-portal #console-view > main,
+body.seldrune-console-page.owner-portal #owner-portal-root,
+body.seldrune-console-page.owner-portal .owner-portal-root,
+body.seldrune-console-page.owner-portal .owner-portal-panel {
+  background: transparent !important;
+  background-image: none !important;
+}
+
+body :is(h1, h2, h3, h4, h5, h6, strong, b, legend) {
+  color: var(--sd-text) !important;
+  opacity: 1 !important;
+}
+body :is(p, li, small, label, summary, output, td, th, dt, dd, .muted, .policy-status, .footer-note, .product-mark, .owner, .empty) {
+  color: var(--sd-muted) !important;
+  opacity: 1 !important;
+}
+body :is(p, li) { line-height: 1.6; }
+body small { font-size: 13px !important; line-height: 1.5; }
+body label { font-size: 14px; }
+body :is(.eyebrow, .cosmic-page-heading > div > p, .owner-home-intro > span, .tag, .seldrune-background-option-copy small) {
+  color: var(--sd-accent) !important;
+  font-size: 12px !important;
+  opacity: 1 !important;
+}
+body a {
+  color: var(--sd-link) !important;
+  text-decoration-color: rgb(111 231 255 / 58%);
+  text-underline-offset: 3px;
+}
+body :is(.brand, .mail-brand, .cosmic-brand, .owner-portal-brand) {
+  color: var(--sd-text) !important;
+  text-decoration: none !important;
+}
+body :is(.mark, .brand-mark) { color: #152033 !important; }
+body :is(.cosmic-tab-icon, .portal-quick-icon, .seldrune-background-check) { color: var(--sd-accent) !important; }
+body :is(.live, .sense-go, .integration-state.is-ready, .system-sense-health[data-state="healthy"], [data-state="healthy"]) {
+  color: var(--sd-positive) !important;
+}
+body :is(.risk, .danger, .error, .integration-state.is-partial, .integration-state.is-missing, [data-state="attention"]) {
+  color: var(--sd-danger) !important;
+}
+body :is(.pill, .posture, .specs span) {
+  color: var(--sd-text) !important;
+  background: rgb(20 35 56 / 94%) !important;
+  border-color: var(--sd-line) !important;
+}
+body :is(.panel, .card, .item, .monitor-card, .summary article, .monitor-summary article, .metrics article, .metric, .command-card, .agent-scorecard, .portal-quick-card, .integration-center, .integration-card, .tool-console-card, .mail-auth-panel, .mail-auth-warning, .mail-message-list, .mail-sidebar, .mail-main, .policy-preview, .sense-metric, .sense-provider-panel, .sense-owner-memory, .seldrune-background-option, .seldrune-appearance-control, .cosmic-runtime-pill, .cosmic-footer, dialog, #toast) {
+  color: var(--sd-text) !important;
+  background: var(--sd-surface) !important;
+  border-color: var(--sd-line) !important;
+  box-shadow: 0 14px 38px rgb(0 0 0 / 30%);
+  backdrop-filter: blur(12px) saturate(1.05);
+  -webkit-backdrop-filter: blur(12px) saturate(1.05);
+}
+body :is(.panel, .card, .login-card, .tool-console-card, .mail-auth-panel, .mail-auth-warning) :is(article, .card, .item, .gpt-tool-panel, .gpt-welcome, .gpt-tool-card, .gpt-provider-card, .tool-stack, .integration-card) {
+  color: var(--sd-text) !important;
+  background: var(--sd-surface-raised) !important;
+  border-color: var(--sd-line) !important;
+}
+body :is(.panel, .card, .item, .monitor-card, .command-card, .integration-card) :is(p, li, small, label, summary, td, th, dt, dd) {
+  color: var(--sd-muted) !important;
+  opacity: 1 !important;
+}
+body :is(input, select, textarea) {
+  min-height: 46px;
+  padding: 10px 12px;
+  color: var(--sd-text) !important;
+  caret-color: var(--sd-text);
+  background: rgb(5 14 27 / 96%) !important;
+  border: 1px solid var(--sd-line) !important;
+  border-radius: 10px;
+  font-size: 16px !important;
+  line-height: 1.45;
+}
+body select option { color: var(--sd-text); background: #081729; }
+body :is(input, select, textarea)::placeholder {
+  color: #c2cedd !important;
+  opacity: 1 !important;
+}
+body :is(button, .button, input[type="button"], input[type="submit"]) {
+  min-height: 48px;
+  padding: 11px 15px;
+  color: var(--sd-text) !important;
+  background: var(--sd-control) !important;
+  border: 1px solid var(--sd-line) !important;
+  border-radius: 11px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  touch-action: manipulation;
+}
+body button:not(.ghost):not(.link):not(.cosmic-tab):not(.portal-quick-card):not(.seldrune-background-option):not(.gpt-tool-button):not(.gpt-sidebar-link):not([data-gpt-view]),
+body :is(input[type="button"], input[type="submit"]) {
+  color: #152033 !important;
+  border-color: #ffe08b !important;
+  background: linear-gradient(135deg, #ffe08b, #f5b942) !important;
+}
+body :is(button, .button):hover { background-color: var(--sd-control-hover) !important; }
+body button:not(.ghost):not(.link):not(.cosmic-tab):not(.portal-quick-card):not(.seldrune-background-option):not(.gpt-tool-button):not(.gpt-sidebar-link):not([data-gpt-view]):hover {
+  color: #152033 !important;
+  border-color: #fff0bd !important;
+  background: linear-gradient(135deg, #fff0bd, #ffcb58) !important;
+}
+body :is(.portal-quick-card, .seldrune-background-option, .gpt-tool-button, .gpt-sidebar-link, .gpt-workspace-nav button, .ghost, button.link) {
+  color: var(--sd-text) !important;
+  background: var(--sd-control) !important;
+  border-color: var(--sd-line) !important;
+}
+body :is(.portal-quick-card, .seldrune-background-option, .gpt-tool-button, .gpt-sidebar-link, .gpt-workspace-nav button, .ghost, button.link):hover {
+  color: #ffffff !important;
+  background: var(--sd-control-hover) !important;
+  border-color: var(--sd-focus) !important;
+}
+body :is(.cosmic-tab, .owner-portal-tab) {
+  min-height: 48px;
+  color: var(--sd-muted) !important;
+  border-color: rgb(149 188 224 / 28%) !important;
+}
+body :is(.cosmic-tab[aria-selected="true"], .owner-portal-tab[aria-selected="true"]) {
+  color: #192236 !important;
+  background: linear-gradient(135deg, #ffe08b, #f5b942) !important;
+  border-color: var(--sd-focus) !important;
+  box-shadow: inset 0 -3px #fff1bd, 0 0 20px rgb(255 209 102 / 22%);
+}
+body :is(.gpt-sidebar, .gpt-topbar, .gpt-status-bar, .cosmic-command-bar, .mail-header, .topbar, nav, .mail-nav, .mail-rail) {
+  color: var(--sd-text) !important;
+  background: rgb(5 12 25 / 93%) !important;
+  border-color: var(--sd-line) !important;
+}
+body :is(.gpt-sidebar, .gpt-topbar, .gpt-status-bar, .cosmic-command-bar, .mail-header, .topbar, nav, .mail-nav, .mail-rail) :is(a, button, p, small, span, strong, label) {
+  opacity: 1 !important;
+}
+body .gpt-thread .command-card[data-role="assistant"],
+body .gpt-thread .command-card[data-role="user"] {
+  color: var(--sd-text) !important;
+  background: rgb(7 20 37 / 96%) !important;
+  border-color: var(--sd-line) !important;
+}
+body .gpt-thread .command-card :is(p, li, td, th, blockquote, span, small, em, strong, b, h1, h2, h3, h4) {
+  color: var(--sd-text) !important;
+  opacity: 1 !important;
+}
+body .seldrune-appearance-heading :is(h2, p),
+body .seldrune-appearance-help,
+body .seldrune-appearance-status,
+body .seldrune-background-option-copy :is(strong, small),
+body .seldrune-appearance-control :is(span, strong, small, output) {
+  color: var(--sd-text) !important;
+  opacity: 1 !important;
+}
+body :is(.gpt-welcome-copy, .gpt-tools-note, .gpt-history-empty, .gpt-sidebar-label, .gpt-provider-label, .owner-home-status, .cosmic-page-heading small, .cosmic-runtime-pill small, .footer-note, .mail-message-row small, .mail-message-row time) {
+  color: var(--sd-muted) !important;
+  opacity: 1 !important;
+}
+body :is(pre, code, .tool-schema) {
+  color: var(--sd-text) !important;
+  background: rgb(4 12 24 / 96%) !important;
+  border-color: var(--sd-line) !important;
+  overflow-wrap: anywhere;
+}
+body :is(button, a, input, select, textarea, summary):focus-visible {
+  outline: 3px solid var(--sd-focus) !important;
+  outline-offset: 3px !important;
+}
+body :is(button, a, input, select, textarea, summary):disabled {
+  opacity: .72;
+  cursor: not-allowed;
+}
+body :is(.owner-portal-home, .owner-portal-grid, .cosmic-panel-grid, .gpt-workspace, .gpt-main, .gpt-thread, .mail-layout, .shell, main, section, article) {
+  min-width: 0;
+}
+body :is(.panel, .card, .item, .command-card, .integration-card, .tool-console-card, .sense-provider-item) {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1100px) {
+  body.seldrune-console-page.owner-portal .cosmic-command-bar {
+    grid-template-columns: minmax(140px, .65fr) minmax(0, 1.7fr);
+  }
+  body.seldrune-console-page.owner-portal .owner-portal-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    padding: 4px 0 8px;
+  }
+  body.seldrune-console-page.owner-portal .owner-portal-tabs {
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: x proximity;
+  }
+}
+@media (max-width: 760px) {
+  body { font-size: 16px; }
+  body :is(.cosmic-command-bar, .mail-header, .topbar) {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+  body.seldrune-console-page.owner-portal .cosmic-command-bar {
+    grid-template-columns: minmax(0, 1fr);
+    margin: 0 -10px 12px;
+    padding: 8px 10px 0;
+  }
+  body.seldrune-console-page.owner-portal .cosmic-brand { justify-content: center; }
+  body.seldrune-console-page.owner-portal .owner-portal-tabs {
+    grid-row: 2;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  body.seldrune-console-page.owner-portal .owner-portal-tab {
+    flex: 0 0 auto;
+    min-width: 76px;
+    min-height: 50px;
+    padding: 8px 10px;
+    scroll-snap-align: start;
+  }
+  body.seldrune-console-page.owner-portal .cosmic-tab-label {
+    font-size: 12px !important;
+    line-height: 1.25;
+    white-space: nowrap;
+  }
+  body.seldrune-console-page.owner-portal .owner-portal-more-tabs summary {
+    min-height: 48px;
+    display: grid;
+    align-items: center;
+  }
+  body.seldrune-console-page.owner-portal .owner-portal-more-menu {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(145px, 100%), 1fr));
+    gap: 8px;
+  }
+  body.seldrune-console-page.owner-portal .owner-portal-actions {
+    grid-column: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+    justify-content: stretch;
+  }
+  body.seldrune-console-page.owner-portal .owner-portal-grid,
+  body.seldrune-console-page.owner-portal .cosmic-panel-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px;
+  }
+  body.seldrune-console-page.owner-portal .owner-portal-grid > *,
+  body.seldrune-console-page.owner-portal .cosmic-panel-grid > * {
+    grid-column: 1 / -1 !important;
+    width: 100%;
+    max-width: 100%;
+  }
+  body.seldrune-console-page.owner-portal .owner-home-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  body.seldrune-console-page.owner-portal .portal-quick-card {
+    min-height: 68px;
+    padding: 12px;
+    text-align: left;
+  }
+  body.seldrune-console-page.owner-portal .cosmic-page-heading {
+    display: block;
+    padding: 0 4px;
+  }
+  body.seldrune-console-page.owner-portal .cosmic-page-heading small {
+    display: block;
+    margin-top: 8px;
+    text-align: left;
+  }
+  body :is(.form-grid, .tool-form, .integration-form, .board, .tool-control-grid) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  body :is(.form-grid > *, .tool-form > *, .integration-form > *, .board > *, .tool-control-grid > *) {
+    grid-column: 1 / -1 !important;
+    min-width: 0;
+  }
+  body :is(.metrics, .summary, .monitor-summary, .sti-runtime-grid, .mission-summary-grid, .liveshift-grid) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  body :is(.actions, .brief-actions, .audit-tools, .integration-card-actions, .integration-form-actions) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  body :is(.actions, .brief-actions, .audit-tools, .integration-card-actions, .integration-form-actions) > :is(button, a, .button) {
+    flex: 1 1 150px;
+    min-height: 48px;
+  }
+  body :is(table, .table-wrap, .audit-list, .tool-stack, .list) { max-width: 100%; }
+  body table { display: block; overflow-x: auto; }
+  body :is(.gpt-thread, .gpt-page-view, .gpt-workspace) { min-width: 0; }
+  body .gpt-dropzone textarea { font-size: 16px !important; }
+  body .gpt-composer-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+  body :is(.section-head, .incident-heading, .action-inbox-heading, .mail-toolbar, .mail-layout) {
+    flex-wrap: wrap;
+  }
+  body :is(.panel, .card, .item, .monitor-card, .login-card) {
+    padding: clamp(14px, 4vw, 22px);
+  }
+  body :is(.cosmic-footer, .footer-note) { font-size: 13px !important; line-height: 1.6; }
+}
+@media (max-width: 440px) {
+  body.seldrune-console-page.owner-portal .owner-home-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  body.seldrune-console-page.owner-portal .owner-portal-tab {
+    min-width: 70px;
+    padding-inline: 8px;
+  }
+  body :is(.metrics, .summary, .monitor-summary, .mission-summary-grid, .liveshift-grid) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  body :is(.owner-portal-actions, .gpt-top-actions) > * { min-width: 0; }
+  body :is(.login-card, .shell) { padding-inline: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body::before, body :is(.panel, .card, .cosmic-tab) { scroll-behavior: auto; animation: none !important; }
+  body :is(button, .button, .card) { transition: none !important; }
+}
+
+
+/* Specificity layer: replaces older light-card rules on the owner portal and GPT workspace. */
+body.seldrune-console-page.owner-portal #owner-portal-root :is(.panel, .metrics article, .command-card, .runtime-status, .agent-scorecard, .portal-quick-card, .gpt-thread .command-card, .incident-center, .treasury, .agent-observatory) {
+  color: var(--sd-text) !important;
+  background: var(--sd-surface) !important;
+  border-color: var(--sd-line) !important;
+  box-shadow: 0 14px 38px rgb(0 0 0 / 30%) !important;
+}
+body.seldrune-console-page.owner-portal #owner-portal-root .panel :is(article, .gpt-tool-panel, .gpt-welcome, .gpt-tool-card, .gpt-provider-card, .tool-console-card) {
+  color: var(--sd-text) !important;
+  background: var(--sd-surface-raised) !important;
+  border-color: var(--sd-line) !important;
+}
+body.seldrune-console-page.owner-portal #owner-portal-root :is(h1, h2, h3, h4, h5, h6, strong, b) {
+  color: var(--sd-text) !important;
+  opacity: 1 !important;
+}
+body.seldrune-console-page.owner-portal #owner-portal-root :is(p, li, small, label, summary, output, span, td, th, dt, dd, .muted, .policy-status, .empty) {
+  color: var(--sd-muted) !important;
+  opacity: 1 !important;
+}
+body.seldrune-console-page.owner-portal #owner-portal-root :is(button, .button, .portal-quick-card) {
+  color: var(--sd-text) !important;
+  border-color: var(--sd-line) !important;
+}
+body.seldrune-console-page.owner-portal #owner-portal-root :is(button, .button, .portal-quick-card) :is(span, strong, b, small) {
+  color: inherit !important;
+  opacity: 1 !important;
+}
+body.seldrune-console-page.owner-portal #owner-portal-root :is(a, .gpt-thread a) {
+  color: var(--sd-link) !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+body.seldrune-console-page.owner-portal #owner-portal-root :is(.live, .sense-go, .integration-state.is-ready, .system-sense-health[data-state="healthy"], [data-state="healthy"]) {
+  color: var(--sd-positive) !important;
+}
+body.seldrune-console-page.owner-portal #owner-portal-root :is(.risk, .danger, .error, .integration-state.is-partial, .integration-state.is-missing, [data-state="attention"]) {
+  color: var(--sd-danger) !important;
+}
+body.seldrune-console-page.owner-portal #owner-portal-root .seldrune-appearance-control :is(input, select) {
+  color: var(--sd-text) !important;
+  background: rgb(5 14 27 / 96%) !important;
+}
+body.seldrune-console-page.owner-portal .cosmic-command-bar,
+body.seldrune-console-page.owner-portal .cosmic-command-bar :is(strong, small, button, summary) {
+  color: var(--sd-text) !important;
+}
+body.seldrune-console-page.owner-portal .cosmic-command-bar .owner-portal-tab {
+  min-height: 48px;
+  color: var(--sd-muted) !important;
+}
+body.seldrune-console-page.owner-portal .cosmic-command-bar .owner-portal-tab[aria-selected="true"] {
+  color: #192236 !important;
+  background: linear-gradient(135deg, #ffe08b, #f5b942) !important;
+  border-color: var(--sd-focus) !important;
+}
+
+#seldrune-gpt :is(.gpt-sidebar, .gpt-topbar, .gpt-status-bar) {
+  color: var(--sd-text) !important;
+  background: rgb(5 12 25 / 95%) !important;
+  border-color: var(--sd-line) !important;
+  opacity: 1 !important;
+}
+#seldrune-gpt .gpt-sidebar :is(button, a, label, small, input),
+#seldrune-gpt :is(.gpt-sidebar-label, .gpt-history-open, .gpt-history-empty, .gpt-creation-status, .gpt-sidebar-bottom, .gpt-sidebar-brand strong, .gpt-sidebar-brand small),
+#seldrune-gpt .gpt-topbar :is(h1, p, span, strong, button),
+#seldrune-gpt .gpt-status-bar :is(span, small) {
+  color: var(--sd-muted) !important;
+  opacity: 1 !important;
+}
+#seldrune-gpt .gpt-sidebar-brand strong,
+#seldrune-gpt .gpt-workspace-nav button.active,
+#seldrune-gpt .gpt-history-open[aria-current="page"] {
+  color: var(--sd-text) !important;
+}
+#seldrune-gpt .gpt-sidebar :is(button, a),
+#seldrune-gpt .gpt-topbar :is(button, .gpt-top-tool-button) {
+  min-height: 48px;
+  color: var(--sd-text) !important;
+  background: var(--sd-control) !important;
+  border-color: var(--sd-line) !important;
+}
+#seldrune-gpt .gpt-sidebar .gpt-workspace-nav button.active,
+#seldrune-gpt .gpt-sidebar .gpt-history-open[aria-current="page"] {
+  color: #192236 !important;
+  background: linear-gradient(135deg, #ffe08b, #f5b942) !important;
+  border-color: var(--sd-focus) !important;
+}
+#seldrune-gpt .gpt-thread .command-card {
+  color: var(--sd-text) !important;
+  background: rgb(7 20 37 / 96%) !important;
+  border: 1px solid var(--sd-line) !important;
+  box-shadow: 0 10px 32px rgb(0 0 0 / 28%) !important;
+}
+#seldrune-gpt .gpt-thread .command-card[data-role="assistant"] {
+  color: var(--sd-text) !important;
+  background: rgb(7 20 37 / 96%) !important;
+  border-color: var(--sd-line) !important;
+}
+#seldrune-gpt .gpt-thread .command-card[data-role="assistant"] :is(p, li, td, th, blockquote, span, small, em) {
+  color: var(--sd-muted) !important;
+  font-size: 16px !important;
+  line-height: 1.68 !important;
+  opacity: 1 !important;
+}
+#seldrune-gpt .gpt-thread .command-card[data-role="assistant"] :is(strong, b, h1, h2, h3, h4) {
+  color: var(--sd-text) !important;
+}
+#seldrune-gpt .gpt-thread .command-card[data-role="assistant"] a {
+  color: var(--sd-link) !important;
+}
+#seldrune-gpt .gpt-thread .command-card[data-role="user"] {
+  color: var(--sd-text) !important;
+  background: linear-gradient(135deg, #12354b, #0d3c3c) !important;
+  border-color: #68c9c4 !important;
+}
+#seldrune-gpt .gpt-thread .command-card[data-role="user"] :is(p, li, td, th, blockquote, span, small, em, strong, b) {
+  color: var(--sd-text) !important;
+  font-size: 16px !important;
+  line-height: 1.6 !important;
+  opacity: 1 !important;
+}
+#seldrune-gpt .gpt-thread .command-card[data-role="user"] a {
+  color: var(--sd-link) !important;
+}
+#seldrune-gpt .gpt-topbar :is(h1, p, span, strong, button),
+#seldrune-gpt .gpt-status-bar :is(span, small),
+#seldrune-gpt .gpt-composer-tools :is(span, label),
+#seldrune-gpt :is(.gpt-provider-control, .gpt-provider-control span, .gpt-mode-pill, .gpt-tools-note, .gpt-page-heading, .gpt-page-heading :is(h2, p, small)) {
+  color: var(--sd-muted) !important;
+  opacity: 1 !important;
+}
+#seldrune-gpt .gpt-dropzone {
+  color: var(--sd-text) !important;
+  background: rgb(6 15 30 / 96%) !important;
+  border: 1px solid var(--sd-line) !important;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 28%) !important;
+}
+#seldrune-gpt .gpt-dropzone textarea {
+  min-height: 96px;
+  color: var(--sd-text) !important;
+  caret-color: var(--sd-text) !important;
+  background: transparent !important;
+}
+#seldrune-gpt .gpt-dropzone textarea::placeholder,
+#seldrune-gpt .gpt-history-search input::placeholder {
+  color: #c2cedd !important;
+  opacity: 1 !important;
+}
+#seldrune-gpt .gpt-dropzone :is(button, select, input) {
+  min-height: 48px;
+  color: var(--sd-text) !important;
+  background: var(--sd-control) !important;
+  border-color: var(--sd-line) !important;
+}
+#seldrune-gpt .gpt-dropzone .gpt-composer-actions button {
+  color: #152033 !important;
+  background: linear-gradient(135deg, #ffe08b, #f5b942) !important;
+  border-color: var(--sd-focus) !important;
+}
+#seldrune-gpt .gpt-welcome,
+#seldrune-gpt .gpt-tool-panel,
+#seldrune-gpt .gpt-provider-card,
+#seldrune-gpt .gpt-tool-card {
+  color: var(--sd-text) !important;
+  background: var(--sd-surface-raised) !important;
+  border: 1px solid var(--sd-line) !important;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 26%) !important;
+}
+#seldrune-gpt .gpt-welcome :is(h2, p, strong, small),
+#seldrune-gpt .gpt-tool-panel :is(p, h2, h3, small, strong),
+#seldrune-gpt .gpt-provider-card :is(small, strong),
+#seldrune-gpt .gpt-tool-card :is(small, strong),
+#seldrune-gpt .gpt-suggestions button :is(strong, small, span) {
+  color: var(--sd-muted) !important;
+  opacity: 1 !important;
+}
+#seldrune-gpt .gpt-welcome :is(h2, strong),
+#seldrune-gpt .gpt-tool-panel :is(h2, h3, strong),
+#seldrune-gpt .gpt-provider-card strong,
+#seldrune-gpt .gpt-tool-card strong {
+  color: var(--sd-text) !important;
+}
+#seldrune-gpt .gpt-suggestions button {
+  min-height: 64px;
+  color: var(--sd-text) !important;
+  background: var(--sd-control) !important;
+  border-color: var(--sd-line) !important;
+}
+#seldrune-gpt .gpt-suggestions button strong { color: var(--sd-text) !important; }
+#seldrune-gpt .gpt-suggestions button small { color: var(--sd-muted) !important; }
+#seldrune-gpt .gpt-unreal-tool-card button { min-height: 48px; }
+
+body :is(.top-link, .mail-nav a, .actions a, .contact-option, .brand) {
+  min-height: 44px;
+}
+body :is(.topbar, .mail-header) a {
+  display: inline-flex;
+  align-items: center;
+}
+@media (max-width: 760px) {
+  body :is(.topbar, .mail-header) {
+    height: auto !important;
+    min-height: 56px;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-block: 8px;
+  }
+  #seldrune-gpt .gpt-topbar :is(button, .gpt-top-tool-button) { min-height: 48px; }
+  #seldrune-gpt .gpt-thread .command-card { width: min(100%, 900px); }
+  #seldrune-gpt .gpt-composer-tools { align-items: stretch; }
+}
+@media (max-width: 440px) {
+  #seldrune-gpt .gpt-top-actions {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
