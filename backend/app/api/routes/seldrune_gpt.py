@@ -76,6 +76,7 @@ from backend.app.services.pdf_editor import (
     render_pdf_pages_for_model,
     validate_pdf_edit_plan,
 )
+from backend.app.services.pdf_creator import PDFCreationError, create_text_pdf
 from backend.app.services.seldrune_pdf_brain import (
     training_summary as pdf_brain_training_summary,
     try_local_pdf_edit,
@@ -338,6 +339,20 @@ class SeldruneGPTPDFEditRequest(BaseModel):
     conversation_id: UUID | None = None
     pdf: SeldruneGPTAttachment
     password: str | None = Field(default=None, max_length=256)
+
+
+class SeldruneGPTPDFCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=180)
+    content: str = Field(min_length=1, max_length=100_000)
+    conversation_id: UUID | None = None
+
+
+class SeldruneGPTPDFCreateResponse(BaseModel):
+    conversation_id: UUID
+    filename: str
+    mime_type: Literal["application/pdf"] = "application/pdf"
+    data_base64: str
+    page_count: int
 
 
 class SeldruneGPTPDFEditResponse(BaseModel):
@@ -871,6 +886,57 @@ def seldrune_gpt(
         cost_tier=route.tier,
         latency_ms=int(_latency_ms),
         provider=result.provider.value,
+    )
+
+
+@router.post(
+    "/{organization_id}/gpt/pdf/create",
+    response_model=SeldruneGPTPDFCreateResponse,
+)
+def create_seldrune_gpt_pdf(
+    organization_id: UUID,
+    payload: SeldruneGPTPDFCreateRequest,
+    _membership: AgentsRunDep,
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> SeldruneGPTPDFCreateResponse:
+    conversation = _resolve_gpt_conversation(
+        session,
+        organization_id=organization_id,
+        user_id=current_user.id,
+        conversation_id=payload.conversation_id,
+        title_hint=payload.title,
+    )
+    try:
+        generated = create_text_pdf(payload.title, payload.content)
+    except PDFCreationError as exc:
+        session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    safe_stem = (
+        re.sub(r"[^A-Za-z0-9._-]+", "-", payload.title).strip("-._") or "document"
+    )
+    filename = f"{safe_stem[:64]}-{uuid4().hex[:8]}.pdf"
+    record_audit(
+        session,
+        organization_id=organization_id,
+        actor_user_id=current_user.id,
+        action="seldrune_gpt.pdf_created",
+        resource_type="document",
+        resource_id=filename,
+        details={
+            "output_filename": filename,
+            "page_count": generated.page_count,
+            "bytes": len(generated.data),
+            "renderer": "pymupdf_story",
+        },
+    )
+    session.commit()
+    return SeldruneGPTPDFCreateResponse(
+        conversation_id=conversation.id,
+        filename=filename,
+        data_base64=base64.b64encode(generated.data).decode("ascii"),
+        page_count=generated.page_count,
     )
 
 
