@@ -418,3 +418,183 @@ body.owner-portal .cosmic-page-heading small {
     transition: none;
   }
 }
+
+/* Keep the wallpaper visible while giving every page a readable dark surface. */
+:root {
+  --seldrune-background-shade: .20;
+  --seldrune-surface: rgb(7 17 31 / 94%);
+  --seldrune-surface-raised: rgb(12 29 49 / 96%);
+  --seldrune-text: #f4f8ff;
+  --seldrune-text-muted: #d0deef;
+  --seldrune-accent: #74ead6;
+}
+
+body.owner-portal::before {
+  filter: saturate(1.12) contrast(1.12) brightness(.88);
+}
+
+body.owner-portal,
+body.owner-portal #console-view > main {
+  color: var(--seldrune-text) !important;
+}
+
+body.owner-portal #console-view > main :is(h1, h2, h3, h4, p, small, label, summary) {
+  color: var(--seldrune-text) !important;
+}
+
+body.owner-portal .panel,
+body.owner-portal .metrics article,
+body.owner-portal .command-card,
+body.owner-portal .runtime-status,
+body.owner-portal .agent-scorecard,
+body.owner-portal .portal-quick-card,
+body.owner-portal .gpt-thread .command-card {
+  color: var(--seldrune-text) !important;
+  border: 1px solid rgb(93 136 171 / 72%) !important;
+  background: var(--seldrune-surface) !important;
+  box-shadow: 0 14px 36px rgb(0 0 0 / 28%) !important;
+  backdrop-filter: blur(8px) saturate(1.08);
+  -webkit-backdrop-filter: blur(8px) saturate(1.08);
+}
+
+body.owner-portal .panel :is(article, .gpt-tool-panel, .gpt-welcome, .gpt-tool-card, .gpt-provider-card),
+body.owner-portal .metrics article {
+  color: var(--seldrune-text) !important;
+  border-color: rgb(93 136 171 / 60%) !important;
+  background-color: var(--seldrune-surface-raised) !important;
+}
+
+body.owner-portal .panel :is(h1, h2, h3, h4, strong, b),
+body.owner-portal .metrics article :is(label, strong),
+body.owner-portal .command-card :is(strong, b) {
+  color: #ffffff !important;
+}
+
+body.owner-portal .panel :is(p, li, small, label, span, td, th, dt, dd, summary),
+body.owner-portal .metrics article :is(label, small),
+body.owner-portal .command-card :is(p, small, span) {
+  color: var(--seldrune-text-muted) !important;
+}
+
+body.owner-portal .panel a,
+body.owner-portal .command-card a {
+  color: var(--seldrune-accent) !important;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+body.owner-portal .panel :is(input, textarea, select),
+body.owner-portal .gpt-dropzone :is(input, textarea, select) {
+  color: #f4f8ff !important;
+  border-color: #47627f !important;
+  background-color: #091728 !important;
+}
+
+body.owner-portal .panel :is(input, textarea, select)::placeholder,
+body.owner-portal .gpt-dropzone textarea::placeholder {
+  color: #c1d0e1 !important;
+  opacity: 1 !important;
+}
+
+body.owner-portal .panel button:not(.link),
+body.owner-portal .command-card button {
+  color: #ffffff !important;
+  border-color: #397f8a !important;
+  background-color: #12354b !important;
+}
+
+body.owner-portal .panel button:not(.link):hover,
+body.owner-portal .command-card button:hover {
+  border-color: #73ead6 !important;
+  background-color: #18536a !important;
+}
+
+body.owner-portal .gpt-sidebar,
+body.owner-portal .gpt-topbar,
+body.owner-portal .gpt-status-bar {
+  color: var(--seldrune-text) !important;
+  border-color: #35536f !important;
+  background: #071321 !important;
+}
+
+body.owner-portal .gpt-sidebar :is(button, a, label, small, input, strong, span),
+body.owner-portal .gpt-topbar :is(h1, p, span, strong, button),
+body.owner-portal .gpt-status-bar :is(span, small) {
+  color: var(--seldrune-text) !important;
+}
+
+body.owner-portal .gpt-sidebar :is(button, a),
+body.owner-portal .gpt-topbar :is(button, .gpt-top-tool-button) {
+  border-color: #35536f !important;
+  background: #10243a !important;
+}
+
+body.owner-portal .gpt-sidebar .active,
+body.owner-portal .gpt-sidebar [aria-current="page"],
+body.owner-portal .gpt-dropzone .gpt-composer-actions button {
+  color: #ffffff !important;
+  border-color: #25a99e !important;
+  background: linear-gradient(135deg, #11677a, #127b76) !important;
+}
+
+body.owner-portal .gpt-thread .command-card[data-role="assistant"] {
+  color: #f4f8ff !important;
+  border-color: #41607b !important;
+  background: rgb(9 24 41 / 97%) !important;
+}
+
+body.owner-portal .gpt-thread .command-card[data-role="assistant"] :is(p, li, td, th, blockquote, span, small, em, strong, b, h1, h2, h3, h4) {
+  color: #f0f5fc !important;
+  opacity: 1 !important;
+}
+
+body.owner-portal .gpt-thread .command-card[data-role="user"] {
+  color: #ffffff !important;
+  border-color: #258a8b !important;
+  background: linear-gradient(135deg, #155c78, #176a63) !important;
+}
+
+#seldrune-appearance-settings,
+#seldrune-appearance-settings .seldrune-appearance-heading h2,
+#seldrune-appearance-settings .seldrune-appearance-heading p,
+#seldrune-appearance-settings .seldrune-appearance-help,
+#seldrune-appearance-settings .seldrune-appearance-status {
+  color: var(--seldrune-text) !important;
+}
+
+#seldrune-appearance-settings .seldrune-background-option,
+#seldrune-appearance-settings .seldrune-appearance-control {
+  color: var(--seldrune-text) !important;
+  border-color: #46627f !important;
+  background: rgb(9 24 41 / 97%) !important;
+}
+
+#seldrune-appearance-settings .seldrune-background-option[aria-pressed="true"] {
+  border-color: #74ead6 !important;
+  box-shadow: 0 0 0 3px rgb(116 234 214 / 22%) !important;
+}
+
+#seldrune-appearance-settings .seldrune-background-check {
+  color: #74ead6 !important;
+}
+
+#seldrune-appearance-settings .seldrune-background-option-copy :is(strong, small),
+#seldrune-appearance-settings .seldrune-appearance-control :is(span, strong, small, output) {
+  color: var(--seldrune-text) !important;
+}
+
+#seldrune-appearance-settings .seldrune-appearance-control select {
+  color: #f4f8ff !important;
+  border-color: #47627f !important;
+  background: #091728 !important;
+}
+
+@media (max-width: 760px) {
+  body.owner-portal .panel,
+  body.owner-portal .metrics article,
+  body.owner-portal .command-card,
+  body.owner-portal .gpt-thread .command-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
