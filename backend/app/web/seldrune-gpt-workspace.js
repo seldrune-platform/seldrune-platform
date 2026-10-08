@@ -88,21 +88,29 @@
         mode: "image",
         title: "Image generation",
         ready: imageReady,
-        state: eventDetail && eventDetail.error ? "Status unavailable" : (imageReady ? "Ready" : "Connect OpenAI"),
-        detail: imageReady
-          ? "Create an image in chat" + (policy.image.model ? " · " + policy.image.model : "")
-          : "Connect OpenAI in Seldrune Connections to enable image creation.",
-        setup: !imageReady && !eventDetail?.error,
+        state: eventDetail && eventDetail.error ? "Status unavailable" : (!policy.image || policy.image.available !== true ? "Unavailable" : (imageReady ? "Ready" : "Connect OpenAI")),
+        detail: eventDetail && eventDetail.error
+          ? "Capability status could not be loaded. Refresh Seldrune and check Connections."
+          : (!policy.image || policy.image.available !== true
+            ? "Image generation is not enabled on this Seldrune server."
+            : (imageReady
+              ? "Create an image in chat" + (policy.image.model ? " · " + policy.image.model : "")
+              : "Connect OpenAI in Seldrune Connections to enable image creation.")),
+        setup: Boolean(policy.image && policy.image.available === true && !imageReady && !eventDetail?.error),
       },
       {
         mode: "speech",
         title: "Spoken audio",
         ready: speechReady,
-        state: eventDetail && eventDetail.error ? "Status unavailable" : (speechReady ? "Ready" : "Connect OpenAI"),
-        detail: speechReady
-          ? "Create narration in chat" + (policy.speech.model ? " · " + policy.speech.model : "")
-          : "Connect OpenAI in Seldrune Connections to enable narration.",
-        setup: !speechReady && !eventDetail?.error,
+        state: eventDetail && eventDetail.error ? "Status unavailable" : (!policy.speech || policy.speech.available !== true ? "Unavailable" : (speechReady ? "Ready" : "Connect OpenAI")),
+        detail: eventDetail && eventDetail.error
+          ? "Capability status could not be loaded. Refresh Seldrune and check Connections."
+          : (!policy.speech || policy.speech.available !== true
+            ? "Spoken audio is not enabled on this Seldrune server."
+            : (speechReady
+              ? "Create narration in chat" + (policy.speech.model ? " · " + policy.speech.model : "")
+              : "Connect OpenAI in Seldrune Connections to enable narration.")),
+        setup: Boolean(policy.speech && policy.speech.available === true && !speechReady && !eventDetail?.error),
       },
       {
         mode: "document",
