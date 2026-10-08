@@ -1,4 +1,4 @@
-# Seldrune Shared Capability and Continuity Seed v0.2
+# Seldrune Shared Capability and Continuity Seed v0.3
 
 ## Purpose
 
@@ -55,7 +55,6 @@ Run the same small task set before and after adding the seed, using the same pro
 
 Keep the seed only if it improves the measured result without increasing unsupported completion claims. Record the model, seed version, test identifiers, and evidence references. Use the repository's existing skill-promotion threshold and proof checks; do not label an unmeasured result as a trained capability.
 
-
 ## Shared owner continuity
 
 Seldrune GPT and assigned-agent requests can attach the authenticated actor's owner-continuity entry from sense:owner-continuity:{user_id}, scoped by organization and actor. Agent tasks receive only the note belonging to the actor who launched that task. The note is labeled as personalization context and cannot grant a tool, connection, or approval. Retrieved organizational knowledge remains task-matched and provenance-aware.
@@ -71,6 +70,11 @@ GPT-6 Luna is an API model, not a GPU. It accepts text and images, but not direc
 For difficult or unfamiliar tasks, agents compare first-principles, domain, implementation, and counterexample lenses, then compress the useful insights into one testable approach. For frontier physics or quantum ideas they distinguish established results, hypotheses, classical simulation, and actual quantum hardware. Claims such as a 1,000× advantage require a paired benchmark with defined tasks and evidence.
 
 Agents should inspect the connected providers and granted tools relevant to the job, execute only through authorized Seldrune routes, and verify outcomes. New account connections, external messages, spending, production deployments, and destructive operations follow the existing owner approval gates.
+
+## Expanded task skills
+
+The owner-supplied 40 capabilities are expanded into 200 task-sized routines in [the v1 operational skill matrix](intelligence-skill-matrix-v1.md). The runtime seed uses a compact task router and selects only relevant routines; it does not copy the full matrix into every request. The matrix defines repeatable methods, not guaranteed model performance, benchmark access, tool availability, or new permissions. Candidate routines must pass held-out evaluation and the repository's existing verification gates before promotion.
+
 ## What this changes
 
 The seed changes agent instructions for each runtime call. It does not modify model weights or create new knowledge from nothing. Its practical effect is to help existing agents reuse their latent abilities more consistently while Seldrune supplies relevant knowledge and governed tools.
