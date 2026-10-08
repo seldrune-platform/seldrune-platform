@@ -1,0 +1,309 @@
+/* Responsive, high-contrast Seldrune GPT workspace. */
+#seldrune-gpt {
+  --gpt-ink: #15243a;
+  --gpt-muted: #42546b;
+  --gpt-line: #b8c8dc;
+  --gpt-surface: rgb(255 255 255 / 96%);
+  color: var(--gpt-ink) !important;
+  font-size: clamp(15px, calc(14.7px + .12vw), 17px) !important;
+  opacity: 1 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+#seldrune-gpt .gpt-main,
+#seldrune-gpt .gpt-page-view,
+#seldrune-gpt .gpt-chat-page,
+#seldrune-gpt .gpt-history-page,
+#seldrune-gpt .gpt-tools-page,
+#seldrune-gpt .gpt-thread {
+  color: var(--gpt-ink) !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  opacity: 1 !important;
+}
+#seldrune-gpt .gpt-sidebar {
+  color: #f5f8ff !important;
+  background: #0c1728 !important;
+  border-color: #31445f !important;
+  box-shadow: 0 12px 38px rgb(4 13 26 / 32%);
+}
+#seldrune-gpt .gpt-sidebar :is(button, a, label, small, input),
+#seldrune-gpt .gpt-sidebar-label,
+#seldrune-gpt .gpt-history-open,
+#seldrune-gpt .gpt-history-empty,
+#seldrune-gpt .gpt-creation-status,
+#seldrune-gpt .gpt-sidebar-bottom,
+#seldrune-gpt .gpt-sidebar-brand :is(strong, small) {
+  color: #e9f0fa !important;
+  opacity: 1 !important;
+}
+#seldrune-gpt .gpt-sidebar .gpt-workspace-nav button.active,
+#seldrune-gpt .gpt-sidebar .gpt-history-open[aria-current="page"] {
+  color: #fff !important;
+  background: linear-gradient(135deg, #2458a7, #116c7c) !important;
+  border-color: #77c5df !important;
+}
+#seldrune-gpt .gpt-topbar,
+#seldrune-gpt .gpt-status-bar {
+  color: var(--gpt-ink) !important;
+  background: rgb(255 255 255 / 95%) !important;
+  border-color: var(--gpt-line) !important;
+  opacity: 1 !important;
+  backdrop-filter: blur(14px) saturate(1.12);
+  -webkit-backdrop-filter: blur(14px) saturate(1.12);
+}
+#seldrune-gpt .gpt-topbar :is(h1, p, span, strong, button),
+#seldrune-gpt .gpt-status-bar :is(span, small) {
+  color: var(--gpt-ink) !important;
+  opacity: 1 !important;
+}
+#seldrune-gpt .gpt-topbar h1 {
+  font-size: clamp(21px, calc(19px + .45vw), 27px) !important;
+  line-height: 1.2;
+}
+#seldrune-gpt .gpt-top-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+#seldrune-gpt .gpt-header-model-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+#seldrune-gpt .gpt-header-model-picker > span {
+  color: var(--gpt-muted) !important;
+  font-size: clamp(13px, calc(12px + .12vw), 14px) !important;
+  font-weight: 650;
+}
+#seldrune-gpt .gpt-header-model-picker select {
+  min-width: 150px;
+  max-width: 230px;
+  min-height: 40px;
+  padding: 8px 34px 8px 12px !important;
+  color: var(--gpt-ink) !important;
+  background: #fff !important;
+  border: 1px solid #9eafc4 !important;
+  border-radius: 12px;
+  font-size: clamp(16px, calc(15px + .12vw), 18px) !important;
+  line-height: 1.25;
+}
+#seldrune-gpt .gpt-topbar .gpt-provider-label {
+  color: var(--gpt-muted) !important;
+}
+#seldrune-gpt .gpt-thread .command-card {
+  width: min(88%, 900px);
+  opacity: 1 !important;
+  filter: none !important;
+  border-radius: 18px;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+#seldrune-gpt .gpt-thread .command-card[data-role="assistant"] {
+  color: #16263e !important;
+  background: #fff !important;
+  border: 1px solid #bdcadd !important;
+  box-shadow: 0 10px 28px rgb(12 27 48 / 14%) !important;
+}
+#seldrune-gpt .gpt-thread .command-card[data-role="assistant"] :is(p, li, td, th, blockquote, span, small, em) {
+  color: #253850 !important;
+  font-size: clamp(15px, calc(14.7px + .12vw), 17px) !important;
+  line-height: 1.68 !important;
+  opacity: 1 !important;
+}
+#seldrune-gpt .gpt-thread .command-card[data-role="assistant"] :is(strong, b, h1, h2, h3, h4) {
+  color: #10223b !important;
+}
+#seldrune-gpt .gpt-thread .command-card[data-role="assistant"] a {
+  color: #0756a5 !important;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+#seldrune-gpt .gpt-thread .command-card[data-role="assistant"] :is(pre, code) {
+  color: #f7f9ff !important;
+  background: #14243b !important;
+}
+#seldrune-gpt .gpt-thread .command-card[data-role="user"] {
+  color: #fff !important;
+  background: linear-gradient(135deg, #234a85, #155b70) !important;
+  border: 1px solid #3c779b !important;
+}
+#seldrune-gpt .gpt-thread .command-card[data-role="user"] :is(p, li, td, th, blockquote, span, small, em, strong, b) {
+  color: #fff !important;
+  font-size: clamp(15px, calc(14.7px + .12vw), 17px) !important;
+  line-height: 1.62 !important;
+  opacity: 1 !important;
+}
+#seldrune-gpt .gpt-thread .command-card[data-role="user"] a { color: #c9f4ff !important; }
+#seldrune-gpt .gpt-dropzone {
+  color: var(--gpt-ink) !important;
+  background: #fff !important;
+  border: 1px solid #aebdd0 !important;
+  border-radius: 20px;
+  box-shadow: 0 14px 36px rgb(15 35 62 / 20%) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+#seldrune-gpt .gpt-dropzone textarea {
+  color: #172943 !important;
+  caret-color: #172943 !important;
+  font-size: clamp(16px, calc(15px + .12vw), 18px) !important;
+  line-height: 1.5;
+}
+#seldrune-gpt .gpt-dropzone textarea::placeholder,
+#seldrune-gpt .gpt-history-search input::placeholder {
+  color: #52647b !important;
+  opacity: 1 !important;
+}
+#seldrune-gpt .gpt-dropzone :is(button, select, input),
+#seldrune-gpt .gpt-topbar :is(button, .gpt-top-tool-button) {
+  color: #1b2d47 !important;
+  background: #fff !important;
+  border: 1px solid #aabbd0 !important;
+  border-radius: 10px;
+}
+#seldrune-gpt .gpt-dropzone .gpt-composer-actions button,
+#seldrune-gpt .gpt-media-tool-action {
+  color: #fff !important;
+  background: linear-gradient(135deg, #2458a7, #116c7c) !important;
+  border-color: #2458a7 !important;
+  font-weight: 700;
+}
+#seldrune-gpt .gpt-page-heading,
+#seldrune-gpt .gpt-page-heading :is(h2, p, small),
+#seldrune-gpt .gpt-tools-note,
+#seldrune-gpt .gpt-welcome :is(h2, p) {
+  color: #20344f !important;
+  opacity: 1 !important;
+}
+#seldrune-gpt .gpt-welcome,
+#seldrune-gpt .gpt-tool-panel,
+#seldrune-gpt .gpt-provider-card,
+#seldrune-gpt .gpt-tool-card,
+#seldrune-gpt .gpt-media-capabilities {
+  color: #20344f !important;
+  background: var(--gpt-surface) !important;
+  border: 1px solid #b6c5d8 !important;
+  box-shadow: 0 10px 28px rgb(12 27 48 / 14%) !important;
+  backdrop-filter: blur(8px) saturate(1.04);
+  -webkit-backdrop-filter: blur(8px) saturate(1.04);
+}
+#seldrune-gpt .gpt-media-capabilities {
+  margin-top: 14px;
+  padding: clamp(16px, 2vw, 24px);
+  border-radius: 18px;
+}
+#seldrune-gpt .gpt-media-capabilities-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+#seldrune-gpt .gpt-media-capabilities-heading h3 {
+  margin: 0;
+  color: #172943 !important;
+  font-size: clamp(18px, calc(17px + .22vw), 21px) !important;
+}
+#seldrune-gpt .gpt-media-capabilities-heading p,
+#seldrune-gpt .gpt-media-action-note {
+  margin: 5px 0 0;
+  color: #43566f !important;
+  font-size: clamp(14px, calc(13.5px + .14vw), 16px) !important;
+  line-height: 1.5;
+}
+#seldrune-gpt .gpt-media-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+#seldrune-gpt .gpt-media-tool-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  color: #20344f !important;
+  background: #fff !important;
+  border: 1px solid #b8c7d9 !important;
+  border-radius: 14px;
+}
+#seldrune-gpt .gpt-media-tool-card strong {
+  color: #162943 !important;
+  font-size: clamp(15px, calc(14.5px + .14vw), 17px);
+}
+#seldrune-gpt .gpt-media-tool-card small {
+  color: #42556d !important;
+  font-size: clamp(13px, calc(12.5px + .12vw), 15px) !important;
+  line-height: 1.45;
+}
+#seldrune-gpt .gpt-media-tool-state {
+  color: #31506e !important;
+  font-size: 12px !important;
+  font-weight: 750;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+#seldrune-gpt .gpt-media-tool-state[data-state="ready"] { color: #12633b !important; }
+#seldrune-gpt .gpt-media-tool-state[data-state="setup"] { color: #754700 !important; }
+#seldrune-gpt .gpt-media-tool-state[data-state="off"] { color: #59697b !important; }
+#seldrune-gpt .gpt-media-tool-action {
+  min-height: 40px;
+  margin-top: auto;
+  padding: 8px 12px;
+  border: 1px solid transparent !important;
+  border-radius: 10px;
+  cursor: pointer;
+}
+#seldrune-gpt .gpt-media-tool-action:disabled {
+  color: #53647a !important;
+  background: #e7edf4 !important;
+  border-color: #c1ccda !important;
+  cursor: not-allowed;
+}
+#seldrune-gpt :is(button, a, select, input, textarea):focus-visible {
+  outline: 3px solid #b76700 !important;
+  outline-offset: 3px;
+}
+@media (max-width: 980px) {
+  #seldrune-gpt .gpt-media-tool-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  #seldrune-gpt .gpt-thread .command-card {
+    width: min(96%, 900px);
+    padding: 14px;
+  }
+  #seldrune-gpt .gpt-topbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  #seldrune-gpt .gpt-top-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  #seldrune-gpt .gpt-header-model-picker select {
+    min-width: 140px;
+    max-width: min(52vw, 220px);
+  }
+  #seldrune-gpt .gpt-thread .command-card[data-role="assistant"] :is(p, li, td, th, blockquote, span, small, em),
+  #seldrune-gpt .gpt-thread .command-card[data-role="user"] :is(p, li, td, th, blockquote, span, small, em, strong, b) {
+    font-size: clamp(15px, calc(14.7px + .12vw), 16px) !important;
+  }
+}
+@media (max-width: 520px) {
+  #seldrune-gpt .gpt-media-tool-grid { grid-template-columns: 1fr; }
+  #seldrune-gpt .gpt-media-capabilities-heading { display: block; }
+  #seldrune-gpt .gpt-header-model-picker > span,
+  #seldrune-gpt .gpt-top-actions .gpt-provider-label,
+  #seldrune-gpt #seldrune-gpt-model { display: none; }
+}
