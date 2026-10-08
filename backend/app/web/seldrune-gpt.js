@@ -133,6 +133,8 @@
     }
   }
 
+  window.seldruneGPT = Object.assign(window.seldruneGPT || {}, { setCreationMode });
+
   function buildCreativeOrder(request) {
     const selectedGuidance = CREATION_MODES[creationMode]?.guidance;
     const inferredKind = creationMode === 'any' ? classifyOutputKind(request) : creationMode;
@@ -1012,6 +1014,8 @@
     }
     try {
       const capabilities = await api('/gpt/capabilities');
+      window.seldruneGPTCapabilities = capabilities;
+      window.seldruneGPTCapabilitiesError = '';
       registeredTools = Array.isArray(capabilities.registered_tools)
         ? capabilities.registered_tools
         : [];
@@ -1046,7 +1050,11 @@
       openToolsButton?.classList.toggle('hidden', !needsSetup);
       renderCodingProviderStatus();
       renderToolCatalog();
+      document.dispatchEvent(new CustomEvent('seldrune:gpt-capabilities-ready', {detail: {capabilities}}));
     } catch (error) {
+      window.seldruneGPTCapabilities = null;
+      window.seldruneGPTCapabilitiesError = error.message || 'Capability status could not be loaded.';
+      document.dispatchEvent(new CustomEvent('seldrune:gpt-capabilities-ready', {detail: {error: window.seldruneGPTCapabilitiesError}}));
       externalToolProviders = [];
       unrealStatusError = error.message || 'Worker status could not be loaded.';
       if (capabilityStatus) {
