@@ -23,7 +23,7 @@ If the default is enabled but the gateway is unavailable, a profile is no longer
 
 ## Runtime boundary
 
-This browser client applies to apps served from the authenticated Seldrune origin that load the script. The repository has no app-cloning/template hook, so newly cloned apps must include the script in their entry page. It cannot make an unrelated browser origin or an external desktop app see a system-wide virtual camera or microphone. That requires a separate signed desktop client and native virtual devices.
+This browser client applies to apps served from the authenticated Seldrune origin that load the script. Seldrune GPT app/game and RapidBuild creation instructions include it for camera or microphone apps built or cloned inside Seldrune; the client reads the owner's saved, approved /media profile and the FaceFusion worker fixes the face model to `ghost_1_256`. This is an app-builder instruction, not a repository-wide hook for arbitrary imported projects, so imported apps must include the script in their entry page. It cannot make an unrelated browser origin or an external desktop app see a system-wide virtual camera or microphone. That requires a separate signed desktop client and native virtual devices.
 
 The current profile workflow authorizes an existing profile ID; it does not upload a photo or voice recording. Face references and voice style data must already be provisioned in private worker storage. A voice profile's `voice-style.json` can set `pitch_semitones` from -8 to +8 alongside the existing gain, presence, and warmth controls. The live adapter uses the locally available MIT-licensed OpenVoiceChanger DSP pitch shifter; this is same-speaker pitch/tone styling, not target-speaker voice conversion. Example:
 

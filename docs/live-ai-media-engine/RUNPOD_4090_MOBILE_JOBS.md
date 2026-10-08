@@ -6,7 +6,7 @@ The Seldrune mobile FaceSwap studio is served at `/liveshell/faceswap/mobile` an
 
 The first worker profile uses FaceFusion's `ghost_1_256` face-swap model. FaceFusion's model metadata identifies that model as Apache-2.0; the FaceFusion application source has its own OpenRAIL-AS license. Check both licenses before using the worker outside a permitted context.
 
-The worker preserves the target video's audio and re-encodes it as AAC at 48 kHz. It does not perform voice conversion. The final video has a burned-in `AI-SYNTHETIC` label. Inputs are limited to 30 seconds, 1080p, 75 MB video, and a 15 MB face image. Job files expire after one hour, and the signed-in user can delete them sooner.
+The worker preserves the target video's audio and re-encodes it as AAC at 48 kHz. It does not perform voice conversion. The final video has a burned-in `AI-SYNTHETIC` label and is normalized to 1920×1080 landscape or 1080×1920 portrait at 30 fps; ffprobe metadata is checked before the job can complete. This fixes encoded dimensions and frame rate, not detail beyond the uploaded source and 256-pixel face model. Inputs are limited to 30 seconds, 1080p, 75 MB video, and a 15 MB face image. Job files expire after one hour, and the signed-in user can delete them sooner.
 
 ## Worker image
 

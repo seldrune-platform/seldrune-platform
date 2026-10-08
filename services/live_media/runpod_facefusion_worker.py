@@ -26,6 +26,7 @@ MAX_VIDEO_BYTES = 75 * 1024 * 1024
 MAX_VIDEO_SECONDS = 30.0
 MAX_VIDEO_PIXELS = 1920 * 1080
 MAX_VIDEO_DIMENSION = 1920
+OUTPUT_VIDEO_FPS = 30
 MAX_ACTIVE_JOBS = 2
 JOB_TTL_SECONDS = 3600
 JOB_TIMEOUT_SECONDS = 1800
@@ -133,11 +134,23 @@ def build_facefusion_command(
     ]
 
 
-def _synthetic_output_command(source_path: Path, output_path: Path) -> list[str]:
+def _synthetic_output_command(
+    source_path: Path,
+    output_path: Path,
+    source_width: int,
+    source_height: int,
+) -> list[str]:
+    target_width, target_height = output_canvas_dimensions(source_width, source_height)
     drawtext = (
         "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:"
         "text='AI-SYNTHETIC':x=18:y=18:fontcolor=white:fontsize=26:"
         "box=1:boxcolor=black@0.65:boxborderw=8"
+    )
+    video_filter = (
+        f"scale={target_width}:{target_height}:"
+        "force_original_aspect_ratio=decrease:force_divisible_by=2,"
+        f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:color=black,"
+        f"setsar=1,fps={OUTPUT_VIDEO_FPS},{drawtext}"
     )
     return [
         "ffmpeg",
@@ -152,13 +165,15 @@ def _synthetic_output_command(source_path: Path, output_path: Path) -> list[str]
         "-map",
         "0:a?",
         "-vf",
-        drawtext,
+        video_filter,
         "-c:v",
         "libx264",
         "-preset",
         "veryfast",
         "-crf",
         "20",
+        "-r",
+        str(OUTPUT_VIDEO_FPS),
         "-c:a",
         "aac",
         "-b:a",
@@ -169,7 +184,6 @@ def _synthetic_output_command(source_path: Path, output_path: Path) -> list[str]
         "+faststart",
         str(output_path),
     ]
-
 
 async def _run_command(command: list[str], *, cwd: Path, timeout: float) -> bytes:
     process = await asyncio.create_subprocess_exec(
@@ -196,7 +210,7 @@ async def _probe_video(path: Path) -> dict[str, object]:
             "-v",
             "error",
             "-show_entries",
-            "format=duration:stream=codec_type,width,height,r_frame_rate,sample_rate",
+            "format=duration:stream=codec_type,width,height,r_frame_rate,avg_frame_rate,sample_rate",
             "-of",
             "json",
             str(path),
@@ -245,6 +259,29 @@ def _fraction(value: object) -> float | None:
         return None
 
 
+def output_canvas_dimensions(source_width: int, source_height: int) -> tuple[int, int]:
+    if source_width <= 0 or source_height <= 0:
+        raise ValueError("The source video dimensions are invalid.")
+    if source_width >= source_height:
+        return 1920, 1080
+    return 1080, 1920
+
+
+def meets_output_target(
+    width: int,
+    height: int,
+    frame_rate: float | None,
+    source_width: int,
+    source_height: int,
+) -> bool:
+    expected_dimensions = output_canvas_dimensions(source_width, source_height)
+    return (
+        (width, height) == expected_dimensions
+        and frame_rate is not None
+        and abs(frame_rate - OUTPUT_VIDEO_FPS) < 0.001
+    )
+
+
 def supports_video_dimensions(width: int, height: int) -> bool:
     return (
         width > 0
@@ -276,8 +313,21 @@ async def _process_job(job_id: str) -> None:
             )
             if not raw_output.is_file() or raw_output.stat().st_size == 0:
                 raise RuntimeError("FaceFusion produced no output video.")
+            raw_metadata = await _probe_video(raw_output)
+            raw_streams = raw_metadata.get("streams", [])
+            raw_video_stream = next(
+                (item for item in raw_streams if item.get("codec_type") == "video"), None
+            )
+            if not raw_video_stream:
+                raise RuntimeError("FaceFusion produced no video stream.")
+            source_width = int(raw_video_stream.get("width", 0))
+            source_height = int(raw_video_stream.get("height", 0))
+            if source_width <= 0 or source_height <= 0:
+                raise RuntimeError("FaceFusion produced invalid video dimensions.")
             await _run_command(
-                _synthetic_output_command(raw_output, labeled_output),
+                _synthetic_output_command(
+                    raw_output, labeled_output, source_width, source_height
+                ),
                 cwd=work_dir,
                 timeout=JOB_TIMEOUT_SECONDS,
             )
@@ -293,6 +343,20 @@ async def _process_job(job_id: str) -> None:
             )
             if not video_stream:
                 raise RuntimeError("The output video stream is missing.")
+            output_width = int(video_stream.get("width", 0))
+            output_height = int(video_stream.get("height", 0))
+            output_fps = (
+                _fraction(video_stream.get("avg_frame_rate"))
+                or _fraction(video_stream.get("r_frame_rate"))
+            )
+            if not meets_output_target(
+                output_width,
+                output_height,
+                output_fps,
+                source_width,
+                source_height,
+            ):
+                raise RuntimeError("The output video does not meet the 1080p/30 fps target.")
             duration = float(metadata.get("format", {}).get("duration", 0.0))
             actual_accelerator = None
             try:
@@ -306,9 +370,9 @@ async def _process_job(job_id: str) -> None:
             except (OSError, RuntimeError):
                 pass
             job["output_path"] = str(labeled_output)
-            job["output_width"] = video_stream.get("width")
-            job["output_height"] = video_stream.get("height")
-            job["output_fps"] = _fraction(video_stream.get("r_frame_rate"))
+            job["output_width"] = output_width
+            job["output_height"] = output_height
+            job["output_fps"] = output_fps
             job["audio_sample_rate_hz"] = (
                 int(audio_stream["sample_rate"])
                 if audio_stream and audio_stream.get("sample_rate")

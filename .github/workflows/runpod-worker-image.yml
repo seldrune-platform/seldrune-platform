@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - codex/media-face-transform-1080p30
     paths:
       - services/live_media/Dockerfile.runpod
       - services/live_media/runpod_facefusion_worker.py
@@ -51,14 +52,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare image tags
+        id: image-tags
+        run: |
+          {
+            echo "tags<<EOF"
+            echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/seldrune-faceswap-worker:sha-${GITHUB_SHA}"
+            if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+              echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/seldrune-faceswap-worker:latest"
+            fi
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
       - name: Build and publish the worker image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: services/live_media/Dockerfile.runpod
           push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/seldrune-faceswap-worker:latest
-            ghcr.io/${{ github.repository_owner }}/seldrune-faceswap-worker:sha-${{ github.sha }}
+          tags: ${{ steps.image-tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

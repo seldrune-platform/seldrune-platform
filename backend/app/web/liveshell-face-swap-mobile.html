@@ -26,7 +26,7 @@
     </section>
     <section class="quality-strip" aria-label="Processing details">
       <div><small>GPU TARGET</small><strong id="gpu-target">RTX 4090</strong></div>
-      <div><small>VIDEO INPUT</small><strong>Up to 1080p · 30 sec</strong></div>
+      <div><small>VIDEO OUTPUT</small><strong>1080p · 30 fps</strong></div>
       <div><small>AUDIO OUTPUT</small><strong>48 kHz AAC</strong></div>
       <div><small>DISCLOSURE</small><strong>Visible AI label</strong></div>
     </section>
@@ -72,7 +72,7 @@
           <div><small>FACE MODEL</small><strong id="output-model">Not started</strong></div>
         </div>
         <a id="download-button" class="button secondary download-button" href="#" hidden>Download labeled video</a>
-        <p class="evidence-note">The result panel shows dimensions and audio metadata measured by the worker. RTX 4090 is the selected baseline; 1080p quality depends on the uploaded source and model output.</p>
+        <p class="evidence-note">The worker outputs 1920×1080 landscape or 1080×1920 portrait at 30 fps. Upscaling sets the file dimensions, not new facial detail; the result panel shows measured output metadata.</p>
       </section>
     </section>
   </main>
