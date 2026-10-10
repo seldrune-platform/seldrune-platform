@@ -218,3 +218,27 @@ def test_gpt_conversation_summary_supports_legacy_history() -> None:
 
     assert summary.id is None
     assert summary.legacy is True
+
+
+def test_gpt_request_accepts_intelligent_ui_prompt() -> None:
+    from backend.app.api.routes.seldrune_gpt import SeldruneGPTRequest
+
+    request = SeldruneGPTRequest(
+        message="Create a small project dashboard.",
+        intelligent_ui=True,
+        openui_prompt="OpenUI Lang component and syntax instructions.",
+    )
+
+    assert request.intelligent_ui is True
+    assert request.openui_prompt.startswith("OpenUI Lang")
+
+
+def test_openui_response_is_marked_and_fences_are_removed() -> None:
+    from backend.app.api.routes.seldrune_gpt import (
+        OPENUI_RESPONSE_MARKER,
+        _mark_openui_response,
+    )
+
+    response = _mark_openui_response("```openui\nroot = Card([])\n```")
+
+    assert response == OPENUI_RESPONSE_MARKER + "\nroot = Card([])"
