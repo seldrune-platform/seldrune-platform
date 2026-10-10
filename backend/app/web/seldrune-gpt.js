@@ -8,6 +8,20 @@
   const model = document.querySelector('#seldrune-gpt-model');
   const newConversation = document.querySelector('#seldrune-gpt-new');
   const chatButton = document.querySelector('#seldrune-gpt-chat');
+  const intelligentUiToggle = document.querySelector('#seldrune-gpt-intelligent-ui');
+  const openUiRoots = new Map();
+  let openUiBundlePromise = null;
+  if (thread && typeof MutationObserver !== 'undefined') {
+    const openUiRootObserver = new MutationObserver(() => {
+      for (const [mount, root] of openUiRoots) {
+        if (!mount.isConnected) {
+          root.unmount();
+          openUiRoots.delete(mount);
+        }
+      }
+    });
+    openUiRootObserver.observe(thread, {childList: true, subtree: true});
+  }
   const attachButton = document.querySelector('#seldrune-gpt-attach');
   const fileInput = document.querySelector('#seldrune-gpt-files');
   const dropzone = document.querySelector('#seldrune-gpt-dropzone');
@@ -35,6 +49,7 @@
   let activeConversationId = null;
   let activeConversationTitle = 'Seldrune GPT';
   let currentGptView = 'chat';
+  let intelligentUiMode = false;
   let workspaceInitialization = null;
 
   const MAX_FILES = 6;
@@ -520,6 +535,189 @@
     void renderOutputLibrary();
   }
 
+  function hasOpenUiRuntime() {
+    const runtime = window.__OpenUI;
+    const library = runtime?.openuiChatLibrary;
+    return Boolean(
+      runtime?.React
+      && typeof runtime.createRoot === 'function'
+      && typeof runtime.Renderer === 'function'
+      && library?.library
+      && library?.schema
+    );
+  }
+
+  function loadOpenUiBundle() {
+    if (hasOpenUiRuntime()) return Promise.resolve(window.__OpenUI);
+    if (openUiBundlePromise) return openUiBundlePromise;
+    openUiBundlePromise = new Promise((resolve, reject) => {
+      const styleId = 'seldrune-openui-runtime-styles';
+      if (!document.getElementById(styleId)) {
+        const link = document.createElement('link');
+        link.id = styleId;
+        link.rel = 'stylesheet';
+        link.href = 'https://cdn.jsdelivr.net/npm/@openuidev/browser-bundle@0.1.5/dist/openui-styles.css';
+        document.head.append(link);
+      }
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@openuidev/browser-bundle@0.1.5/dist/openui-bundle.min.js';
+      script.async = true;
+      script.onload = () => {
+        if (hasOpenUiRuntime()) resolve(window.__OpenUI);
+        else {
+          openUiBundlePromise = null;
+          reject(new Error('The OpenUI bundle loaded without its expected renderer.'));
+        }
+      };
+      script.onerror = () => {
+        openUiBundlePromise = null;
+        script.remove();
+        reject(new Error('The OpenUI renderer could not load. Check your connection and retry.'));
+      };
+      document.head.append(script);
+    });
+    return openUiBundlePromise;
+  }
+
+  function buildOpenUiPrompt() {
+    const library = window.__OpenUI?.openuiChatLibrary?.library;
+    if (!library || typeof library.prompt !== 'function') {
+      throw new Error('The OpenUI prompt generator is unavailable. Reload Seldrune and retry.');
+    }
+    return library.prompt({
+      preamble: 'Create one concise, accessible interface for the owner’s request using the supplied components.',
+      additionalRules: [
+        'Use the library root component as the first statement.',
+        'Keep the interface self-contained and use no more than 12 components.',
+        'Do not use Query, Mutation, @Run, external links, network requests, JavaScript, or HTML.',
+        'Buttons and forms may collect local input but must not claim an external action was performed.',
+      ],
+      toolCalls: false,
+      bindings: false,
+    });
+  }
+
+  function extractOpenUiCode(text) {
+    const value = String(text || '');
+    const marker = '<!--seldrune-openui-v1-->';
+    if (!value.startsWith(marker)) return null;
+    return value.slice(marker.length).trim();
+  }
+
+  function renderOpenUiSurface(mount, code, feedback, details) {
+    const runtime = window.__OpenUI;
+    const library = runtime?.openuiChatLibrary;
+    if (!hasOpenUiRuntime()) {
+      mount.textContent = 'Load the Intelligent UI renderer to view this interface.';
+      return;
+    }
+    try {
+      const root = runtime.createRoot(mount);
+      openUiRoots.set(mount, root);
+      root.render(runtime.React.createElement(runtime.Renderer, {
+        code,
+        library: library.library,
+        schema: library.schema,
+        onError: errors => {
+          if (Array.isArray(errors) && errors.length) {
+            feedback.hidden = false;
+            feedback.textContent = 'Some interface elements could not render: ' + errors
+              .map(error => String(error?.message || error?.code || 'Unknown render error'))
+              .join('; ').slice(0, 500);
+            details.open = true;
+          } else {
+            feedback.hidden = true;
+            feedback.textContent = '';
+          }
+        },
+      }));
+    } catch (error) {
+      mount.textContent = 'The interactive interface could not be rendered. See its source below.';
+      feedback.hidden = false;
+      feedback.textContent = String(error?.message || error).slice(0, 300);
+      details.open = true;
+    }
+  }
+
+  function renderOpenUiResponse(body, code) {
+    const mount = document.createElement('div');
+    mount.className = 'gpt-openui-renderer';
+    mount.setAttribute('aria-label', 'AI-generated interactive interface');
+    const feedback = document.createElement('p');
+    feedback.className = 'gpt-openui-error';
+    feedback.setAttribute('role', 'status');
+    feedback.hidden = true;
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'ghost gpt-openui-load';
+    retry.textContent = 'Load interactive renderer';
+    const details = document.createElement('details');
+    details.className = 'gpt-openui-source';
+    const summary = document.createElement('summary');
+    summary.textContent = 'View generated UI source';
+    const source = document.createElement('pre');
+    source.textContent = code;
+    details.append(summary, source);
+    body.append(mount, feedback, retry, details);
+    const render = () => {
+      retry.hidden = true;
+      mount.replaceChildren();
+      renderOpenUiSurface(mount, code, feedback, details);
+    };
+    if (hasOpenUiRuntime()) {
+      render();
+    } else {
+      details.open = true;
+      retry.addEventListener('click', async () => {
+        retry.disabled = true;
+        retry.textContent = 'Loading renderer…';
+        try {
+          await loadOpenUiBundle();
+          render();
+        } catch (error) {
+          feedback.hidden = false;
+          feedback.textContent = String(error?.message || error).slice(0, 300);
+          retry.disabled = false;
+          retry.textContent = 'Retry renderer load';
+        }
+      });
+    }
+  }
+
+  if (intelligentUiToggle) {
+    intelligentUiToggle.addEventListener('click', async () => {
+      if (intelligentUiMode) {
+        intelligentUiMode = false;
+        intelligentUiToggle.classList.remove('active');
+        intelligentUiToggle.setAttribute('aria-pressed', 'false');
+        intelligentUiToggle.setAttribute('aria-label', 'Enable Intelligent UI');
+        intelligentUiToggle.textContent = '✦ Intelligent UI';
+        if (input) setCreationMode(creationMode);
+        status.textContent = 'Text chat mode enabled.';
+        return;
+      }
+      intelligentUiToggle.disabled = true;
+      status.textContent = 'Loading the Intelligent UI renderer…';
+      try {
+        await loadOpenUiBundle();
+        intelligentUiMode = true;
+        intelligentUiToggle.classList.add('active');
+        intelligentUiToggle.setAttribute('aria-pressed', 'true');
+        intelligentUiToggle.setAttribute('aria-label', 'Disable Intelligent UI');
+        intelligentUiToggle.textContent = '✦ UI On';
+        if (input) input.placeholder = 'Describe the interface Seldrune should create…';
+        if (modePill) {
+          modePill.textContent = 'Intelligent UI';
+          modePill.classList.add('active');
+        }
+        status.textContent = 'Intelligent UI is ready. Your next message will render as an interactive interface.';
+      } catch (error) {
+        status.textContent = String(error?.message || error).slice(0, 300);
+      } finally {
+        intelligentUiToggle.disabled = false;
+      }
+    });
+  }
   function addMessage(label, text, role = 'assistant') {
     if (thread.querySelector('.empty')) thread.replaceChildren();
     const card = document.createElement('article');
@@ -528,9 +726,15 @@
     const body = document.createElement('div');
     const heading = document.createElement('strong');
     heading.textContent = label;
-    const message = document.createElement('p');
-    message.textContent = text;
-    body.append(heading, message);
+    body.append(heading);
+    const openUiCode = role === 'assistant' ? extractOpenUiCode(text) : null;
+    if (openUiCode !== null) {
+      renderOpenUiResponse(body, openUiCode);
+    } else {
+      const message = document.createElement('p');
+      message.textContent = text;
+      body.append(message);
+    }
     card.append(body);
     thread.append(card);
     card.scrollIntoView({
@@ -1787,8 +1991,17 @@
   }
 
   async function runUniversalMessage(request, outgoingAttachments, attachmentNames) {
+    let openUiPrompt = null;
+    if (intelligentUiMode) {
+      try {
+        openUiPrompt = buildOpenUiPrompt();
+      } catch (error) {
+        status.textContent = String(error?.message || error).slice(0, 300);
+        return;
+      }
+    }
     const connectUnreal = /\b(connect|configure|set\s+up|setup)\b.{0,80}\bunreal(?:\s+engine)?\b/i.test(request);
-    if (connectUnreal && !outgoingAttachments.length) {
+    if (!intelligentUiMode && connectUnreal && !outgoingAttachments.length) {
       addMessage('You', request, 'user');
       input.value = '';
       clearAttachments();
@@ -1801,7 +2014,7 @@
       openUnrealConnections();
       return;
     }
-    const mediaKind = requestedMediaKind(request);
+    const mediaKind = intelligentUiMode ? null : requestedMediaKind(request);
     if (mediaKind) {
       if (mediaKind === 'image' || mediaKind === 'speech') {
         await runMediaCreation(mediaKind, request, outgoingAttachments, attachmentNames);
@@ -1811,7 +2024,7 @@
       return;
     }
     const kind = classifyOutputKind(request);
-    const useTools = requestNeedsAction(request, creationMode, outgoingAttachments.length > 0);
+    const useTools = !intelligentUiMode && requestNeedsAction(request, creationMode, outgoingAttachments.length > 0);
     if (useTools) {
       input.value = '';
       clearAttachments();
@@ -1834,7 +2047,7 @@
     );
     input.value = '';
     try {
-      const chatMessage = shouldSaveTextOutput(request)
+      const chatMessage = !intelligentUiMode && shouldSaveTextOutput(request)
         ? buildChatRequest(buildCreativeOrder(request), kind)
         : request;
       const result = await api('/gpt', {
@@ -1844,6 +2057,8 @@
           attachments: outgoingAttachments,
           conversation_id: activeConversationId,
           provider: providerSelect?.value || 'auto',
+          intelligent_ui: intelligentUiMode,
+          openui_prompt: intelligentUiMode ? openUiPrompt : null,
         }),
       });
       clearAttachments();
@@ -1851,10 +2066,10 @@
       if (result.conversation_id) activeConversationId = result.conversation_id;
       const responseText = result.response || '(No text returned)';
       const responseCard = addMessage('Seldrune AI', responseText);
-      const pdfExportButton = addPdfExportButton(responseCard, request, responseText);
+      const pdfExportButton = intelligentUiMode ? null : addPdfExportButton(responseCard, request, responseText);
       await refreshConversations();
       let savedOutput = null;
-      if (shouldSaveTextOutput(request)) {
+      if (!intelligentUiMode && shouldSaveTextOutput(request)) {
         try {
           const note = kind === 'song' || kind === 'video' || kind === 'visual'
             ? 'Text package · no rendered media file was produced.'
@@ -1872,11 +2087,12 @@
         : '';
       const cached = Number(result.cached_input_tokens || 0);
       const outputNote = savedOutput ? ` · saved ${savedOutput.fileName} in Outputs` : '';
-      const textOnlyNote = ['song', 'video', 'visual'].includes(kind) && shouldSaveTextOutput(request)
+      const textOnlyNote = !intelligentUiMode && ['song', 'video', 'visual'].includes(kind) && shouldSaveTextOutput(request)
         ? ' · text package only; no media render'
         : '';
-      status.textContent = `${result.provider || 'openai'} · ${result.model || 'model'} (${result.cost_tier || 'auto'}) · ${result.latency_ms || 0} ms · ${result.input_tokens || 0} input · ${result.output_tokens || 0} output${cached ? ` · ${cached} cached` : ''}${chatCost}${outputNote}${textOnlyNote}`;
-      if (requestNeedsPdf(request)) {
+      const interactiveUiNote = intelligentUiMode ? ' · interactive UI rendered in chat' : '';
+      status.textContent = `${result.provider || 'openai'} · ${result.model || 'model'} (${result.cost_tier || 'auto'}) · ${result.latency_ms || 0} ms · ${result.input_tokens || 0} input · ${result.output_tokens || 0} output${cached ? ` · ${cached} cached` : ''}${chatCost}${outputNote}${textOnlyNote}${interactiveUiNote}`;
+      if (!intelligentUiMode && requestNeedsPdf(request)) {
         try {
           const created = await createPdfOutput(request, responseText, responseCard);
           if (pdfExportButton) pdfExportButton.textContent = 'Create another PDF';
