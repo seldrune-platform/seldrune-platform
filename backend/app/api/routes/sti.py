@@ -59,11 +59,15 @@ def sti_telemetry() -> dict[str, object]:
             "onnx_runtime": live_media.gpu.onnx_available,
             "tensorrt_runtime": live_media.gpu.tensorrt_available,
             "runtime_ready": live_media.production_ready,
-            "face_model_loaded": True,
-            "first_frame_transformed": True,
-            "live_stream_returned": True,
-            "webrtc_return_verified": True,
-            "cuda_webrtc_return_verified": True,
+            # Delivery claims require the signed production receipt. Runtime
+            # package/GPU detection alone does not prove a transformed call.
+            "face_model_loaded": production_gates.live_session_verified,
+            "first_frame_transformed": production_gates.live_session_verified,
+            "live_stream_returned": production_gates.live_session_verified,
+            "webrtc_return_verified": production_gates.live_session_verified,
+            # The current production receipt does not attest CUDA execution or
+            # an OS virtual-camera device, so keep those gates closed.
+            "cuda_webrtc_return_verified": False,
             "virtual_camera_connected": False,
             "accelerator_profile": accelerator.key,
             "accelerator_name": accelerator.display_name,
