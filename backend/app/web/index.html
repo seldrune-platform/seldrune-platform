@@ -203,16 +203,15 @@
     <footer class="gpt-status-bar"><span id="seldrune-gpt-status" role="status">Ready.</span><span>Chat replies are text. For PDFs, give the AI PDF Editor an instruction; it uses no coordinates or manual edit tools.</span></footer>
     <div hidden>
       <section class="gpt-creation-forge" id="seldrune-media-creation" aria-labelledby="gpt-creation-title">
-        <p class="eyebrow">PRODUCT STUDIO</p><h3 id="gpt-creation-title">Create a downloadable product</h3>
-        <p>Create image and spoken-audio files, or turn a Seldrune answer into a multi-page PDF. Completed files are saved in Outputs.</p>
+        <p class="eyebrow">PRODUCT STUDIO</p><h3 id="gpt-creation-title">Create image, narration, or video</h3>
+        <p>Create downloadable image and spoken-audio files, or turn a Seldrune answer into a multi-page PDF. Video rendering is unavailable. Completed files are saved in Outputs.</p>
         <div class="gpt-creation-modes" role="group" aria-label="Product creation type">
           <button type="button" class="gpt-creation-mode" data-creation-mode="image" aria-pressed="false">Image</button>
           <button type="button" class="gpt-creation-mode" data-creation-mode="speech" aria-pressed="false">Spoken audio</button>
           <button type="button" class="gpt-creation-mode" data-creation-mode="document" aria-pressed="false">PDF document</button>
-          <button type="button" class="gpt-creation-mode" data-creation-mode="song" aria-pressed="false">Music · unavailable</button>
           <button type="button" class="gpt-creation-mode" data-creation-mode="video" aria-pressed="false">Video · unavailable</button>
         </div>
-        <small id="seldrune-gpt-creation-status" class="gpt-creation-status" aria-live="polite">Image and spoken-audio files need an OpenAI connection. PDF export uses the answer already created. Music and video renderers are not connected.</small>
+        <small id="seldrune-gpt-creation-status" class="gpt-creation-status" aria-live="polite">Image and spoken-audio files need an OpenAI connection. PDF export uses the answer already created. Video rendering is unavailable.</small>
       </section>
     </div>
   </main>
