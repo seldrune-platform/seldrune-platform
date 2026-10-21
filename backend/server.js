@@ -3,7 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
-import { createHash, timingSafeEqual, randomUUID } from 'node:crypto';
+import { scrypt, timingSafeEqual, randomUUID, randomBytes } from 'node:crypto';
+import { promisify } from 'node:util';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,9 +38,12 @@ export function readConfig(env = process.env) {
   };
 }
 
-function equalSecret(a, b) {
-  const digest = value => createHash('sha256').update(String(value)).digest();
-  return timingSafeEqual(digest(a), digest(b));
+const derivePassword = promisify(scrypt);
+
+function equalUsername(a, b) {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
 }
 
 export function createRunpodClient(config, fetchImpl = fetch) {
@@ -114,6 +118,9 @@ export function createApp(config, { client = createRunpodClient(config), now = D
   store = createLeaseStore(config.stateFile, config.podId, now), fetchImpl = fetch,
   log = console } = {}) {
   const app = express();
+  const passwordSalt = randomBytes(16);
+  const passwordOptions = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
+  const expectedPassword = derivePassword(config.password, passwordSalt, 64, passwordOptions);
   const streamUrl = `https://${config.podId}-3000.proxy.runpod.net`;
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
@@ -167,7 +174,11 @@ export function createApp(config, { client = createRunpodClient(config), now = D
   app.post('/api/login', loginLimiter, async (req, res) => {
     const { username, password } = req.body || {};
     if (typeof username !== 'string' || typeof password !== 'string' ||
-        !equalSecret(username, config.username) || !equalSecret(password, config.password)) {
+        !equalUsername(username, config.username)) {
+      return res.status(401).json({ error: 'Invalid host credentials' });
+    }
+    const candidatePassword = await derivePassword(password, passwordSalt, 64, passwordOptions);
+    if (!timingSafeEqual(candidatePassword, await expectedPassword)) {
       return res.status(401).json({ error: 'Invalid host credentials' });
     }
     await exclusive(async () => {

@@ -31,6 +31,10 @@ cancels pending requests on session changes. Returning after idle shutdown
 requires login again. Closing/minimizing a window does **not** power off the
 pod: use Start → Shut down, or let background idle shutdown occur. Confirm the
 stop in RunPod if the control plane cannot be reached.
+Terminal states such as DEAD, PAUSED and TERMINATED immediately end the session
+and its heartbeats. During boot only, EXITED receives a 15-second grace period
+for resume propagation before returning to the lock screen. RUNNING and known
+transitional states remain observable.
 
 An authenticated stream (HTTP 401/403) opens its separate login screen; this
 is not reported as a ready stream by the backend. The WebView allows navigation

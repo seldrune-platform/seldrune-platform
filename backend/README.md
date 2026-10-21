@@ -70,6 +70,9 @@ Login issues a 12-hour HS256 JWT with issuer/audience checks. Only the latest
 login session remains valid. Shutdown or idle stop revokes it. The phone keeps
 the token in memory; reopening the app requires login again. Host credentials
 and JWT key rotation revoke access; rotate the JWT key after a suspected leak.
+Password verification derives 64-byte scrypt keys with a random process-local
+salt (N=32768, r=8, p=1) and compares them in constant time. The configured
+password remains a server-side environment secret.
 Native clients send no Origin. Browser clients require an exact HTTPS origin
 in `ALLOWED_ORIGINS` (comma-separated); CORS is not authentication.
 

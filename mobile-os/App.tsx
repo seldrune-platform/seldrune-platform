@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import {
-  ApiError, canNavigate, request, STREAM_CHROME_SCRIPT, validateApiUrl, validateStreamUrl,
+  ApiError, canNavigate, request, shouldEndSession, STREAM_CHROME_SCRIPT, validateApiUrl, validateStreamUrl,
   type PodStatus, type Session,
 } from './src/api';
 
@@ -148,8 +148,8 @@ function Shell() {
         if (cancelled || !foreground || run !== generation) return;
         validateStreamUrl(next.streamUrl, session.podId);
         setStatus(next);
-        if (next.desiredStatus === 'TERMINATED' ||
-            (next.desiredStatus === 'EXITED' && phaseRef.current === 'desktop')) {
+        if (shouldEndSession(next.desiredStatus,
+          phaseRef.current === 'desktop' ? 'desktop' : 'booting', Date.now() - bootStarted)) {
           lock('Workstation is stopped. Sign in to resume.'); return;
         }
         const ready = next.streamReady || (next.isRunning && next.streamHealth === 'authentication_required');

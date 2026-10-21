@@ -1,6 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ApiError, canNavigate, request, validateApiUrl, validateStreamUrl } from '../src/api.ts';
+import { ApiError, canNavigate, request, shouldEndSession, validateApiUrl, validateStreamUrl } from '../src/api.ts';
+
+test('failed resume leaves boot mode after a bounded observation grace period', () => {
+  assert.equal(shouldEndSession('EXITED', 'booting', 0), false);
+  assert.equal(shouldEndSession('EXITED', 'booting', 14_999), false);
+  assert.equal(shouldEndSession('EXITED', 'booting', 15_000), true);
+  assert.equal(shouldEndSession('EXITED', 'desktop', 0), true);
+});
+test('terminal states end boot and desktop sessions', () => {
+  for (const state of ['DEAD', 'PAUSED', 'STOPPED', 'TERMINATED', 'UNKNOWN']) {
+    assert.equal(shouldEndSession(state, 'booting', 0), true, state);
+    assert.equal(shouldEndSession(state, 'desktop', 0), true, state);
+  }
+});
+test('running and genuinely transitional states remain observable', () => {
+  for (const state of ['RUNNING', 'CREATED', 'RESTARTING', 'STARTING', 'PENDING']) {
+    assert.equal(shouldEndSession(state, 'booting', 20_000), false, state);
+    assert.equal(shouldEndSession(state, 'desktop', 20_000), false, state);
+  }
+});
 
 test('only HTTPS origins can configure the control plane', () => {
   assert.equal(validateApiUrl('https://example.com/'), 'https://example.com');

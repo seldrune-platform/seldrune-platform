@@ -5,6 +5,13 @@ export type PodStatus = {
   gpu: { gpuUtilPercent: number | null; memoryUtilPercent: number | null };
 };
 
+// A resume acknowledgement can precede the first RUNNING observation. Bound
+// that EXITED grace period, and never keep a failed/stopped pod's lease alive.
+export function shouldEndSession(state: string, phase: 'booting' | 'desktop', elapsedMs: number): boolean {
+  if (state === 'EXITED') return phase === 'desktop' || elapsedMs >= 15_000;
+  return !['RUNNING', 'CREATED', 'RESTARTING', 'STARTING', 'PENDING'].includes(state);
+}
+
 export function validateApiUrl(value: string | undefined): string {
   if (!value) throw new Error('Set EXPO_PUBLIC_API_URL to your HTTPS orchestrator URL.');
   const parsed = new URL(value);
