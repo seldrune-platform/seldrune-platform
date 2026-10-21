@@ -146,7 +146,7 @@ function Shell() {
       try {
         const next = await call<PodStatus>('/api/status');
         if (cancelled || !foreground || run !== generation) return;
-        validateStreamUrl(next.streamUrl, session.podId);
+        validateStreamUrl(next.streamUrl, session.podId, session.streamPort);
         setStatus(next);
         if (shouldEndSession(next.desiredStatus,
           phaseRef.current === 'desktop' ? 'desktop' : 'booting', Date.now() - bootStarted)) {
@@ -195,7 +195,7 @@ function Shell() {
     setBusy(true); setError(''); setNotice('');
     try {
       const next = await request<Session>(apiConfig.url, '/api/login', undefined, { username, password });
-      validateStreamUrl(next.streamUrl, next.podId);
+      validateStreamUrl(next.streamUrl, next.podId, next.streamPort);
       setPassword(''); setStatus(null); setStreamError(''); setStreamLoaded(false);
       progress.setValue(0.08); setSession(next); setPhase('booting');
     } catch (cause) { setError((cause as Error).message); }

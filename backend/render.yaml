@@ -29,6 +29,8 @@ services:
         sync: false
       - key: RUNPOD_POD_ID
         sync: false
+      - key: STREAM_PORT
+        value: "3000"
       - key: STATE_FILE
         value: /var/data/cloud-gpu-lease.json
       - key: ALLOWED_ORIGINS

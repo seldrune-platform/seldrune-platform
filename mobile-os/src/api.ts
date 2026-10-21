@@ -1,4 +1,4 @@
-export type Session = { token: string; podId: string; streamUrl: string };
+export type Session = { token: string; podId: string; streamUrl: string; streamPort?: number };
 export type PodStatus = {
   podId: string; desiredStatus: string; isRunning: boolean; streamReady: boolean;
   containerHealth: string; streamHealth: string; streamUrl: string; uptime: number;
@@ -22,9 +22,10 @@ export function validateApiUrl(value: string | undefined): string {
   return parsed.origin;
 }
 
-export function validateStreamUrl(value: string, podId: string): string {
-  const expected = `https://${podId}-3000.proxy.runpod.net`;
-  if (value !== expected || !/^[a-z0-9]{6,64}$/i.test(podId)) {
+export function validateStreamUrl(value: string, podId: string, streamPort = 3000): string {
+  const expected = `https://${podId}-${streamPort}.proxy.runpod.net`;
+  if (!Number.isInteger(streamPort) || streamPort < 1 || streamPort > 65535 ||
+      value !== expected || !/^[a-z0-9]{6,64}$/i.test(podId)) {
     throw new Error('The server returned an invalid workstation URL.');
   }
   return value;

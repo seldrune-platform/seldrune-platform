@@ -42,6 +42,9 @@ only within the configured pod's HTTPS origin and does not receive the control
 plane JWT or RunPod API key. Stream reload, error feedback, and a toolbar-toggle
 button remain accessible. Toolbar injection hides only known Selkies/noVNC
 chrome selectors and can be turned off for troubleshooting.
+The server returns its configured stream port at login. The mobile app validates
+that exact port (default 3000, or 6901 for the selected Kasm desktop) and pod ID.
+Rebuild the mobile app to use the configurable-port API with an older installation.
 
 Android uses a hardware WebView layer. Blur uses native Android SDK 31+ blur
 with a translucent fallback on older versions. Boot opacity/progress animations

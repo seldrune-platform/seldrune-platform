@@ -24,6 +24,10 @@ export function readConfig(env = process.env) {
   if (!/^[a-z0-9]{6,64}$/i.test(env.RUNPOD_POD_ID)) throw new Error('Invalid RUNPOD_POD_ID');
   const port = Number(env.PORT || 10000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
+  const streamPort = Number(env.STREAM_PORT || 3000);
+  if (!Number.isInteger(streamPort) || streamPort < 1 || streamPort > 65535) {
+    throw new Error('Invalid STREAM_PORT');
+  }
   const origins = (env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
   for (const origin of origins) {
     if (new URL(origin).origin !== origin || !origin.startsWith('https://')) {
@@ -33,7 +37,7 @@ export function readConfig(env = process.env) {
   return {
     username: env.HOST_USERNAME || 'admin', password: env.HOST_PASSWORD,
     jwtSecret: env.JWT_SECRET, apiKey: env.RUNPOD_API_KEY, podId: env.RUNPOD_POD_ID,
-    port, origins, trustProxy: env.RENDER === 'true' ? 1 : false,
+    port, streamPort, origins, trustProxy: env.RENDER === 'true' ? 1 : false,
     stateFile: resolve(env.STATE_FILE || '.runtime/lease.json'),
   };
 }
@@ -121,7 +125,8 @@ export function createApp(config, { client = createRunpodClient(config), now = D
   const passwordSalt = randomBytes(16);
   const passwordOptions = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
   const expectedPassword = derivePassword(config.password, passwordSalt, 64, passwordOptions);
-  const streamUrl = `https://${config.podId}-3000.proxy.runpod.net`;
+  const streamPort = config.streamPort ?? 3000;
+  const streamUrl = `https://${config.podId}-${streamPort}.proxy.runpod.net`;
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
   app.use(helmet());
@@ -192,7 +197,7 @@ export function createApp(config, { client = createRunpodClient(config), now = D
       const token = jwt.sign({ epoch }, config.jwtSecret, {
         algorithm: 'HS256', subject: config.username, issuer, audience, expiresIn: '12h',
       });
-      res.json({ token, podId: config.podId, streamUrl, expiresIn: 43_200,
+      res.json({ token, podId: config.podId, streamUrl, streamPort, expiresIn: 43_200,
         heartbeatIntervalSeconds: 30, idleTimeoutSeconds: IDLE_MS / 1000 });
     });
   });
@@ -219,7 +224,7 @@ export function createApp(config, { client = createRunpodClient(config), now = D
       gpuUtilPercent: percent(gpu.gpuUtilPercent), memoryUtilPercent: percent(gpu.memoryUtilPercent) }));
     return { podId: config.podId, desiredStatus: pod.desiredStatus, isRunning,
       containerHealth: isRunning ? 'running' : 'waiting', streamReady, streamHealth,
-      streamUrl, uptime: pod.runtime?.uptimeInSeconds ?? 0, gpus,
+      streamUrl, streamPort, uptime: pod.runtime?.uptimeInSeconds ?? 0, gpus,
       gpu: gpus[0] || { gpuUtilPercent: null, memoryUtilPercent: null } };
   }
   app.get('/api/status', authenticate, async (_req, res) => {

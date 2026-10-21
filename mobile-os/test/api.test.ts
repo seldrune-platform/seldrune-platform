@@ -38,6 +38,16 @@ test('stream URL must match the exact RunPod pod and port', () => {
   assert.equal(canNavigate('file:///etc/passwd', url), false);
   assert.equal(canNavigate('about:blank', url), true);
 });
+
+test('configured stream ports preserve exact pod and origin validation', () => {
+  const url = 'https://testpod123-6901.proxy.runpod.net';
+  assert.equal(validateStreamUrl(url, 'testpod123', 6901), url);
+  assert.throws(() => validateStreamUrl(url, 'testpod123'));
+  assert.throws(() => validateStreamUrl(url, 'differentpod', 6901));
+  for (const port of [0, -1, 65536, 3.5, NaN]) {
+    assert.throws(() => validateStreamUrl(`https://testpod123-${port}.proxy.runpod.net`, 'testpod123', port));
+  }
+});
 test('API sends bearer credentials only to control plane and propagates session expiry', async t => {
   const original = globalThis.fetch;
   t.after(() => { globalThis.fetch = original; });

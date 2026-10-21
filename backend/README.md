@@ -27,10 +27,14 @@ Node 24's environment proxy support for managed execution environments.
 ## Configure the workstation
 
 Create/select a dedicated single-GPU RunPod pod, expose its desktop service as
-HTTP port **3000**, and install a browser-compatible desktop streamer, such as
+HTTP port **3000** by default, and install a browser-compatible desktop streamer, such as
 a properly configured Selkies/webtop image. Store the exact pod ID on Render.
 The control plane resumes existing pods; it does not create, reset, migrate,
 install software on, or terminate them. RunPod capacity must be available to resume.
+For an existing pod with a different exposed HTTP port, set `STREAM_PORT` to that
+port on Render. For the selected `novel_plum_jellyfish` pod (`rwwvlvv34gw0dy`),
+the exposed Kasm desktop is **6901**, so use `STREAM_PORT=6901` and that pod ID.
+The default remains 3000 for webtop images. Ports must be integers from 1 to 65535.
 
 **Secure the desktop streamer separately.** The RunPod HTTPS proxy URL can be
 reached directly. The orchestrator JWT protects control endpoints, not this
@@ -58,7 +62,9 @@ All bodies are JSON. Except for login and health, endpoints require
 | POST | `/api/heartbeat` | bearer token, `{}` | Renew lease; only this endpoint and a successful login renew activity |
 | POST | `/api/shutdown` | bearer token, `{}` | `podStop` acknowledgement, then revoke the session |
 
-The stream URL is always `https://<RUNPOD_POD_ID>-3000.proxy.runpod.net`.
+The stream URL is `https://<RUNPOD_POD_ID>-<STREAM_PORT>.proxy.runpod.net`.
+Login and status return the configured `streamPort`. The mobile client validates
+the exact pod and port; it does not allow arbitrary stream domains.
 Telemetry percentages are clamped to 0–100; missing telemetry is `null`, not
 fabricated zero. `memoryUtilPercent` is displayed as VRAM utilization, not MiB.
 Errors are JSON: 401 for invalid/expired sessions, 429 for throttling, 400/413
