@@ -1,7 +1,7 @@
 export type Session = { token: string; podId: string; streamUrl: string; streamPort?: number };
 export type PodStatus = {
   podId: string; desiredStatus: string; isRunning: boolean; streamReady: boolean;
-  containerHealth: string; streamHealth: string; streamUrl: string; uptime: number;
+  containerHealth: string; streamHealth: string; streamUrl: string; streamPort?: number; uptime: number;
   gpu: { gpuUtilPercent: number | null; memoryUtilPercent: number | null };
 };
 
@@ -29,6 +29,13 @@ export function validateStreamUrl(value: string, podId: string, streamPort = 300
     throw new Error('The server returned an invalid workstation URL.');
   }
   return value;
+}
+
+export function streamMatchesSession(status: Pick<PodStatus, 'streamUrl' | 'streamPort'>, session: Session): boolean {
+  try {
+    validateStreamUrl(status.streamUrl, session.podId, status.streamPort);
+    return (status.streamPort ?? 3000) === (session.streamPort ?? 3000);
+  } catch { return false; }
 }
 
 export function canNavigate(url: string, streamUrl: string): boolean {

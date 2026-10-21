@@ -65,6 +65,9 @@ All bodies are JSON. Except for login and health, endpoints require
 The stream URL is `https://<RUNPOD_POD_ID>-<STREAM_PORT>.proxy.runpod.net`.
 Login and status return the configured `streamPort`. The mobile client validates
 the exact pod and port; it does not allow arbitrary stream domains.
+JWT sessions are scoped to the stream port, so changing it on redeploy revokes
+old clients' access and heartbeat renewal. Legacy portless tokens remain valid
+only with the default port 3000.
 Telemetry percentages are clamped to 0–100; missing telemetry is `null`, not
 fabricated zero. `memoryUtilPercent` is displayed as VRAM utilization, not MiB.
 Errors are JSON: 401 for invalid/expired sessions, 429 for throttling, 400/413

@@ -158,7 +158,8 @@ export function createApp(config, { client = createRunpodClient(config), now = D
         algorithms: ['HS256'], issuer, audience,
       });
       const lease = store.get();
-      if (!lease.active || claims.sub !== config.username || claims.epoch !== lease.epoch) {
+      if (!lease.active || claims.sub !== config.username || claims.epoch !== lease.epoch ||
+          (claims.streamPort ?? 3000) !== streamPort) {
         throw new Error('Session ended');
       }
       req.session = claims;
@@ -194,7 +195,7 @@ export function createApp(config, { client = createRunpodClient(config), now = D
       if (pod.desiredStatus !== 'RUNNING') await client.resume();
       const epoch = randomUUID();
       store.update({ active: true, epoch, lastHeartbeat: now() });
-      const token = jwt.sign({ epoch }, config.jwtSecret, {
+      const token = jwt.sign({ epoch, streamPort }, config.jwtSecret, {
         algorithm: 'HS256', subject: config.username, issuer, audience, expiresIn: '12h',
       });
       res.json({ token, podId: config.podId, streamUrl, streamPort, expiresIn: 43_200,

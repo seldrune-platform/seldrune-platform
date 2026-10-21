@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import {
-  ApiError, canNavigate, request, shouldEndSession, STREAM_CHROME_SCRIPT, validateApiUrl, validateStreamUrl,
+  ApiError, canNavigate, request, shouldEndSession, streamMatchesSession, STREAM_CHROME_SCRIPT, validateApiUrl, validateStreamUrl,
   type PodStatus, type Session,
 } from './src/api';
 
@@ -146,7 +146,9 @@ function Shell() {
       try {
         const next = await call<PodStatus>('/api/status');
         if (cancelled || !foreground || run !== generation) return;
-        validateStreamUrl(next.streamUrl, session.podId, session.streamPort);
+        if (!streamMatchesSession(next, session)) {
+          lock('Workstation configuration changed. Sign in again.'); return;
+        }
         setStatus(next);
         if (shouldEndSession(next.desiredStatus,
           phaseRef.current === 'desktop' ? 'desktop' : 'booting', Date.now() - bootStarted)) {

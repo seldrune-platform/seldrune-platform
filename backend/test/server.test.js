@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
+import jwt from 'jsonwebtoken';
 import { createApp, createLeaseStore, createRunpodClient, readConfig, IDLE_MS } from '../server.js';
 
 const password = 'test-only-password-123';
@@ -77,6 +78,26 @@ test('Kasm login and status use the configured port on the fixed RunPod host', a
   const result = await f.call('/api/status', { token: session.token });
   assert.equal(result.data.streamUrl, session.streamUrl);
   assert.equal(result.data.streamPort, 6901);
+});
+
+test('port changes revoke previously signed sessions and their heartbeats', async t => {
+  const f = await fixture(t, { streamPort: 6901 });
+  const { token } = await f.login();
+  const claims = jwt.decode(token);
+  const oldToken = jwt.sign({ ...claims, streamPort: 3000 }, config.jwtSecret);
+  for (const [path, body] of [['/api/status', undefined], ['/api/heartbeat', {}], ['/api/shutdown', {}]]) {
+    assert.equal((await f.call(path, { token: oldToken, body })).status, 401);
+  }
+  assert.equal((await f.call('/api/status', { token })).status, 200);
+});
+
+test('legacy sessions without a port claim stay valid only on the default port', async t => {
+  const f = await fixture(t);
+  const { token } = await f.login();
+  const claims = jwt.decode(token);
+  delete claims.streamPort;
+  const legacyToken = jwt.sign(claims, config.jwtSecret);
+  assert.equal((await f.call('/api/status', { token: legacyToken })).status, 200);
 });
 
 test('invalid credentials and anonymous requests never operate a pod', async t => {
