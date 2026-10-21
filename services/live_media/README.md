@@ -16,6 +16,12 @@ Build with `Dockerfile.webrtc-gateway`. The service exposes:
 - `DELETE /v1/sessions/{session_id}`: closes a session only for its organization and user.
 - `GET /healthz` and `GET /readyz`: process health and configuration readiness.
 
+Render must use `/readyz` for this service's health check. `/healthz` proves only
+that the process can answer HTTP and must not be substituted to bypass missing
+worker, authorization, TLS, or TURN configuration. A `ready` response does not by
+itself prove transformed media; live status still requires a real transformed-frame
+test and its valid evidence receipt.
+
 Configure these gateway environment variables:
 
 | Variable | Purpose |
