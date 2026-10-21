@@ -26,3 +26,9 @@ dist/
 *.log
 .coverage
 htmlcov/
+
+# Cloud GPU orchestrator and Expo shell
+node_modules/
+.expo/
+backend/.runtime/
+mobile-os/web-build/

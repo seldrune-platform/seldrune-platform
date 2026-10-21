@@ -31,6 +31,11 @@ The v1.0.1 production-recovery patch added real PostgreSQL migration and product
 
 ## Local development
 
+The optional [Cloud GPU OS control plane](backend/README.md) and
+[Expo mobile shell](mobile-os/README.md) are independent Node packages for an
+on-demand RunPod workstation. Their Render Blueprint is `backend/render.yaml`;
+the root Blueprint continues to deploy the Python platform.
+
 Requires Python 3.12+.
 
 ```bash

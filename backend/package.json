@@ -1,0 +1,21 @@
+{
+  "name": "cloud-gpu-os-orchestrator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Authenticated, on-demand RunPod control plane",
+  "type": "module",
+  "engines": { "node": ">=24 <25" },
+  "scripts": {
+    "start": "node --use-env-proxy server.js",
+    "dev": "node --use-env-proxy --env-file-if-exists=.env --watch server.js",
+    "test": "node --test test/*.test.js",
+    "check": "node --check server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

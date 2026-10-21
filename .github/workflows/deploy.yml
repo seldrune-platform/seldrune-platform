@@ -1,0 +1,86 @@
+name: Cloud GPU OS validation and deploy
+
+on:
+  pull_request:
+    paths: ['backend/**', 'mobile-os/**', '.github/workflows/deploy.yml']
+  push:
+    branches: [main]
+    paths: ['backend/**', 'mobile-os/**', '.github/workflows/deploy.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-gpu-os-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm audit --omit=dev --audit-level=high
+
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mobile-os
+    env:
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_API_URL: https://example.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: mobile-os/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run export:android
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [backend, mobile]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - name: Deploy validated commit to Render
+        env:
+          RENDER_DEPLOY_WEBHOOK_URL: ${{ secrets.RENDER_DEPLOY_WEBHOOK_URL }}
+          RELEASE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$RENDER_DEPLOY_WEBHOOK_URL" ]]; then
+            echo '::error::Set RENDER_DEPLOY_WEBHOOK_URL in the production environment.'
+            exit 1
+          fi
+          # Do not print the secret hook URL or its response. No redirects/retries:
+          # deploy POSTs are not idempotent. Acknowledgement is not rollout success.
+          if [[ "$RENDER_DEPLOY_WEBHOOK_URL" != https://api.render.com/deploy/srv-* ]]; then
+            echo '::error::Expected an HTTPS Render service deploy hook.'
+            exit 1
+          fi
+          separator='?'
+          [[ "$RENDER_DEPLOY_WEBHOOK_URL" != *'?'* ]] || separator='&'
+          curl --fail --silent --show-error --proto '=https' --max-time 30 \
+            --request POST --output /dev/null \
+            "${RENDER_DEPLOY_WEBHOOK_URL}${separator}ref=${RELEASE_SHA}"

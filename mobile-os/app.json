@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Cloud GPU OS",
+    "slug": "cloud-gpu-mobile-os",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.seldrune.cloudgpuos",
+      "infoPlist": { "CADisableMinimumFrameDurationOnPhone": true }
+    },
+    "android": {
+      "package": "com.seldrune.cloudgpuos",
+      "permissions": ["INTERNET"],
+      "usesCleartextTraffic": false
+    }
+  }
+}

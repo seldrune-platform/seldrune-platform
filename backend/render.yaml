@@ -1,0 +1,35 @@
+# In Render's Blueprint creation form, set Blueprint Path to backend/render.yaml.
+services:
+  - type: web
+    name: cloud-gpu-os-orchestrator
+    runtime: node
+    plan: starter
+    rootDir: backend
+    numInstances: 1
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeployTrigger: 'off'
+    disk:
+      name: cloud-gpu-lease
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 24.19.0
+      - key: NODE_ENV
+        value: production
+      - key: HOST_USERNAME
+        value: admin
+      - key: HOST_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: RUNPOD_API_KEY
+        sync: false
+      - key: RUNPOD_POD_ID
+        sync: false
+      - key: STATE_FILE
+        value: /var/data/cloud-gpu-lease.json
+      - key: ALLOWED_ORIGINS
+        value: ""
