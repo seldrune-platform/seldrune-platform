@@ -30,6 +30,10 @@ def test_capability_seed_is_appended_to_custom_agent_instructions() -> None:
     assert "model statement alone is not completion proof" in instructions
     assert "compact skill capsules" in instructions
     assert "operations require the applicable owner approval" in normalized
+    assert "Capability router (v1)" in instructions
+    assert "choose only task-relevant routines" in normalized
+    assert "Security: require explicitly authorized scope" in normalized
+    assert "docs/intelligence-skill-matrix-v1.md" in instructions
 
 
 def test_capability_seed_is_appended_to_default_agent_instructions() -> None:
@@ -39,6 +43,7 @@ def test_capability_seed_is_appended_to_default_agent_instructions() -> None:
     assert "research, analysis" in instructions
     assert "Seldrune collaborative execution seed" in instructions
     assert "acceptance evidence" in instructions
+    assert "Capability router (v1)" in instructions
 
 
 def test_owner_continuity_is_labeled_and_appended_to_agent_input() -> None:
