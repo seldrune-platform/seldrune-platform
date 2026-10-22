@@ -1,0 +1,81 @@
+#seldrune-gpt .gpt-intelligent-ui-toggle {
+  white-space: nowrap;
+  border: 1px solid #b9c9dd;
+  border-radius: 999px;
+  color: #263c58;
+  background: #f3f7fc;
+  padding: 7px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+#seldrune-gpt .gpt-intelligent-ui-toggle:hover {
+  border-color: #879fbc;
+  background: #eaf1fa;
+}
+
+#seldrune-gpt .gpt-intelligent-ui-toggle.active {
+  border-color: #7358d8;
+  color: #4933a4;
+  background: #f0edff;
+  box-shadow: 0 0 0 2px rgb(115 88 216 / 12%);
+}
+
+#seldrune-gpt .gpt-openui-renderer {
+  min-height: 44px;
+  max-width: 100%;
+  overflow: auto;
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid #d7e0ec;
+  border-radius: 16px;
+  background: #f8fbff;
+  color: #172a42;
+}
+
+#seldrune-gpt .gpt-openui-renderer > * {
+  max-width: 100%;
+}
+
+#seldrune-gpt .gpt-openui-error {
+  margin: 8px 0 0;
+  color: #8a2d36;
+  font-size: 0.9rem;
+}
+
+#seldrune-gpt .gpt-openui-load {
+  margin-top: 10px;
+}
+
+#seldrune-gpt .gpt-openui-source {
+  margin-top: 10px;
+  color: #425873;
+  font-size: 0.86rem;
+}
+
+#seldrune-gpt .gpt-openui-source summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+#seldrune-gpt .gpt-openui-source pre {
+  max-width: 100%;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 10px;
+  background: #eef3fa;
+  color: #243750;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  #seldrune-gpt .gpt-intelligent-ui-toggle {
+    padding: 6px 9px;
+    font-size: 0.82rem;
+  }
+
+  #seldrune-gpt .gpt-openui-renderer {
+    padding: 10px;
+  }
+}
