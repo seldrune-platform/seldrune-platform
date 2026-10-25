@@ -9,10 +9,16 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://cloud-gpu-os-orchestrator.onrender.com"
       },
-      "android": { "buildType": "apk" }
+      "android": { "buildType": "apk" },
+      "ios": { "simulator": true }
+    },
+    "internal": {
+      "extends": "preview",
+      "ios": { "simulator": false }
     },
     "production": {
       "autoIncrement": true,
+      "distribution": "store",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://cloud-gpu-os-orchestrator.onrender.com"
       },

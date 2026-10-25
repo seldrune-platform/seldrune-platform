@@ -32,6 +32,11 @@ cancels pending requests on session changes. Returning after idle shutdown
 requires login again. Closing/minimizing a window does **not** power off the
 pod: use Start → Shut down, or let background idle shutdown occur. Confirm the
 stop in RunPod if the control plane cannot be reached.
+The Start menu profile action locks the shell and stops its heartbeat; it does
+not immediately stop the pod. The idle watchdog can stop an unused pod after
+five minutes. Tapping the active taskbar app minimizes it; tapping it again
+restores it. Android Back closes the Start menu first, then minimizes the
+focused window.
 Terminal states such as DEAD, PAUSED and TERMINATED immediately end the session
 and its heartbeats. During boot only, EXITED receives a 15-second grace period
 for resume propagation before returning to the lock screen. RUNNING and known
@@ -68,13 +73,28 @@ orientation, drag/resize, accessibility, background/resume, stream credentials,
 audio, reconnect, and shutdown on your target devices. Verify that GPU/VRAM
 readings match RunPod and that a lost phone heartbeat stops the dedicated pod.
 Configure native signing and store identities before distributing a release.
-`eas.json` includes internal APK and production app-bundle profiles. After
-linking your Expo project (`npx eas-cli login`, then `npx eas-cli init`) and
-configuring secure signing credentials, build an installable Android APK with
-`npx eas-cli build --platform android --profile preview`; use the `production`
-profile for a Play Store app bundle. The profiles already set the production API
-URL. EAS builds, signing, store submission and physical-device tests are not
-executed by this repository's CI workflow.
+`eas.json` includes an internal Android APK profile, an iOS simulator profile,
+and store production profiles for Android and iOS. After linking your Expo
+project (`npx eas-cli login`, then `npx eas-cli init`), build a preview with
+`npx eas-cli build --platform android --profile preview` or
+`npx eas-cli build --platform ios --profile preview`. The iOS preview targets a
+simulator. Build an installable iOS preview with
+`npx eas-cli build --platform ios --profile internal`; register the device and
+configure Apple signing when prompted. Build store artifacts with
+`npx eas-cli build --platform android --profile production` or
+`npx eas-cli build --platform ios --profile production`. Configure secure
+signing credentials before distributing them. The profiles already set the
+production API URL. EAS builds, signing, store submission and physical-device
+tests are not executed by this repository's CI workflow.
+
+For a build launched from GitHub, add an Expo robot token as the repository
+Actions secret `EXPO_TOKEN`. The `Mobile OS EAS build` workflow supports
+Android or iOS builds with the preview, internal, or production profile. Its
+initial push to the `codex/mobile-os-eas-build` branch starts an Android
+preview; after the workflow reaches the default branch, use its manual
+**Run workflow** action for later builds. It creates or links the EAS project
+under the `seldrune-platform` organization and stores the finished build in
+Expo. Never put the token in source control or a public build log.
 
 Dependency audit at implementation time reports high-severity advisories in
 the current Expo/Metro build-tool chains (`braces` and `node-forge`). The registry

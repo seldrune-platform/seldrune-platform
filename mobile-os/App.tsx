@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Animated, AppState, KeyboardAvoidingView, PanResponder,
+  ActivityIndicator, Alert, Animated, AppState, BackHandler, KeyboardAvoidingView, PanResponder,
   Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -228,6 +228,35 @@ function Shell() {
   function patchFrame(id: WindowId, patch: Partial<FrameState>) {
     setFrames(previous => previous.map(frame => frame.id === id ? { ...frame, ...patch } : frame));
   }
+  function toggleTaskbarApp(id: WindowId) {
+    const frame = frames.find(item => item.id === id);
+    if (frame && active === id && !frame.minimized) {
+      patchFrame(id, { minimized: true });
+      return;
+    }
+    openApp(id);
+  }
+  function lockWorkstation() {
+    setStartOpen(false);
+    lock('Workstation locked. Sign in again to reconnect.');
+  }
+
+  useEffect(() => {
+    if (phase !== 'desktop') return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (startOpen) {
+        setStartOpen(false);
+        return true;
+      }
+      const focused = frames.find(frame => frame.id === active && !frame.minimized);
+      if (focused) {
+        patchFrame(active, { minimized: true });
+        return true;
+      }
+      return false;
+    });
+    return () => subscription.remove();
+  }, [phase, startOpen, frames, active]);
 
   return <View style={styles.root}>
     <BlurTargetView ref={wallpaper} style={StyleSheet.absoluteFill}>
@@ -287,7 +316,18 @@ function Shell() {
           <View style={styles.appTile}><Ionicons name={app.icon} size={30} color={app.color} /></View>
           <Text style={styles.appLabel}>{app.title}</Text>
         </Pressable>)}</View>
-        <View style={styles.workspace}>{frames.map(frame => <AppFrame key={frame.id} frame={frame}
+        <View style={styles.workspace}>
+          {frames.length === 0 && <View style={styles.emptyWorkspace}>
+            <View style={styles.emptyCard}>
+              <View style={styles.appTile}><Ionicons name="desktop-outline" size={30} color="#6ed7ff" /></View>
+              <Text style={styles.panelTitle}>Your workspace is ready</Text>
+              <Text style={styles.body}>Open the GPU workstation to continue on your cloud desktop.</Text>
+              <Pressable accessibilityRole="button" onPress={() => openApp('workstation')} style={styles.emptyAction}>
+                <Text style={styles.emptyActionLabel}>Open GPU Workstation</Text>
+              </Pressable>
+            </View>
+          </View>}
+          {frames.map(frame => <AppFrame key={frame.id} frame={frame}
           focused={active === frame.id} onFocus={() => setActive(frame.id)}
           onMinimize={() => patchFrame(frame.id, { minimized: true })}
           onMaximize={() => patchFrame(frame.id, { maximized: !frame.maximized })}
@@ -331,22 +371,33 @@ function Shell() {
             <Text style={styles.body}>Native animations adapt to your display. Remote frame rate and latency depend on the stream, device and network.</Text>
             <Text style={styles.notice}>Backgrounding pauses heartbeats. After five idle minutes, the server requests a stop on its next 60-second check. Storage may still be billed.</Text>
           </ScrollView>}
-        </AppFrame>)}</View>
+        </AppFrame>)}
+        </View>
         {!!notice && <View style={styles.noticeBanner}><Text style={styles.smallText}>{notice}</Text></View>}
         {startOpen && <BlurView blurTarget={wallpaper} blurMethod="dimezisBlurViewSdk31Plus" intensity={80} tint="dark" style={styles.startMenu}>
           <Text style={styles.panelTitle}>Pinned</Text><View style={styles.pinnedApps}>{apps.map(app =>
             <Pressable accessibilityRole="button" key={app.id} style={styles.pinnedApp} onPress={() => openApp(app.id)}>
               <Ionicons name={app.icon} color={app.color} size={27} /><Text style={styles.appLabel}>{app.title}</Text>
             </Pressable>)}</View>
-          <View style={styles.startFooter}><Text style={styles.body}>{username}</Text>
+          <View style={styles.startFooter}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Lock workstation" onPress={lockWorkstation}
+              style={styles.lockAction}>
+              <View style={styles.lockAvatar}><Ionicons name="person-outline" size={17} color="#d8eeff" /></View>
+              <View><Text numberOfLines={1} style={styles.body}>{username}</Text>
+                <Text style={styles.lockHint}>Lock workstation</Text></View>
+            </Pressable>
             <Pressable accessibilityRole="button" onPress={confirmShutdown} disabled={busy} style={styles.powerButton}>
               <Ionicons name="power-outline" size={20} color="#fff" /><Text style={styles.body}>{busy ? 'Stopping…' : 'Shut down'}</Text>
             </Pressable></View>
         </BlurView>}
         <BlurView blurTarget={wallpaper} blurMethod="dimezisBlurViewSdk31Plus" intensity={70} tint="dark" style={styles.taskbar}>
           <IconButton icon="logo-windows" label="Toggle Start menu" onPress={() => setStartOpen(value => !value)} />
-          {apps.map(app => <Pressable key={app.id} accessibilityRole="button" accessibilityLabel={`Open ${app.title}`}
-            style={[styles.taskIcon, frames.some(frame => frame.id === app.id) && styles.taskActive]} onPress={() => openApp(app.id)}>
+          {apps.map(app => <Pressable key={app.id} accessibilityRole="button"
+            accessibilityLabel={frames.some(frame => frame.id === app.id && active === app.id && !frame.minimized)
+              ? `Minimize ${app.title}` : `Open ${app.title}`}
+            style={[styles.taskIcon, frames.some(frame => frame.id === app.id) && styles.taskActive,
+              frames.some(frame => frame.id === app.id && frame.minimized) && styles.taskMinimized]}
+            onPress={() => toggleTaskbarApp(app.id)}>
             <Ionicons name={app.icon} size={23} color={app.color} /></Pressable>)}
           <View style={styles.taskClock}><Text style={styles.smallText}>{clock.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text></View>
         </BlurView>
@@ -389,6 +440,12 @@ const styles = StyleSheet.create({
   appTile: { height: 52, width: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#d1e9ff12', borderWidth: 1, borderColor: '#cbe5ff24' },
   appLabel: { color: '#e1edff', fontSize: 11, textAlign: 'center', lineHeight: 15 },
   workspace: { flex: 1, marginHorizontal: 10, marginBottom: 8 },
+  emptyWorkspace: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
+  emptyCard: { width: '100%', maxWidth: 360, alignItems: 'center', gap: 12, padding: 24,
+    borderRadius: 18, backgroundColor: '#12223bd9', borderWidth: 1, borderColor: '#9dc5f22b' },
+  emptyAction: { minHeight: 44, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center',
+    borderRadius: 10, backgroundColor: '#89d1ff', marginTop: 4 },
+  emptyActionLabel: { color: '#0b1933', fontSize: 13, fontWeight: '700' },
   frame: { position: 'absolute', backgroundColor: '#101e35', borderWidth: 1, borderColor: '#8bacdf55', borderRadius: 12, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 18, elevation: 6 },
   maximized: { top: 0, left: 0, right: 0, bottom: 0 },
   floating: { top: 12, left: '4%', width: '92%', height: '78%', minHeight: 180 },
@@ -409,9 +466,13 @@ const styles = StyleSheet.create({
   pinnedApps: { flexDirection: 'row', justifyContent: 'space-around', marginVertical: 26, gap: 12 },
   pinnedApp: { alignItems: 'center', gap: 12, flex: 1 },
   startFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderColor: '#8bacdf30', paddingTop: 16 },
+  lockAction: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1, paddingVertical: 4, paddingRight: 8 },
+  lockAvatar: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#7caef12b' },
+  lockHint: { color: '#91afd2', fontSize: 10, marginTop: 1 },
   powerButton: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8 },
   taskbar: { height: 58, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, paddingHorizontal: 12, backgroundColor: '#1b2c4799', borderTopWidth: 1, borderColor: '#b5d4ff26', overflow: 'hidden', zIndex: 40 },
   taskIcon: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', borderRadius: 8 },
   taskActive: { backgroundColor: '#e1eeff18', borderBottomWidth: 2, borderColor: '#8bd6ff' },
+  taskMinimized: { opacity: 0.6 },
   taskClock: { marginLeft: 'auto', alignItems: 'flex-end' },
 });
