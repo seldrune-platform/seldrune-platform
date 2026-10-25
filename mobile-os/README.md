@@ -8,7 +8,9 @@ Performance and System are local apps. It is not a Windows kernel or a Windows
 license: the operating system inside the stream comes from your RunPod image.
 On Android and iOS the workstation opens edge to edge in immersive full screen.
 A small floating dock keeps the keyboard one tap away; reload, viewer-toolbar,
-and exit controls stay in its expandable menu.
+and Pod power controls stay in its expandable menu. The keyboard and toolbar
+work without reloading the remote desktop. The app asks Kasm/noVNC to fit and
+resize the desktop to the phone viewport when the remote server supports it.
 
 ## Development
 
@@ -29,15 +31,14 @@ bundle after changing it. Never put API keys, JWT secrets, or host passwords int
 `EXPO_PUBLIC_*` variables. Host username defaults to `admin`; enter the password
 on the lock screen. Password and session token are not persisted by this app.
 
-After host login, the app discovers Pods in the linked RunPod account. A single
-Pod opens automatically; if there are several, select the workstation to open.
+After host login, the app connects only to `RUNPOD_POD_ID` configured on the
+orchestrator. It does not show the other Pods in the account.
 The app polls every 3 seconds during boot and 30 seconds on the desktop, with
 30-second foreground heartbeats. It pauses requests in the background and
 cancels pending requests on session changes. Locking or closing the app leaves
-the Pod running. Use Start → Shut down when you want to stop the selected Pod.
-Tapping the active taskbar app minimizes it; tapping it again restores it.
-Android Back closes the Start menu first, then exits immersive mode, then
-minimizes the focused window.
+the Pod running. Use the mobile dock's power control and confirm to stop the
+current Pod. On Android, Back opens the mobile controls while the workstation
+stays full screen.
 Terminal states such as DEAD, PAUSED and TERMINATED immediately end the session
 and its heartbeats. During boot only, EXITED receives a 15-second grace period
 for resume propagation before returning to the lock screen. RUNNING and known
@@ -50,12 +51,13 @@ to `kasm_user`, and the password must match the value configured for the Pod
 stream username and password stay in app memory and clear when the workstation
 is locked. The WebView receives neither the control-plane JWT nor the RunPod
 API key. Stream reload, error feedback, and a toolbar-toggle button remain
-available. Toolbar injection hides only known Selkies/noVNC chrome selectors
-and can be turned off for troubleshooting. The keyboard control reveals the
-viewer toolbar and activates its native noVNC/Kasm keyboard input so the phone's
-software keyboard can type into the remote desktop.
+available. Toolbar injection hides known Selkies/noVNC chrome selectors and
+can be turned off for troubleshooting. The unsupported noVNC browser-fullscreen
+button is hidden because the app already fills the phone screen. The keyboard
+control reveals the viewer toolbar and activates its native noVNC/Kasm keyboard
+input so the phone's software keyboard can type into the remote desktop.
 The server returns its configured stream port at login. The mobile app validates
-that exact port (default 3000, or 6901 for the selected Kasm desktop) and pod ID.
+that exact port (default 3000, or 6901 for the Kasm desktop) and configured Pod ID.
 Rebuild the mobile app to use the configurable-port API with an older installation.
 If a deployment changes the stream port, the app locks the stale session and
 stops heartbeats rather than indefinitely retrying the previous stream URL.
@@ -77,7 +79,7 @@ and compile its Android JS/Hermes bundle. They do not replace installing a
 signed native build on a physical phone. Before release, test keyboard/touch,
 orientation, drag/resize, accessibility, background/resume, stream credentials,
 audio, reconnect, and shutdown on your target devices. Verify that GPU/VRAM
-readings match RunPod and that selecting a Pod opens its matching desktop stream.
+readings match RunPod and that the configured Pod opens its matching desktop stream.
 Configure native signing and store identities before distributing a release.
 `eas.json` includes an internal Android APK profile, an iOS simulator profile,
 and store production profiles for Android and iOS. After linking your Expo
@@ -96,7 +98,7 @@ tests are not executed by this repository's CI workflow.
 For a build launched from GitHub, add an Expo robot token as the repository
 Actions secret `EXPO_TOKEN`. The `Mobile OS EAS build` workflow supports
 Android or iOS builds with the preview, internal, or production profile. Its
-initial push to the `codex/mobile-os-dynamic-pod` branch starts an Android
+initial push to the `codex/mobile-os-current-pod-mobile` branch starts an Android
 preview; after the workflow reaches the default branch, use its manual
 **Run workflow** action for later builds. It creates or links the EAS project
 under the `seldrune-platform` organization and stores the finished build in

@@ -1,6 +1,4 @@
 export type Session = { token: string; podId: string; streamUrl: string; streamPort?: number };
-export type AvailablePod = { id: string; name: string; desiredStatus: string; isRunning: boolean };
-export type LoginResult = Session | { requiresPodSelection: true; pods: AvailablePod[] };
 export type PodStatus = {
   podId: string; desiredStatus: string; isRunning: boolean; streamReady: boolean;
   containerHealth: string; streamHealth: string; streamUrl: string; streamPort?: number; uptime: number;
@@ -82,13 +80,51 @@ export async function request<T>(base: string, path: string, token?: string,
 // after page load, without observing every remote desktop DOM mutation.
 export const STREAM_CHROME_SCRIPT = `
 (function () {
-  if (window.__cloudGpuChrome) return true;
-  window.__cloudGpuChrome = true;
-  var style = document.createElement('style');
-  style.id = 'cloudGpuHiddenStreamChrome';
-  style.textContent = '#noVNC_control_bar, #noVNC_control_bar_anchor, #controlBar, .selkies-toolbar { display:none !important; }';
-  if (document.head) document.head.appendChild(style);
+  var id = 'cloudGpuHiddenStreamChrome';
+  if (!document.getElementById(id) && document.head) {
+    var style = document.createElement('style');
+    style.id = id;
+    style.textContent = '#noVNC_control_bar, #noVNC_control_bar_anchor, #controlBar, .selkies-toolbar { display:none !important; }';
+    document.head.appendChild(style);
+  }
   return true;
+})(); true;
+`;
+
+export const SHOW_REMOTE_CHROME_SCRIPT = `
+(function () {
+  var style = document.getElementById('cloudGpuHiddenStreamChrome');
+  if (style) style.remove();
+})(); true;
+`;
+
+// Fit the remote canvas to a phone viewport and ask Kasm/noVNC to resize the
+// desktop session itself when its server supports the DesktopSize extension.
+export const MOBILE_VIEWPORT_SCRIPT = `
+(function () {
+  var attempts = 0;
+  function fitRemoteDesktop() {
+    var ui = window.UI;
+    var rfb = ui && ui.rfb;
+    if (rfb) {
+      rfb.scaleViewport = true;
+      rfb.resizeSession = true;
+      return;
+    }
+    var scale = document.getElementById('noVNC_setting_scale');
+    if (scale && scale.value !== 'local') {
+      scale.value = 'local';
+      scale.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    var resize = document.getElementById('noVNC_setting_resize');
+    if (resize && !resize.checked) {
+      resize.checked = true;
+      resize.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    if (attempts++ < 24) setTimeout(fitRemoteDesktop, 500);
+  }
+  fitRemoteDesktop();
+  window.addEventListener('resize', fitRemoteDesktop, { passive: true });
 })(); true;
 `;
 
@@ -108,5 +144,19 @@ export const OPEN_REMOTE_KEYBOARD_SCRIPT = `
     setTimeout(openKeyboard, 250);
   }
   openKeyboard();
+})(); true;
+`;
+
+// The native app already fills the phone screen; noVNC's browser fullscreen
+// API is unsupported inside Android WebView and throws an overlay error.
+export const DISABLE_REMOTE_FULLSCREEN_SCRIPT = `
+(function () {
+  var style = document.getElementById('cloudGpuUnsupportedFullscreen');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'cloudGpuUnsupportedFullscreen';
+    style.textContent = '#noVNC_fullscreen_button, #noVNC_fullscreen_button_container, [aria-label*="fullscreen" i], [title*="fullscreen" i] { display:none !important; }';
+    if (document.head) document.head.appendChild(style);
+  }
 })(); true;
 `;

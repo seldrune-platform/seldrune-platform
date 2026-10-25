@@ -22,7 +22,7 @@ export function readConfig(env = process.env) {
   if (env.HOST_PASSWORD.length < 12) throw new Error('HOST_PASSWORD needs at least 12 characters');
   if (Buffer.byteLength(env.JWT_SECRET) < 32) throw new Error('JWT_SECRET needs at least 32 bytes');
   const podId = env.RUNPOD_POD_ID.trim();
-  if (podId !== 'auto' && !/^[a-z0-9]{6,64}$/i.test(podId)) throw new Error('Invalid RUNPOD_POD_ID');
+  if (!/^[a-z0-9]{6,64}$/i.test(podId)) throw new Error('RUNPOD_POD_ID must identify one current workstation');
   const port = Number(env.PORT || 10000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
   const streamPort = Number(env.STREAM_PORT || 3000);
@@ -66,17 +66,7 @@ export function createRunpodClient(config, fetchImpl = fetch) {
     return result.data;
   }
   return {
-    async pods() {
-      const data = await graphql(`query MyPods {
-        myself { pods { id name desiredStatus runtime { uptimeInSeconds ports {
-          ip isIpPublic privatePort publicPort type
-        } gpus { id gpuUtilPercent memoryUtilPercent } } } }
-      }`);
-      if (!Array.isArray(data.myself?.pods)) throw new Error('Invalid RunPod pod list');
-      return data.myself.pods;
-    },
     async pod(podId = config.podId) {
-      if (!podId || podId === 'auto') throw new Error('A Pod ID is required');
       const data = await graphql(`query Pod($podId: String!) {
         pod(input: {podId: $podId}) { id desiredStatus runtime { uptimeInSeconds gpus {
           id gpuUtilPercent memoryUtilPercent
@@ -87,7 +77,6 @@ export function createRunpodClient(config, fetchImpl = fetch) {
       return pod;
     },
     async resume(podId = config.podId) {
-      if (!podId || podId === 'auto') throw new Error('A Pod ID is required');
       const data = await graphql(`mutation Resume($podId: String!) {
         podResume(input: {podId: $podId, gpuCount: 1}) { id desiredStatus }
       }`, { podId });
@@ -95,7 +84,6 @@ export function createRunpodClient(config, fetchImpl = fetch) {
       return data.podResume;
     },
     async stop(podId = config.podId) {
-      if (!podId || podId === 'auto') throw new Error('A Pod ID is required');
       const data = await graphql(`mutation Stop($podId: String!) {
         podStop(input: {podId: $podId}) { id desiredStatus }
       }`, { podId });
@@ -155,7 +143,7 @@ export function createApp(config, { client = createRunpodClient(config), now = D
     }
     return current;
   }
-  if (config.podId !== 'auto') storeFor(config.podId);
+  storeFor(config.podId);
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
   app.use(helmet());
@@ -186,10 +174,10 @@ export function createApp(config, { client = createRunpodClient(config), now = D
       const claims = jwt.verify(header.slice(7), config.jwtSecret, {
         algorithms: ['HS256'], issuer, audience,
       });
-      const podId = claims.podId || (config.podId === 'auto' ? '' : config.podId);
+      const podId = claims.podId || config.podId;
       const lease = storeFor(podId).get();
       if (!lease.active || claims.sub !== config.username || claims.epoch !== lease.epoch ||
-          (claims.streamPort ?? 3000) !== streamPort || (claims.podId && claims.podId !== podId)) {
+          (claims.streamPort ?? 3000) !== streamPort || podId !== config.podId) {
         throw new Error('Session ended');
       }
       req.session = { ...claims, podId };
@@ -217,39 +205,15 @@ export function createApp(config, { client = createRunpodClient(config), now = D
     if (!timingSafeEqual(candidatePassword, await expectedPassword)) {
       return res.status(401).json({ error: 'Invalid host credentials' });
     }
+    if (requestedPodId !== undefined && requestedPodId !== config.podId) {
+      return res.status(400).json({ error: 'This app is connected to one current workstation.' });
+    }
     await exclusive(async () => {
-      let podId;
-      if (typeof client.pods === 'function') {
-        const available = (await client.pods()).filter(pod =>
-          typeof pod?.id === 'string' && /^[a-z0-9]{6,64}$/i.test(pod.id) &&
-          !['DEAD', 'TERMINATED', 'COMPLETED'].includes(String(pod.desiredStatus).toUpperCase()));
-        if (requestedPodId !== undefined && (typeof requestedPodId !== 'string' ||
-            !/^[a-z0-9]{6,64}$/i.test(requestedPodId))) {
-          return res.status(400).json({ error: 'Choose a valid RunPod workstation.' });
-        }
-        if (requestedPodId) {
-          if (!available.some(pod => pod.id === requestedPodId)) {
-            return res.status(409).json({ error: 'That Pod is no longer available. Refresh the list and choose an available Pod.' });
-          }
-          podId = requestedPodId;
-        } else if (available.length === 1) {
-          podId = available[0].id;
-        } else if (available.length > 1) {
-          return res.json({ requiresPodSelection: true, pods: available.map(pod => ({
-            id: pod.id, name: typeof pod.name === 'string' && pod.name.trim() ? pod.name : pod.id,
-            desiredStatus: pod.desiredStatus || 'UNKNOWN', isRunning: pod.runtime != null,
-          })) });
-        } else {
-          return res.status(404).json({ error: 'No RunPod workstations are available in this account.' });
-        }
-      } else {
-        podId = requestedPodId || config.podId;
-        if (podId === 'auto') return res.status(503).json({ error: 'RunPod workstation discovery is unavailable.' });
-      }
+      const podId = config.podId;
       const podStore = storeFor(podId);
       const pod = await client.pod(podId);
       // Persist intent before resuming: a lost upstream response must not orphan
-      // an active GPU outside the selected Pod's lease scope.
+      // an active GPU outside the configured current workstation's lease scope.
       podStore.update({ lastHeartbeat: now() });
       if (pod.desiredStatus !== 'RUNNING') await client.resume(podId);
       const epoch = randomUUID();

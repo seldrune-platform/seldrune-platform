@@ -10,9 +10,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import {
-  ApiError, canNavigate, OPEN_REMOTE_KEYBOARD_SCRIPT, request, shouldEndSession, streamMatchesSession,
-  STREAM_CHROME_SCRIPT, validateApiUrl, validateStreamUrl,
-  type AvailablePod, type LoginResult, type PodStatus, type Session,
+  ApiError, canNavigate, DISABLE_REMOTE_FULLSCREEN_SCRIPT, MOBILE_VIEWPORT_SCRIPT,
+  OPEN_REMOTE_KEYBOARD_SCRIPT, request, shouldEndSession, SHOW_REMOTE_CHROME_SCRIPT,
+  streamMatchesSession, STREAM_CHROME_SCRIPT, validateApiUrl, validateStreamUrl,
+  type PodStatus, type Session,
 } from './src/api';
 
 type Phase = 'locked' | 'booting' | 'desktop';
@@ -89,7 +90,6 @@ function Shell() {
   const [startOpen, setStartOpen] = useState(false);
   const [frames, setFrames] = useState<FrameState[]>([]);
   const [active, setActive] = useState<WindowId>('workstation');
-  const [immersive, setImmersive] = useState(Platform.OS !== 'web');
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [clock, setClock] = useState(new Date());
   const [streamError, setStreamError] = useState('');
@@ -99,9 +99,6 @@ function Shell() {
   const [streamPassword, setStreamPassword] = useState('');
   const [streamAuthAttempted, setStreamAuthAttempted] = useState(false);
   const [streamReloadVersion, setStreamReloadVersion] = useState(0);
-  const [keyboardPending, setKeyboardPending] = useState(false);
-  const [availablePods, setAvailablePods] = useState<AvailablePod[]>([]);
-  const [selectedPodId, setSelectedPodId] = useState('');
   const [chromeHidden, setChromeHidden] = useState(true);
   const webview = useRef<WebView<object>>(null);
   const wallpaper = useRef<React.ComponentRef<typeof View>>(null);
@@ -109,8 +106,7 @@ function Shell() {
   const bootPulse = useRef(new Animated.Value(0.35)).current;
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
-  const workstationImmersive = Platform.OS !== 'web' && phase === 'desktop' &&
-    active === 'workstation' && immersive;
+  const workstationImmersive = Platform.OS !== 'web' && phase === 'desktop' && active === 'workstation';
   const apiConfig = useMemo(() => {
     try { return { url: validateApiUrl(process.env.EXPO_PUBLIC_API_URL), error: '' }; }
     catch (cause) { return { url: '', error: (cause as Error).message }; }
@@ -120,8 +116,6 @@ function Shell() {
     setSession(null); setPhase('locked'); setFrames([]); setStatus(null);
     setStartOpen(false); setPassword(''); setNotice(message); setStreamLoaded(false);
     setStreamAuthPrompt(false); setStreamPassword(''); setStreamAuthAttempted(false);
-    setKeyboardPending(false);
-    setAvailablePods([]); setSelectedPodId('');
   }, []);
   useEffect(() => {
     if (workstationImmersive) return;
@@ -209,22 +203,13 @@ function Shell() {
     };
   }, [session, apiConfig.url, lock, progress]);
 
-  async function login(podChoice?: string) {
+  async function login() {
     if (busy || apiConfig.error) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      const chosenPodId = podChoice || (availablePods.length ? selectedPodId : '');
-      const next = await request<LoginResult>(apiConfig.url, '/api/login', undefined,
-        { username, password, ...(chosenPodId ? { podId: chosenPodId } : {}) });
-      if ('requiresPodSelection' in next) {
-        setAvailablePods(next.pods);
-        setSelectedPodId(previous => next.pods.some(pod => pod.id === previous)
-          ? previous : next.pods[0]?.id || '');
-        setNotice('Choose the RunPod workstation you want to open.');
-        return;
-      }
+      const next = await request<Session>(apiConfig.url, '/api/login', undefined,
+        { username, password });
       validateStreamUrl(next.streamUrl, next.podId, next.streamPort);
-      setAvailablePods([]); setSelectedPodId('');
       setPassword(''); setStatus(null); setStreamError(''); setStreamLoaded(false);
       setStreamAuthPrompt(false); setStreamPassword(''); setStreamAuthAttempted(false);
       progress.setValue(0.08); setSession(next); setPhase('booting');
@@ -272,20 +257,17 @@ function Shell() {
   function openRemoteKeyboard() {
     if (!webview.current) return;
     if (chromeHidden) {
-      setKeyboardPending(true);
       setChromeHidden(false);
-      setStreamLoaded(false);
-      setStreamReloadVersion(version => version + 1);
-      return;
+      webview.current.injectJavaScript(SHOW_REMOTE_CHROME_SCRIPT);
     }
     webview.current.injectJavaScript(OPEN_REMOTE_KEYBOARD_SCRIPT);
   }
 
   function toggleRemoteToolbar() {
-    setChromeHidden(value => !value);
+    const show = chromeHidden;
+    setChromeHidden(!show);
     setMobileToolsOpen(false);
-    setStreamLoaded(false);
-    setStreamReloadVersion(version => version + 1);
+    webview.current?.injectJavaScript(show ? SHOW_REMOTE_CHROME_SCRIPT : STREAM_CHROME_SCRIPT);
   }
 
   useEffect(() => {
@@ -296,7 +278,7 @@ function Shell() {
         return true;
       }
       if (workstationImmersive) {
-        setImmersive(false);
+        setMobileToolsOpen(value => !value);
         return true;
       }
       const focused = frames.find(frame => frame.id === active && !frame.minimized);
@@ -335,25 +317,11 @@ function Shell() {
               textContentType="password" editable={!busy} onSubmitEditing={() => { void login(); }} style={styles.input} />
             {!!(apiConfig.error || error) && <Text accessibilityRole="alert" style={styles.error}>{apiConfig.error || error}</Text>}
             {!!notice && <Text style={styles.notice}>{notice}</Text>}
-            {!!availablePods.length && <View style={styles.podChoices}>
-              <Text style={styles.podChoicesTitle}>RunPod workstations</Text>
-              {availablePods.map(pod => <Pressable key={pod.id} accessibilityRole="radio"
-                accessibilityState={{ checked: selectedPodId === pod.id }}
-                onPress={() => setSelectedPodId(pod.id)} style={[styles.podChoice,
-                  selectedPodId === pod.id && styles.podChoiceSelected]}>
-                <View style={styles.podChoiceCopy}>
-                  <Text numberOfLines={1} style={styles.podChoiceName}>{pod.name}</Text>
-                  <Text numberOfLines={1} style={styles.podChoiceMeta}>{pod.id} · {pod.desiredStatus}</Text>
-                </View>
-                <Ionicons name={selectedPodId === pod.id ? 'radio-button-on' : 'radio-button-off'}
-                  size={18} color={selectedPodId === pod.id ? '#89d1ff' : '#9bb0cd'} />
-              </Pressable>)}
-            </View>}
             <Pressable accessibilityRole="button" disabled={busy || !password || !!apiConfig.error}
               style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed,
                 (busy || !password || !!apiConfig.error) && styles.disabled]} onPress={() => { void login(); }}>
               {busy ? <ActivityIndicator color="#0b1933" /> : <><Ionicons name="arrow-forward" size={20} color="#0b1933" />
-                <Text style={styles.primaryLabel}>{availablePods.length ? 'Open selected workstation' : 'Unlock workstation'}</Text></>}
+                <Text style={styles.primaryLabel}>Unlock workstation</Text></>}
             </Pressable>
           </BlurView>
           <Text style={styles.footnote}>On demand compute · Private workspace</Text>
@@ -398,7 +366,7 @@ function Shell() {
           onMinimize={() => patchFrame(frame.id, { minimized: true })}
           onMaximize={() => {
             if (Platform.OS !== 'web' && frame.id === 'workstation') {
-              patchFrame(frame.id, { maximized: true }); setImmersive(true);
+              patchFrame(frame.id, { maximized: true });
             } else patchFrame(frame.id, { maximized: !frame.maximized });
           }}
           onClose={() => setFrames(previous => previous.filter(item => item.id !== frame.id))}>
@@ -412,7 +380,7 @@ function Shell() {
             </View>}
             {Platform.OS === 'web' ? <View style={styles.panel}><Text style={styles.body}>
               Use the Android or iOS app for the hardware-accelerated desktop stream.</Text></View> : <WebView<object>
-              key={`${chromeHidden ? 'hidden-chrome' : 'visible-chrome'}-${streamReloadVersion}`} ref={webview}
+              key={streamReloadVersion} ref={webview}
               source={{ uri: session.streamUrl }}
               basicAuthCredential={streamAuthAttempted ? { username: streamUsername, password: streamPassword } : undefined}
               style={styles.webview} androidLayerType="hardware" javaScriptEnabled domStorageEnabled
@@ -420,16 +388,15 @@ function Shell() {
               scrollEnabled={false} bounces={false}
               originWhitelist={[new URL(session.streamUrl).origin, 'about:blank']}
               onShouldStartLoadWithRequest={navigation => canNavigate(navigation.url, session.streamUrl)}
-              injectedJavaScript={chromeHidden ? STREAM_CHROME_SCRIPT : 'true;'}
+              injectedJavaScript={'true;'}
               allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false}
               mixedContentMode="never" setSupportMultipleWindows={false}
               allowFileAccess={false} allowUniversalAccessFromFileURLs={false}
               onLoadEnd={() => {
                 setStreamLoaded(true);
-                if (keyboardPending) {
-                  setKeyboardPending(false);
-                  webview.current?.injectJavaScript(OPEN_REMOTE_KEYBOARD_SCRIPT);
-                }
+                webview.current?.injectJavaScript(DISABLE_REMOTE_FULLSCREEN_SCRIPT);
+                webview.current?.injectJavaScript(MOBILE_VIEWPORT_SCRIPT);
+                webview.current?.injectJavaScript(chromeHidden ? STREAM_CHROME_SCRIPT : SHOW_REMOTE_CHROME_SCRIPT);
               }}
               onError={event => {
                 if (event.nativeEvent.description === 'net::ERR_HTTP_RESPONSE_CODE_FAILURE') return;
@@ -458,9 +425,9 @@ function Shell() {
                   onPress={toggleRemoteToolbar} style={styles.mobileControlButton}>
                   <Ionicons name={chromeHidden ? 'eye-outline' : 'eye-off-outline'} size={21} color="#f2f7ff" />
                 </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel="Exit full screen"
-                  onPress={() => { setMobileToolsOpen(false); setImmersive(false); }} style={styles.mobileControlButton}>
-                  <Ionicons name="contract-outline" size={21} color="#f2f7ff" />
+                <Pressable accessibilityRole="button" accessibilityLabel="Shut down current Pod"
+                  onPress={() => { setMobileToolsOpen(false); confirmShutdown(); }} style={styles.mobileControlButton}>
+                  <Ionicons name="power-outline" size={21} color="#ffb8c0" />
                 </Pressable>
               </View>}
               <Pressable accessibilityRole="button" accessibilityLabel="Show remote keyboard"
@@ -506,10 +473,10 @@ function Shell() {
             <Text style={styles.metric}>{percent(status?.gpu.gpuUtilPercent)}</Text><Text style={styles.body}>GPU utilization</Text>
             <Text style={styles.metric}>{percent(status?.gpu.memoryUtilPercent)}</Text><Text style={styles.body}>VRAM utilization</Text>
             <Text style={styles.notice}>Uptime {Math.floor((status?.uptime || 0) / 60)} min · {status?.containerHealth || 'Unknown'}</Text>
-            <Text style={styles.smallText}>Missing telemetry is shown as —. Refreshes every 10 seconds.</Text>
+            <Text style={styles.smallText}>Missing telemetry is shown as —. Refreshes every 30 seconds.</Text>
           </ScrollView> : <ScrollView contentContainerStyle={styles.panel}>
             <Ionicons name="logo-windows" size={42} color="#79ccff" /><Text style={styles.panelTitle}>Cloud GPU OS</Text>
-            <Text style={styles.body}>A Windows 11 inspired mobile shell for your own cloud workstation.</Text>
+            <Text style={styles.body}>A touch-first mobile interface for your current cloud workstation.</Text>
             <Text style={styles.notice}>Pod: {session?.podId}</Text>
             <Text style={styles.body}>Native animations adapt to your display. Remote frame rate and latency depend on the stream, device and network.</Text>
             <Text style={styles.notice}>Automatic idle shutdown is off. Locking or closing the app leaves this Pod running. Shut it down explicitly from the Start menu when you are finished.</Text>
@@ -564,15 +531,6 @@ const styles = StyleSheet.create({
   heading: { color: '#fff', fontSize: 22, fontWeight: '600', textAlign: 'center', marginBottom: 8 },
   subtitle: { color: '#a8bedb', fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   input: { backgroundColor: '#0a152c80', color: '#fff', borderWidth: 1, borderColor: '#7994b94d', borderRadius: 9, width: '100%', padding: 14, marginBottom: 12, fontSize: 15 },
-  podChoices: { width: '100%', marginBottom: 8 },
-  podChoicesTitle: { color: '#dce9ff', fontSize: 13, fontWeight: '700', marginBottom: 8 },
-  podChoice: { width: '100%', minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 12, paddingVertical: 8, marginBottom: 7, borderRadius: 9,
-    borderWidth: 1, borderColor: '#7994b94d', backgroundColor: '#0a152c80' },
-  podChoiceSelected: { borderColor: '#89d1ff', backgroundColor: '#4b8eb533' },
-  podChoiceCopy: { flex: 1, minWidth: 0 },
-  podChoiceName: { color: '#f0f6ff', fontSize: 13, fontWeight: '600' },
-  podChoiceMeta: { color: '#a9bddb', fontSize: 10, marginTop: 3 },
   primaryButton: { minHeight: 48, backgroundColor: '#89d1ff', borderRadius: 9, width: '100%', flexDirection: 'row', gap: 9, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   primaryLabel: { color: '#0b1933', fontWeight: '700', fontSize: 14 }, pressed: { opacity: 0.65 }, disabled: { opacity: 0.45 },
   error: { color: '#ffb7b7', fontSize: 13, lineHeight: 19, marginVertical: 8 },

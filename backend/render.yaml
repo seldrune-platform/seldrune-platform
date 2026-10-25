@@ -1,5 +1,5 @@
 # In Render's Blueprint creation form, set Blueprint Path to backend/render.yaml.
-# The app discovers Pods from the authenticated RunPod account at login.
+# Keep the mobile app attached to the user's current workstation.
 services:
   - type: web
     name: cloud-gpu-os-orchestrator
@@ -29,7 +29,7 @@ services:
       - key: RUNPOD_API_KEY
         sync: false
       - key: RUNPOD_POD_ID
-        value: auto
+        value: o4nqpenvxvk9gw
       - key: AUTO_STOP_IDLE
         value: "false"
       - key: STREAM_PORT

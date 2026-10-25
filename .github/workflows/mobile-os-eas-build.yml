@@ -6,6 +6,7 @@ on:
       - 'codex/mobile-os-dynamic-pod'
       - 'codex/mobile-os-touch-immersive'
       - 'codex/mobile-os-mobile-optimized'
+      - 'codex/mobile-os-current-pod-mobile'
     paths:
       - '.github/workflows/mobile-os-eas-build.yml'
       - 'mobile-os/**'
