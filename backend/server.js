@@ -221,7 +221,8 @@ export function createApp(config, { client = createRunpodClient(config), now = D
       let podId;
       if (typeof client.pods === 'function') {
         const available = (await client.pods()).filter(pod =>
-          typeof pod?.id === 'string' && /^[a-z0-9]{6,64}$/i.test(pod.id));
+          typeof pod?.id === 'string' && /^[a-z0-9]{6,64}$/i.test(pod.id) &&
+          !['DEAD', 'TERMINATED', 'COMPLETED'].includes(String(pod.desiredStatus).toUpperCase()));
         if (requestedPodId !== undefined && (typeof requestedPodId !== 'string' ||
             !/^[a-z0-9]{6,64}$/i.test(requestedPodId))) {
           return res.status(400).json({ error: 'Choose a valid RunPod workstation.' });
