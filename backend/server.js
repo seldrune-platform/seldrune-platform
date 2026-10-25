@@ -149,9 +149,7 @@ export function createApp(config, { client = createRunpodClient(config), now = D
     }
     let current = leaseStores.get(podId);
     if (!current) {
-      const statePath = config.podId === 'auto'
-        ? config.stateFile.replace(/\.json$/i, `-${podId}.json`)
-        : config.stateFile;
+      const statePath = `${config.stateFile.replace(/\.json$/i, '')}-${podId}.json`;
       current = createLeaseStore(statePath, podId, now);
       leaseStores.set(podId, current);
     }
@@ -304,7 +302,7 @@ export function createApp(config, { client = createRunpodClient(config), now = D
     await exclusive(async () => {
       currentSession(req);
       storeFor(req.session.podId).update({ lastHeartbeat: now() });
-      res.json({ ok: true, idleTimeoutSeconds: IDLE_MS / 1000 });
+      res.json({ ok: true, idleTimeoutSeconds: config.autoStopIdle ? IDLE_MS / 1000 : null });
     });
   });
   app.post('/api/shutdown', authenticate, async (req, res) => {
