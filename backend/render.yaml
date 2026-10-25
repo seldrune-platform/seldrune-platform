@@ -1,4 +1,5 @@
 # In Render's Blueprint creation form, set Blueprint Path to backend/render.yaml.
+# Defaults target the selected Kasm pod; change both values if switching pods.
 services:
   - type: web
     name: cloud-gpu-os-orchestrator
@@ -28,9 +29,9 @@ services:
       - key: RUNPOD_API_KEY
         sync: false
       - key: RUNPOD_POD_ID
-        sync: false
+        value: rwwvlvv34gw0dy
       - key: STREAM_PORT
-        value: "3000"
+        value: "6901"
       - key: STATE_FILE
         value: /var/data/cloud-gpu-lease.json
       - key: ALLOWED_ORIGINS
