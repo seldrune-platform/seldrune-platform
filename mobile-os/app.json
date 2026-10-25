@@ -2,7 +2,14 @@
   "expo": {
     "name": "Cloud GPU OS",
     "slug": "cloud-gpu-mobile-os",
+    "owner": "seldrune-platform",
     "version": "1.0.0",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#07142c"
+    },
     "orientation": "default",
     "userInterfaceStyle": "dark",
     "ios": {
@@ -13,7 +20,15 @@
     "android": {
       "package": "com.seldrune.cloudgpuos",
       "permissions": ["INTERNET"],
-      "usesCleartextTraffic": false
+      "usesCleartextTraffic": false,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#07142c"
+      }
+    },
+    "web": { "favicon": "./assets/favicon.png" },
+    "extra": {
+      "eas": { "projectId": "030c01db-b31c-4626-80dd-10108f219017" }
     }
   }
 }

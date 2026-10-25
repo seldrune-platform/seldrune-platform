@@ -21,7 +21,8 @@ export function readConfig(env = process.env) {
   }
   if (env.HOST_PASSWORD.length < 12) throw new Error('HOST_PASSWORD needs at least 12 characters');
   if (Buffer.byteLength(env.JWT_SECRET) < 32) throw new Error('JWT_SECRET needs at least 32 bytes');
-  if (!/^[a-z0-9]{6,64}$/i.test(env.RUNPOD_POD_ID)) throw new Error('Invalid RUNPOD_POD_ID');
+  const podId = env.RUNPOD_POD_ID.trim();
+  if (podId !== 'auto' && !/^[a-z0-9]{6,64}$/i.test(podId)) throw new Error('Invalid RUNPOD_POD_ID');
   const port = Number(env.PORT || 10000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
   const streamPort = Number(env.STREAM_PORT || 3000);
@@ -36,9 +37,10 @@ export function readConfig(env = process.env) {
   }
   return {
     username: env.HOST_USERNAME || 'admin', password: env.HOST_PASSWORD,
-    jwtSecret: env.JWT_SECRET, apiKey: env.RUNPOD_API_KEY, podId: env.RUNPOD_POD_ID,
+    jwtSecret: env.JWT_SECRET, apiKey: env.RUNPOD_API_KEY, podId,
     port, streamPort, origins, trustProxy: env.RENDER === 'true' ? 1 : false,
     stateFile: resolve(env.STATE_FILE || '.runtime/lease.json'),
+    autoStopIdle: env.AUTO_STOP_IDLE === 'true',
   };
 }
 
@@ -64,28 +66,40 @@ export function createRunpodClient(config, fetchImpl = fetch) {
     return result.data;
   }
   return {
-    async pod() {
+    async pods() {
+      const data = await graphql(`query MyPods {
+        myself { pods { id name desiredStatus runtime { uptimeInSeconds ports {
+          ip isIpPublic privatePort publicPort type
+        } gpus { id gpuUtilPercent memoryUtilPercent } } } }
+      }`);
+      if (!Array.isArray(data.myself?.pods)) throw new Error('Invalid RunPod pod list');
+      return data.myself.pods;
+    },
+    async pod(podId = config.podId) {
+      if (!podId || podId === 'auto') throw new Error('A Pod ID is required');
       const data = await graphql(`query Pod($podId: String!) {
         pod(input: {podId: $podId}) { id desiredStatus runtime { uptimeInSeconds gpus {
           id gpuUtilPercent memoryUtilPercent
         } } }
-      }`, { podId: config.podId });
+      }`, { podId });
       const pod = data.pod;
-      if (!pod) throw new Error('Configured pod not found');
+      if (!pod) throw new Error('RunPod Pod not found');
       return pod;
     },
-    async resume() {
+    async resume(podId = config.podId) {
+      if (!podId || podId === 'auto') throw new Error('A Pod ID is required');
       const data = await graphql(`mutation Resume($podId: String!) {
         podResume(input: {podId: $podId, gpuCount: 1}) { id desiredStatus }
-      }`, { podId: config.podId });
-      if (data.podResume?.id !== config.podId) throw new Error('Invalid resume response');
+      }`, { podId });
+      if (data.podResume?.id !== podId) throw new Error('Invalid resume response');
       return data.podResume;
     },
-    async stop() {
+    async stop(podId = config.podId) {
+      if (!podId || podId === 'auto') throw new Error('A Pod ID is required');
       const data = await graphql(`mutation Stop($podId: String!) {
         podStop(input: {podId: $podId}) { id desiredStatus }
-      }`, { podId: config.podId });
-      if (data.podStop?.id !== config.podId) throw new Error('Invalid stop response');
+      }`, { podId });
+      if (data.podStop?.id !== podId) throw new Error('Invalid stop response');
       return data.podStop;
     },
   };
@@ -119,14 +133,31 @@ export function createLeaseStore(path, podId, now = Date.now) {
 }
 
 export function createApp(config, { client = createRunpodClient(config), now = Date.now,
-  store = createLeaseStore(config.stateFile, config.podId, now), fetchImpl = fetch,
+  store: providedStore, fetchImpl = fetch,
   log = console } = {}) {
   const app = express();
   const passwordSalt = randomBytes(16);
   const passwordOptions = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
   const expectedPassword = derivePassword(config.password, passwordSalt, 64, passwordOptions);
   const streamPort = config.streamPort ?? 3000;
-  const streamUrl = `https://${config.podId}-${streamPort}.proxy.runpod.net`;
+  const leaseStores = new Map();
+  function storeFor(podId) {
+    if (!/^[a-z0-9]{6,64}$/i.test(podId || '')) throw new Error('Invalid Pod ID');
+    if (providedStore) {
+      leaseStores.set(podId, providedStore);
+      return providedStore;
+    }
+    let current = leaseStores.get(podId);
+    if (!current) {
+      const statePath = config.podId === 'auto'
+        ? config.stateFile.replace(/\.json$/i, `-${podId}.json`)
+        : config.stateFile;
+      current = createLeaseStore(statePath, podId, now);
+      leaseStores.set(podId, current);
+    }
+    return current;
+  }
+  if (config.podId !== 'auto') storeFor(config.podId);
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
   app.use(helmet());
@@ -157,19 +188,20 @@ export function createApp(config, { client = createRunpodClient(config), now = D
       const claims = jwt.verify(header.slice(7), config.jwtSecret, {
         algorithms: ['HS256'], issuer, audience,
       });
-      const lease = store.get();
+      const podId = claims.podId || (config.podId === 'auto' ? '' : config.podId);
+      const lease = storeFor(podId).get();
       if (!lease.active || claims.sub !== config.username || claims.epoch !== lease.epoch ||
-          (claims.streamPort ?? 3000) !== streamPort) {
+          (claims.streamPort ?? 3000) !== streamPort || (claims.podId && claims.podId !== podId)) {
         throw new Error('Session ended');
       }
-      req.session = claims;
+      req.session = { ...claims, podId };
       next();
     } catch {
       res.status(401).json({ error: 'Session expired. Sign in again.' });
     }
   }
   function currentSession(req) {
-    const lease = store.get();
+    const lease = storeFor(req.session.podId).get();
     if (!lease.active || lease.epoch !== req.session.epoch) {
       const error = new Error('Session ended. Sign in again.');
       error.status = 401;
@@ -178,7 +210,7 @@ export function createApp(config, { client = createRunpodClient(config), now = D
   }
   app.get('/healthz', (_req, res) => res.json({ ok: true }));
   app.post('/api/login', loginLimiter, async (req, res) => {
-    const { username, password } = req.body || {};
+    const { username, password, podId: requestedPodId } = req.body || {};
     if (typeof username !== 'string' || typeof password !== 'string' ||
         !equalUsername(username, config.username)) {
       return res.status(401).json({ error: 'Invalid host credentials' });
@@ -188,25 +220,55 @@ export function createApp(config, { client = createRunpodClient(config), now = D
       return res.status(401).json({ error: 'Invalid host credentials' });
     }
     await exclusive(async () => {
-      const pod = await client.pod();
+      let podId;
+      if (typeof client.pods === 'function') {
+        const available = (await client.pods()).filter(pod =>
+          typeof pod?.id === 'string' && /^[a-z0-9]{6,64}$/i.test(pod.id));
+        if (requestedPodId !== undefined && (typeof requestedPodId !== 'string' ||
+            !/^[a-z0-9]{6,64}$/i.test(requestedPodId))) {
+          return res.status(400).json({ error: 'Choose a valid RunPod workstation.' });
+        }
+        if (requestedPodId) {
+          if (!available.some(pod => pod.id === requestedPodId)) {
+            return res.status(409).json({ error: 'That Pod is no longer available. Refresh the list and choose an available Pod.' });
+          }
+          podId = requestedPodId;
+        } else if (available.length === 1) {
+          podId = available[0].id;
+        } else if (available.length > 1) {
+          return res.json({ requiresPodSelection: true, pods: available.map(pod => ({
+            id: pod.id, name: typeof pod.name === 'string' && pod.name.trim() ? pod.name : pod.id,
+            desiredStatus: pod.desiredStatus || 'UNKNOWN', isRunning: pod.runtime != null,
+          })) });
+        } else {
+          return res.status(404).json({ error: 'No RunPod workstations are available in this account.' });
+        }
+      } else {
+        podId = requestedPodId || config.podId;
+        if (podId === 'auto') return res.status(503).json({ error: 'RunPod workstation discovery is unavailable.' });
+      }
+      const podStore = storeFor(podId);
+      const pod = await client.pod(podId);
       // Persist intent before resuming: a lost upstream response must not orphan
-      // an active GPU outside the watchdog's scope.
-      store.update({ lastHeartbeat: now() });
-      if (pod.desiredStatus !== 'RUNNING') await client.resume();
+      // an active GPU outside the selected Pod's lease scope.
+      podStore.update({ lastHeartbeat: now() });
+      if (pod.desiredStatus !== 'RUNNING') await client.resume(podId);
       const epoch = randomUUID();
-      store.update({ active: true, epoch, lastHeartbeat: now() });
-      const token = jwt.sign({ epoch, streamPort }, config.jwtSecret, {
+      podStore.update({ active: true, epoch, lastHeartbeat: now() });
+      const token = jwt.sign({ epoch, streamPort, podId }, config.jwtSecret, {
         algorithm: 'HS256', subject: config.username, issuer, audience, expiresIn: '12h',
       });
-      res.json({ token, podId: config.podId, streamUrl, streamPort, expiresIn: 43_200,
-        heartbeatIntervalSeconds: 30, idleTimeoutSeconds: IDLE_MS / 1000 });
+      const streamUrl = `https://${podId}-${streamPort}.proxy.runpod.net`;
+      res.json({ token, podId, streamUrl, streamPort, expiresIn: 43_200,
+        heartbeatIntervalSeconds: 30, idleTimeoutSeconds: config.autoStopIdle ? IDLE_MS / 1000 : null });
     });
   });
 
-  let statusPending;
-  async function status() {
-    const pod = await client.pod();
+  const statusPending = new Map();
+  async function status(podId) {
+    const pod = await client.pod(podId);
     const isRunning = pod.desiredStatus === 'RUNNING' && pod.runtime != null;
+    const streamUrl = `https://${podId}-${streamPort}.proxy.runpod.net`;
     let streamReady = false;
     let streamHealth = isRunning ? 'unreachable' : 'waiting';
     if (isRunning) {
@@ -223,28 +285,33 @@ export function createApp(config, { client = createRunpodClient(config), now = D
       ? Math.min(100, Math.max(0, value)) : null;
     const gpus = (pod.runtime?.gpus || []).map(gpu => ({ id: gpu.id,
       gpuUtilPercent: percent(gpu.gpuUtilPercent), memoryUtilPercent: percent(gpu.memoryUtilPercent) }));
-    return { podId: config.podId, desiredStatus: pod.desiredStatus, isRunning,
+    return { podId, desiredStatus: pod.desiredStatus, isRunning,
       containerHealth: isRunning ? 'running' : 'waiting', streamReady, streamHealth,
       streamUrl, streamPort, uptime: pod.runtime?.uptimeInSeconds ?? 0, gpus,
       gpu: gpus[0] || { gpuUtilPercent: null, memoryUtilPercent: null } };
   }
-  app.get('/api/status', authenticate, async (_req, res) => {
-    // Coalesce concurrent polls, without caching stale status indefinitely.
-    statusPending ??= status().finally(() => { statusPending = undefined; });
-    res.json(await statusPending);
+  app.get('/api/status', authenticate, async (req, res) => {
+    // Coalesce concurrent polls for the same Pod, without sharing one user's VM status with another.
+    const podId = req.session.podId;
+    let pending = statusPending.get(podId);
+    if (!pending) {
+      pending = status(podId).finally(() => statusPending.delete(podId));
+      statusPending.set(podId, pending);
+    }
+    res.json(await pending);
   });
   app.post('/api/heartbeat', authenticate, async (req, res) => {
     await exclusive(async () => {
       currentSession(req);
-      store.update({ lastHeartbeat: now() });
+      storeFor(req.session.podId).update({ lastHeartbeat: now() });
       res.json({ ok: true, idleTimeoutSeconds: IDLE_MS / 1000 });
     });
   });
   app.post('/api/shutdown', authenticate, async (req, res) => {
     await exclusive(async () => {
       currentSession(req);
-      await client.stop();
-      store.update({ active: false, epoch: randomUUID() });
+      await client.stop(req.session.podId);
+      storeFor(req.session.podId).update({ active: false, epoch: randomUUID() });
       res.json({ stopped: true });
     });
   });
@@ -260,17 +327,20 @@ export function createApp(config, { client = createRunpodClient(config), now = D
 
   async function watchdog() {
     return exclusive(async () => {
-      if (now() - store.get().lastHeartbeat < IDLE_MS) return;
-      try {
-        const pod = await client.pod();
-        if (pod.desiredStatus !== 'EXITED' && pod.desiredStatus !== 'TERMINATED') {
-          await client.stop();
-          log.info('Idle GPU stop acknowledged');
+      if (config.autoStopIdle === false) return;
+      for (const [podId, podStore] of leaseStores) {
+        if (now() - podStore.get().lastHeartbeat < IDLE_MS) continue;
+        try {
+          const pod = await client.pod(podId);
+          if (pod.desiredStatus !== 'EXITED' && pod.desiredStatus !== 'TERMINATED') {
+            await client.stop(podId);
+            log.info('Idle GPU stop acknowledged');
+          }
+          podStore.update({ active: false, epoch: randomUUID() });
+        } catch {
+          // Keep the expired lease. The next tick retries the stop; no false success.
+          log.error('Idle GPU stop failed; retry scheduled in 60 seconds');
         }
-        store.update({ active: false, epoch: randomUUID() });
-      } catch {
-        // Keep the expired lease. The next tick retries the stop; no false success.
-        log.error('Idle GPU stop failed; retry scheduled in 60 seconds');
       }
     });
   }

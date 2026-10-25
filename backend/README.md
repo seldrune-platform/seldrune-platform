@@ -1,6 +1,6 @@
 # Cloud GPU OS control plane
 
-Node 24 / Express orchestrator for one dedicated, single-GPU RunPod workstation.
+Node 24 / Express orchestrator for RunPod workstations selected from the account.
 This service is independent of the existing Python `backend/app` platform.
 Run exactly **one instance**: the lifecycle lock and login limiter are local to
 the process. Horizontal replicas require a shared transactional lease and limiter.
@@ -11,7 +11,7 @@ the process. Horizontal replicas require a shared transactional lease and limite
 cd backend
 npm ci
 cp .env.example .env
-# Securely fill HOST_PASSWORD, JWT_SECRET, RUNPOD_API_KEY and RUNPOD_POD_ID.
+# Securely fill HOST_PASSWORD, JWT_SECRET and RUNPOD_API_KEY.
 npm run dev
 ```
 
@@ -26,16 +26,14 @@ Node 24's environment proxy support for managed execution environments.
 
 ## Configure the workstation
 
-Create/select a dedicated single-GPU RunPod pod, expose its desktop service as
-HTTP port **3000** by default, and install a browser-compatible desktop streamer, such as
-a properly configured Selkies/webtop image. Store the exact pod ID on Render.
-The control plane resumes existing pods; it does not create, reset, migrate,
-install software on, or terminate them. RunPod capacity must be available to resume.
-For an existing pod with a different exposed HTTP port, set `STREAM_PORT` to that
-port on Render. For the selected `novel_plum_jellyfish-migration` pod
-(`o4nqpenvxvk9gw`),
-the exposed Kasm desktop is **6901**, so use `STREAM_PORT=6901` and that pod ID.
-The default remains 3000 for webtop images. Ports must be integers from 1 to 65535.
+Expose the desktop service as HTTP port **3000** by default, with a
+browser-compatible desktop streamer such as a properly configured
+Selkies/webtop image. Set `RUNPOD_POD_ID=auto` to discover Pods in the RunPod
+account after host login. A single Pod opens automatically; with multiple Pods,
+the app asks which one to open. The selected Pod is resumed if stopped. The
+control plane does not create, reset, migrate, or install software on Pods.
+For a Kasm desktop exposed on port **6901**, set `STREAM_PORT=6901`; ports must
+be integers from 1 to 65535.
 
 **Secure the desktop streamer separately.** The RunPod HTTPS proxy URL can be
 reached directly. The orchestrator JWT protects control endpoints, not this
@@ -58,17 +56,16 @@ All bodies are JSON. Except for login and health, endpoints require
 | Method | Path | Request | Result |
 | --- | --- | --- | --- |
 | GET | `/healthz` | none | Local process health; no upstream requests |
-| POST | `/api/login` | `{ "username": "admin", "password": "…" }` | Resume stopped pod; return `token`, `podId`, `streamUrl`, `expiresIn`, heartbeat/idle timing |
+| POST | `/api/login` | `{ "username": "admin", "password": "…", "podId": "optional" }` | Discover Pods; ask for a selection if multiple, then resume the selected Pod and return `token`, `podId`, `streamUrl` |
 | GET | `/api/status` | bearer token | Desired state, observed container runtime, stream health, uptime, all GPU telemetry and first-GPU summary |
 | POST | `/api/heartbeat` | bearer token, `{}` | Renew lease; only this endpoint and a successful login renew activity |
 | POST | `/api/shutdown` | bearer token, `{}` | `podStop` acknowledgement, then revoke the session |
 
-The stream URL is `https://<RUNPOD_POD_ID>-<STREAM_PORT>.proxy.runpod.net`.
+The stream URL is `https://<selected-pod-id>-<STREAM_PORT>.proxy.runpod.net`.
 Login and status return the configured `streamPort`. The mobile client validates
 the exact pod and port; it does not allow arbitrary stream domains.
-JWT sessions are scoped to the stream port, so changing it on redeploy revokes
-old clients' access and heartbeat renewal. Legacy portless tokens remain valid
-only with the default port 3000.
+JWT sessions are scoped to the selected Pod and stream port, so changing either
+revokes old clients' access and heartbeat renewal.
 Telemetry percentages are clamped to 0–100; missing telemetry is `null`, not
 fabricated zero. `memoryUtilPercent` is displayed as VRAM utilization, not MiB.
 Errors are JSON: 401 for invalid/expired sessions, 429 for throttling, 400/413
@@ -86,19 +83,17 @@ password remains a server-side environment secret.
 Native clients send no Origin. Browser clients require an exact HTTPS origin
 in `ALLOWED_ORIGINS` (comma-separated); CORS is not authentication.
 
-## Idle shutdown and recovery
+## Pod shutdown and recovery
 
-A watchdog checks every **60 seconds**. At **300 seconds** without a login or
-heartbeat it requests `podStop`. Status polling does not keep a GPU alive.
-Typical stop initiation is 300–360 seconds after the last heartbeat; provider
-failures can delay it. Failed stops remain eligible for the next tick.
+Automatic idle shutdown is **disabled by default**. Locking or closing the app
+does not stop a Pod. The user can explicitly shut down the selected Pod from
+the app's Start menu. Set `AUTO_STOP_IDLE=true` only when unattended shutdown is
+intended.
 
-The lease (pod identity, epoch, activity flag and timestamp; no credentials) is
-atomically saved to `STATE_FILE`. Store it on persistent disk. The watchdog
-reconciles an already-running configured pod even after process restart, so
-this must be a dedicated workstation, not a shared pod controlled elsewhere.
-An invalid/cross-pod lease fails startup; inspect/archive the file before changing
-pod identity. Multiple readers/writers and shared-file replicas are unsupported.
+Each selected Pod gets a separate lease file derived from `STATE_FILE`, containing
+the Pod identity, epoch, activity flag and timestamp but no credentials. Store it
+on persistent disk. Old lease files are left intact when selecting another Pod.
+Run exactly one service instance; multiple readers/writers are unsupported.
 
 The server cannot stop GPUs while Render is unavailable or suspended. Use the
 paid always-on Blueprint plan, an independent billing alert, and RunPod-side
@@ -112,9 +107,8 @@ Create a Render Blueprint from this repository and set **Blueprint Path** to
 `backend/render.yaml`; the root `render.yaml` continues to deploy the Python
 platform. This Blueprint uses a Starter service and 1 GB persistent disk (paid),
 one replica, Node 24, frozen `npm ci`, `/healthz`, and manual/CI deployment.
-Its pod ID and stream port are prefilled for `novel_plum_jellyfish-migration`
-(`o4nqpenvxvk9gw`, port `6901`); update both values if you select a different
-RunPod pod or image.
+It discovers Pods from the configured RunPod account, uses port `6901` for the
+Kasm desktop stream, and disables automatic idle shutdown.
 Enter host and RunPod credentials in Render's secure environment settings;
 `JWT_SECRET` is generated by Render. The disk backs `STATE_FILE` at `/var/data`.
 

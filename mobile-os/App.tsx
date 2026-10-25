@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Animated, AppState, KeyboardAvoidingView, PanResponder,
+  ActivityIndicator, Alert, Animated, AppState, BackHandler, KeyboardAvoidingView, PanResponder,
   Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -11,7 +11,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import {
   ApiError, canNavigate, request, shouldEndSession, streamMatchesSession, STREAM_CHROME_SCRIPT, validateApiUrl, validateStreamUrl,
-  type PodStatus, type Session,
+  type AvailablePod, type LoginResult, type PodStatus, type Session,
 } from './src/api';
 
 type Phase = 'locked' | 'booting' | 'desktop';
@@ -91,6 +91,13 @@ function Shell() {
   const [clock, setClock] = useState(new Date());
   const [streamError, setStreamError] = useState('');
   const [streamLoaded, setStreamLoaded] = useState(false);
+  const [streamAuthPrompt, setStreamAuthPrompt] = useState(false);
+  const [streamUsername, setStreamUsername] = useState('kasm_user');
+  const [streamPassword, setStreamPassword] = useState('');
+  const [streamAuthAttempted, setStreamAuthAttempted] = useState(false);
+  const [streamReloadVersion, setStreamReloadVersion] = useState(0);
+  const [availablePods, setAvailablePods] = useState<AvailablePod[]>([]);
+  const [selectedPodId, setSelectedPodId] = useState('');
   const [chromeHidden, setChromeHidden] = useState(true);
   const webview = useRef<WebView<object>>(null);
   const wallpaper = useRef<React.ComponentRef<typeof View>>(null);
@@ -106,6 +113,8 @@ function Shell() {
   const lock = useCallback((message = '') => {
     setSession(null); setPhase('locked'); setFrames([]); setStatus(null);
     setStartOpen(false); setPassword(''); setNotice(message); setStreamLoaded(false);
+    setStreamAuthPrompt(false); setStreamPassword(''); setStreamAuthAttempted(false);
+    setAvailablePods([]); setSelectedPodId('');
   }, []);
   useEffect(() => {
     const timer = setInterval(() => setClock(new Date()), 1000);
@@ -192,13 +201,24 @@ function Shell() {
     };
   }, [session, apiConfig.url, lock, progress]);
 
-  async function login() {
+  async function login(podChoice?: string) {
     if (busy || apiConfig.error) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      const next = await request<Session>(apiConfig.url, '/api/login', undefined, { username, password });
+      const chosenPodId = podChoice || (availablePods.length ? selectedPodId : '');
+      const next = await request<LoginResult>(apiConfig.url, '/api/login', undefined,
+        { username, password, ...(chosenPodId ? { podId: chosenPodId } : {}) });
+      if ('requiresPodSelection' in next) {
+        setAvailablePods(next.pods);
+        setSelectedPodId(previous => next.pods.some(pod => pod.id === previous)
+          ? previous : next.pods[0]?.id || '');
+        setNotice('Choose the RunPod workstation you want to open.');
+        return;
+      }
       validateStreamUrl(next.streamUrl, next.podId, next.streamPort);
+      setAvailablePods([]); setSelectedPodId('');
       setPassword(''); setStatus(null); setStreamError(''); setStreamLoaded(false);
+      setStreamAuthPrompt(false); setStreamPassword(''); setStreamAuthAttempted(false);
       progress.setValue(0.08); setSession(next); setPhase('booting');
     } catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
@@ -211,7 +231,7 @@ function Shell() {
       lock('Stop acknowledged. Storage charges may continue.');
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) lock('Session already ended.');
-      else setNotice('Shutdown could not be confirmed. Retry; the idle watchdog also remains active.');
+      else setNotice('Shutdown could not be confirmed. The Pod may still be running; retry to confirm.');
     } finally { setBusy(false); }
   }
   function confirmShutdown() {
@@ -228,6 +248,35 @@ function Shell() {
   function patchFrame(id: WindowId, patch: Partial<FrameState>) {
     setFrames(previous => previous.map(frame => frame.id === id ? { ...frame, ...patch } : frame));
   }
+  function toggleTaskbarApp(id: WindowId) {
+    const frame = frames.find(item => item.id === id);
+    if (frame && active === id && !frame.minimized) {
+      patchFrame(id, { minimized: true });
+      return;
+    }
+    openApp(id);
+  }
+  function lockWorkstation() {
+    setStartOpen(false);
+    lock('Workstation locked. Sign in again to reconnect.');
+  }
+
+  useEffect(() => {
+    if (phase !== 'desktop') return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (startOpen) {
+        setStartOpen(false);
+        return true;
+      }
+      const focused = frames.find(frame => frame.id === active && !frame.minimized);
+      if (focused) {
+        patchFrame(active, { minimized: true });
+        return true;
+      }
+      return false;
+    });
+    return () => subscription.remove();
+  }, [phase, startOpen, frames, active]);
 
   return <View style={styles.root}>
     <BlurTargetView ref={wallpaper} style={StyleSheet.absoluteFill}>
@@ -255,11 +304,25 @@ function Shell() {
               textContentType="password" editable={!busy} onSubmitEditing={() => { void login(); }} style={styles.input} />
             {!!(apiConfig.error || error) && <Text accessibilityRole="alert" style={styles.error}>{apiConfig.error || error}</Text>}
             {!!notice && <Text style={styles.notice}>{notice}</Text>}
+            {!!availablePods.length && <View style={styles.podChoices}>
+              <Text style={styles.podChoicesTitle}>RunPod workstations</Text>
+              {availablePods.map(pod => <Pressable key={pod.id} accessibilityRole="radio"
+                accessibilityState={{ checked: selectedPodId === pod.id }}
+                onPress={() => setSelectedPodId(pod.id)} style={[styles.podChoice,
+                  selectedPodId === pod.id && styles.podChoiceSelected]}>
+                <View style={styles.podChoiceCopy}>
+                  <Text numberOfLines={1} style={styles.podChoiceName}>{pod.name}</Text>
+                  <Text numberOfLines={1} style={styles.podChoiceMeta}>{pod.id} · {pod.desiredStatus}</Text>
+                </View>
+                <Ionicons name={selectedPodId === pod.id ? 'radio-button-on' : 'radio-button-off'}
+                  size={18} color={selectedPodId === pod.id ? '#89d1ff' : '#9bb0cd'} />
+              </Pressable>)}
+            </View>}
             <Pressable accessibilityRole="button" disabled={busy || !password || !!apiConfig.error}
               style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed,
                 (busy || !password || !!apiConfig.error) && styles.disabled]} onPress={() => { void login(); }}>
               {busy ? <ActivityIndicator color="#0b1933" /> : <><Ionicons name="arrow-forward" size={20} color="#0b1933" />
-                <Text style={styles.primaryLabel}>Unlock workstation</Text></>}
+                <Text style={styles.primaryLabel}>{availablePods.length ? 'Open selected workstation' : 'Unlock workstation'}</Text></>}
             </Pressable>
           </BlurView>
           <Text style={styles.footnote}>On demand compute · Private workspace</Text>
@@ -287,7 +350,18 @@ function Shell() {
           <View style={styles.appTile}><Ionicons name={app.icon} size={30} color={app.color} /></View>
           <Text style={styles.appLabel}>{app.title}</Text>
         </Pressable>)}</View>
-        <View style={styles.workspace}>{frames.map(frame => <AppFrame key={frame.id} frame={frame}
+        <View style={styles.workspace}>
+          {frames.length === 0 && <View style={styles.emptyWorkspace}>
+            <View style={styles.emptyCard}>
+              <View style={styles.appTile}><Ionicons name="desktop-outline" size={30} color="#6ed7ff" /></View>
+              <Text style={styles.panelTitle}>Your workspace is ready</Text>
+              <Text style={styles.body}>Open the GPU workstation to continue on your cloud desktop.</Text>
+              <Pressable accessibilityRole="button" onPress={() => openApp('workstation')} style={styles.emptyAction}>
+                <Text style={styles.emptyActionLabel}>Open GPU Workstation</Text>
+              </Pressable>
+            </View>
+          </View>}
+          {frames.map(frame => <AppFrame key={frame.id} frame={frame}
           focused={active === frame.id} onFocus={() => setActive(frame.id)}
           onMinimize={() => patchFrame(frame.id, { minimized: true })}
           onMaximize={() => patchFrame(frame.id, { maximized: !frame.maximized })}
@@ -302,7 +376,9 @@ function Shell() {
             </View>
             {Platform.OS === 'web' ? <View style={styles.panel}><Text style={styles.body}>
               Use the Android or iOS app for the hardware-accelerated desktop stream.</Text></View> : <WebView<object>
-              key={chromeHidden ? 'hidden-chrome' : 'visible-chrome'} ref={webview} source={{ uri: session.streamUrl }}
+              key={`${chromeHidden ? 'hidden-chrome' : 'visible-chrome'}-${streamReloadVersion}`} ref={webview}
+              source={{ uri: session.streamUrl }}
+              basicAuthCredential={streamAuthAttempted ? { username: streamUsername, password: streamPassword } : undefined}
               style={styles.webview} androidLayerType="hardware" javaScriptEnabled domStorageEnabled
               originWhitelist={[new URL(session.streamUrl).origin, 'about:blank']}
               onShouldStartLoadWithRequest={navigation => canNavigate(navigation.url, session.streamUrl)}
@@ -311,10 +387,48 @@ function Shell() {
               mixedContentMode="never" setSupportMultipleWindows={false}
               allowFileAccess={false} allowUniversalAccessFromFileURLs={false}
               onLoadEnd={() => setStreamLoaded(true)}
-              onError={() => setStreamError('Stream disconnected. Reload to reconnect.')}
-              onHttpError={event => setStreamError(`Stream returned HTTP ${event.nativeEvent.statusCode}. Check the desktop service.`)}
+              onError={event => {
+                if (event.nativeEvent.description === 'net::ERR_HTTP_RESPONSE_CODE_FAILURE') return;
+                setStreamError('Stream disconnected. Reload to reconnect.');
+              }}
+              onHttpError={event => {
+                const statusCode = event.nativeEvent.statusCode;
+                if (statusCode === 401) {
+                  setStreamAuthPrompt(true);
+                  setStreamError(streamAuthAttempted
+                    ? 'The desktop rejected these credentials. Check the Kasm username and Pod password.' : '');
+                } else {
+                  setStreamError(`Stream returned HTTP ${statusCode}. Check the desktop service.`);
+                }
+              }}
               onContentProcessDidTerminate={() => { setStreamError('Stream process restarted. Reload to reconnect.'); }}
             />}
+            {Platform.OS !== 'web' && streamAuthPrompt && <View style={styles.streamAuthShade}>
+              <View style={styles.streamAuthPanel}>
+                <Text style={styles.panelTitle}>Sign in to the desktop</Text>
+                <Text style={styles.body}>Use the Kasm credentials configured for this RunPod Pod. They are separate from your Cloud GPU OS login.</Text>
+                <TextInput accessibilityLabel="Kasm username" value={streamUsername} onChangeText={setStreamUsername}
+                  placeholder="Kasm username" placeholderTextColor="#99abc5" autoCapitalize="none"
+                  autoCorrect={false} textContentType="username" style={styles.input} />
+                <TextInput accessibilityLabel="Kasm password" value={streamPassword} onChangeText={setStreamPassword}
+                  placeholder="Desktop password (VNC_PW)" placeholderTextColor="#99abc5" secureTextEntry
+                  textContentType="password" onSubmitEditing={() => {
+                    if (!streamUsername || !streamPassword) return;
+                    setStreamError(''); setStreamAuthPrompt(false); setStreamAuthAttempted(true);
+                    setStreamReloadVersion(version => version + 1);
+                  }} style={styles.input} />
+                {!!streamError && <Text accessibilityRole="alert" style={styles.error}>{streamError}</Text>}
+                <Pressable accessibilityRole="button" disabled={!streamUsername || !streamPassword}
+                  style={({ pressed }) => [styles.streamAuthButton, pressed && styles.pressed,
+                    (!streamUsername || !streamPassword) && styles.disabled]}
+                  onPress={() => {
+                    setStreamError(''); setStreamAuthPrompt(false); setStreamAuthAttempted(true);
+                    setStreamReloadVersion(version => version + 1);
+                  }}>
+                  <Text style={styles.primaryLabel}>Connect desktop</Text>
+                </Pressable>
+              </View>
+            </View>}
             {!!streamError && <View style={styles.streamError}><Text style={styles.error}>{streamError}</Text>
               <Pressable accessibilityRole="button" onPress={() => { setStreamError(''); webview.current?.reload(); }}>
                 <Text style={styles.link}>Reconnect</Text></Pressable></View>}
@@ -329,24 +443,35 @@ function Shell() {
             <Text style={styles.body}>A Windows 11 inspired mobile shell for your own cloud workstation.</Text>
             <Text style={styles.notice}>Pod: {session?.podId}</Text>
             <Text style={styles.body}>Native animations adapt to your display. Remote frame rate and latency depend on the stream, device and network.</Text>
-            <Text style={styles.notice}>Backgrounding pauses heartbeats. After five idle minutes, the server requests a stop on its next 60-second check. Storage may still be billed.</Text>
+            <Text style={styles.notice}>Automatic idle shutdown is off. Locking or closing the app leaves this Pod running. Shut it down explicitly from the Start menu when you are finished.</Text>
           </ScrollView>}
-        </AppFrame>)}</View>
+        </AppFrame>)}
+        </View>
         {!!notice && <View style={styles.noticeBanner}><Text style={styles.smallText}>{notice}</Text></View>}
         {startOpen && <BlurView blurTarget={wallpaper} blurMethod="dimezisBlurViewSdk31Plus" intensity={80} tint="dark" style={styles.startMenu}>
           <Text style={styles.panelTitle}>Pinned</Text><View style={styles.pinnedApps}>{apps.map(app =>
             <Pressable accessibilityRole="button" key={app.id} style={styles.pinnedApp} onPress={() => openApp(app.id)}>
               <Ionicons name={app.icon} color={app.color} size={27} /><Text style={styles.appLabel}>{app.title}</Text>
             </Pressable>)}</View>
-          <View style={styles.startFooter}><Text style={styles.body}>{username}</Text>
+          <View style={styles.startFooter}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Lock workstation" onPress={lockWorkstation}
+              style={styles.lockAction}>
+              <View style={styles.lockAvatar}><Ionicons name="person-outline" size={17} color="#d8eeff" /></View>
+              <View><Text numberOfLines={1} style={styles.body}>{username}</Text>
+                <Text style={styles.lockHint}>Lock workstation</Text></View>
+            </Pressable>
             <Pressable accessibilityRole="button" onPress={confirmShutdown} disabled={busy} style={styles.powerButton}>
               <Ionicons name="power-outline" size={20} color="#fff" /><Text style={styles.body}>{busy ? 'Stopping…' : 'Shut down'}</Text>
             </Pressable></View>
         </BlurView>}
         <BlurView blurTarget={wallpaper} blurMethod="dimezisBlurViewSdk31Plus" intensity={70} tint="dark" style={styles.taskbar}>
           <IconButton icon="logo-windows" label="Toggle Start menu" onPress={() => setStartOpen(value => !value)} />
-          {apps.map(app => <Pressable key={app.id} accessibilityRole="button" accessibilityLabel={`Open ${app.title}`}
-            style={[styles.taskIcon, frames.some(frame => frame.id === app.id) && styles.taskActive]} onPress={() => openApp(app.id)}>
+          {apps.map(app => <Pressable key={app.id} accessibilityRole="button"
+            accessibilityLabel={frames.some(frame => frame.id === app.id && active === app.id && !frame.minimized)
+              ? `Minimize ${app.title}` : `Open ${app.title}`}
+            style={[styles.taskIcon, frames.some(frame => frame.id === app.id) && styles.taskActive,
+              frames.some(frame => frame.id === app.id && frame.minimized) && styles.taskMinimized]}
+            onPress={() => toggleTaskbarApp(app.id)}>
             <Ionicons name={app.icon} size={23} color={app.color} /></Pressable>)}
           <View style={styles.taskClock}><Text style={styles.smallText}>{clock.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text></View>
         </BlurView>
@@ -370,6 +495,15 @@ const styles = StyleSheet.create({
   heading: { color: '#fff', fontSize: 22, fontWeight: '600', textAlign: 'center', marginBottom: 8 },
   subtitle: { color: '#a8bedb', fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   input: { backgroundColor: '#0a152c80', color: '#fff', borderWidth: 1, borderColor: '#7994b94d', borderRadius: 9, width: '100%', padding: 14, marginBottom: 12, fontSize: 15 },
+  podChoices: { width: '100%', marginBottom: 8 },
+  podChoicesTitle: { color: '#dce9ff', fontSize: 13, fontWeight: '700', marginBottom: 8 },
+  podChoice: { width: '100%', minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 12, paddingVertical: 8, marginBottom: 7, borderRadius: 9,
+    borderWidth: 1, borderColor: '#7994b94d', backgroundColor: '#0a152c80' },
+  podChoiceSelected: { borderColor: '#89d1ff', backgroundColor: '#4b8eb533' },
+  podChoiceCopy: { flex: 1, minWidth: 0 },
+  podChoiceName: { color: '#f0f6ff', fontSize: 13, fontWeight: '600' },
+  podChoiceMeta: { color: '#a9bddb', fontSize: 10, marginTop: 3 },
   primaryButton: { minHeight: 48, backgroundColor: '#89d1ff', borderRadius: 9, width: '100%', flexDirection: 'row', gap: 9, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   primaryLabel: { color: '#0b1933', fontWeight: '700', fontSize: 14 }, pressed: { opacity: 0.65 }, disabled: { opacity: 0.45 },
   error: { color: '#ffb7b7', fontSize: 13, lineHeight: 19, marginVertical: 8 },
@@ -389,6 +523,12 @@ const styles = StyleSheet.create({
   appTile: { height: 52, width: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#d1e9ff12', borderWidth: 1, borderColor: '#cbe5ff24' },
   appLabel: { color: '#e1edff', fontSize: 11, textAlign: 'center', lineHeight: 15 },
   workspace: { flex: 1, marginHorizontal: 10, marginBottom: 8 },
+  emptyWorkspace: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
+  emptyCard: { width: '100%', maxWidth: 360, alignItems: 'center', gap: 12, padding: 24,
+    borderRadius: 18, backgroundColor: '#12223bd9', borderWidth: 1, borderColor: '#9dc5f22b' },
+  emptyAction: { minHeight: 44, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center',
+    borderRadius: 10, backgroundColor: '#89d1ff', marginTop: 4 },
+  emptyActionLabel: { color: '#0b1933', fontSize: 13, fontWeight: '700' },
   frame: { position: 'absolute', backgroundColor: '#101e35', borderWidth: 1, borderColor: '#8bacdf55', borderRadius: 12, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 18, elevation: 6 },
   maximized: { top: 0, left: 0, right: 0, bottom: 0 },
   floating: { top: 12, left: '4%', width: '92%', height: '78%', minHeight: 180 },
@@ -401,6 +541,9 @@ const styles = StyleSheet.create({
   smallText: { color: '#bbcde6', fontSize: 11, lineHeight: 16, flexShrink: 1 },
   webview: { flex: 1, backgroundColor: '#050d19' },
   streamError: { position: 'absolute', left: 8, right: 8, bottom: 8, padding: 16, borderRadius: 10, backgroundColor: '#17243af5' },
+  streamAuthShade: { ...StyleSheet.absoluteFill, justifyContent: 'center', padding: 12, backgroundColor: '#071226d9' },
+  streamAuthPanel: { borderRadius: 14, padding: 18, gap: 12, backgroundColor: '#17243af5', borderWidth: 1, borderColor: '#8bacdf55' },
+  streamAuthButton: { minHeight: 46, marginTop: 4, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: '#89d1ff' },
   link: { color: '#85d4ff', fontWeight: '600', paddingVertical: 8 },
   panel: { padding: 22, gap: 12 }, panelTitle: { color: '#f1f6ff', fontSize: 18, fontWeight: '600' },
   metric: { fontSize: 40, color: '#8bd6ff', fontWeight: '300' },
@@ -409,9 +552,13 @@ const styles = StyleSheet.create({
   pinnedApps: { flexDirection: 'row', justifyContent: 'space-around', marginVertical: 26, gap: 12 },
   pinnedApp: { alignItems: 'center', gap: 12, flex: 1 },
   startFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderColor: '#8bacdf30', paddingTop: 16 },
+  lockAction: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1, paddingVertical: 4, paddingRight: 8 },
+  lockAvatar: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#7caef12b' },
+  lockHint: { color: '#91afd2', fontSize: 10, marginTop: 1 },
   powerButton: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8 },
   taskbar: { height: 58, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, paddingHorizontal: 12, backgroundColor: '#1b2c4799', borderTopWidth: 1, borderColor: '#b5d4ff26', overflow: 'hidden', zIndex: 40 },
   taskIcon: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', borderRadius: 8 },
   taskActive: { backgroundColor: '#e1eeff18', borderBottomWidth: 2, borderColor: '#8bd6ff' },
+  taskMinimized: { opacity: 0.6 },
   taskClock: { marginLeft: 'auto', alignItems: 'flex-end' },
 });

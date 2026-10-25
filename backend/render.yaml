@@ -1,5 +1,5 @@
 # In Render's Blueprint creation form, set Blueprint Path to backend/render.yaml.
-# Defaults target the selected Kasm pod; change both values if switching pods.
+# The app discovers Pods from the authenticated RunPod account at login.
 services:
   - type: web
     name: cloud-gpu-os-orchestrator
@@ -29,7 +29,9 @@ services:
       - key: RUNPOD_API_KEY
         sync: false
       - key: RUNPOD_POD_ID
-        value: o4nqpenvxvk9gw
+        value: auto
+      - key: AUTO_STOP_IDLE
+        value: "false"
       - key: STREAM_PORT
         value: "6901"
       - key: STATE_FILE

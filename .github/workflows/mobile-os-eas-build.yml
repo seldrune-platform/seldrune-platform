@@ -1,0 +1,64 @@
+name: Mobile OS EAS build
+
+on:
+  push:
+    branches:
+      - 'codex/mobile-os-dynamic-pod'
+    paths:
+      - '.github/workflows/mobile-os-eas-build.yml'
+      - 'mobile-os/**'
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Build platform
+        required: true
+        type: choice
+        options: [android, ios]
+        default: android
+      profile:
+        description: EAS build profile
+        required: true
+        type: choice
+        options: [preview, internal, production]
+        default: preview
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-os-eas-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: mobile-os
+    env:
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_API_URL: https://cloud-gpu-os-orchestrator.onrender.com
+      BUILD_PLATFORM: ${{ inputs.platform || 'android' }}
+      BUILD_PROFILE: ${{ inputs.profile || 'preview' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: mobile-os/package-lock.json
+      - run: npm ci
+      - name: Initialize or link the Expo project
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [[ -z "$EXPO_TOKEN" ]]; then
+            echo '::error::Add an Expo robot access token as the EXPO_TOKEN repository secret.'
+            exit 1
+          fi
+          npx --yes eas-cli@25.3.0 project:init --account seldrune-platform --non-interactive
+      - name: Build with EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx --yes eas-cli@25.3.0 build --platform "$BUILD_PLATFORM" --profile "$BUILD_PROFILE" --non-interactive

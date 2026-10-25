@@ -1,4 +1,6 @@
 export type Session = { token: string; podId: string; streamUrl: string; streamPort?: number };
+export type AvailablePod = { id: string; name: string; desiredStatus: string; isRunning: boolean };
+export type LoginResult = Session | { requiresPodSelection: true; pods: AvailablePod[] };
 export type PodStatus = {
   podId: string; desiredStatus: string; isRunning: boolean; streamReady: boolean;
   containerHealth: string; streamHealth: string; streamUrl: string; streamPort?: number; uptime: number;
