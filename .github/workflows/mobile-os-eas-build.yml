@@ -6,6 +6,7 @@ on:
       - 'codex/mobile-os-eas-build'
     paths:
       - '.github/workflows/mobile-os-eas-build.yml'
+      - 'mobile-os/App.tsx'
   workflow_dispatch:
     inputs:
       platform:
