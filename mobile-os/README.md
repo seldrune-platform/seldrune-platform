@@ -42,12 +42,15 @@ and its heartbeats. During boot only, EXITED receives a 15-second grace period
 for resume propagation before returning to the lock screen. RUNNING and known
 transitional states remain observable.
 
-An authenticated stream (HTTP 401/403) opens its separate login screen; this
-is not reported as a ready stream by the backend. The WebView allows navigation
-only within the configured pod's HTTPS origin and does not receive the control
-plane JWT or RunPod API key. Stream reload, error feedback, and a toolbar-toggle
-button remain accessible. Toolbar injection hides only known Selkies/noVNC
-chrome selectors and can be turned off for troubleshooting.
+An HTTP 401 from the stream means the desktop requires its own KasmVNC Basic
+Auth credentials. The app shows a desktop sign-in prompt; the username defaults
+to `kasm_user`, and the password must match the value configured for the Pod
+(commonly `VNC_PW`). This is separate from the Cloud GPU OS host password. The
+stream username and password stay in app memory and clear when the workstation
+is locked. The WebView receives neither the control-plane JWT nor the RunPod
+API key. Stream reload, error feedback, and a toolbar-toggle button remain
+available. Toolbar injection hides only known Selkies/noVNC chrome selectors
+and can be turned off for troubleshooting.
 The server returns its configured stream port at login. The mobile app validates
 that exact port (default 3000, or 6901 for the selected Kasm desktop) and pod ID.
 Rebuild the mobile app to use the configurable-port API with an older installation.
