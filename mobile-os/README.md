@@ -6,6 +6,9 @@ taskbar, live GPU/VRAM badge, and draggable/minimizable/maximizable app frames.
 GPU Workstation embeds your authenticated browser desktop in a WebView;
 Performance and System are local apps. It is not a Windows kernel or a Windows
 license: the operating system inside the stream comes from your RunPod image.
+On Android and iOS the workstation opens edge to edge in immersive full screen.
+Floating controls reload the stream, open the remote on-screen keyboard, reveal
+the viewer toolbar, or return to the Cloud GPU OS shell.
 
 ## Development
 
@@ -33,7 +36,8 @@ The app polls every 3 seconds during boot and 10 seconds on the desktop, with
 cancels pending requests on session changes. Locking or closing the app leaves
 the Pod running. Use Start → Shut down when you want to stop the selected Pod.
 Tapping the active taskbar app minimizes it; tapping it again restores it.
-Android Back closes the Start menu first, then minimizes the focused window.
+Android Back closes the Start menu first, then exits immersive mode, then
+minimizes the focused window.
 Terminal states such as DEAD, PAUSED and TERMINATED immediately end the session
 and its heartbeats. During boot only, EXITED receives a 15-second grace period
 for resume propagation before returning to the lock screen. RUNNING and known
@@ -47,7 +51,9 @@ stream username and password stay in app memory and clear when the workstation
 is locked. The WebView receives neither the control-plane JWT nor the RunPod
 API key. Stream reload, error feedback, and a toolbar-toggle button remain
 available. Toolbar injection hides only known Selkies/noVNC chrome selectors
-and can be turned off for troubleshooting.
+and can be turned off for troubleshooting. The keyboard control reveals the
+viewer toolbar and activates its native noVNC/Kasm keyboard input so the phone's
+software keyboard can type into the remote desktop.
 The server returns its configured stream port at login. The mobile app validates
 that exact port (default 3000, or 6901 for the selected Kasm desktop) and pod ID.
 Rebuild the mobile app to use the configurable-port API with an older installation.

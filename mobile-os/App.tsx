@@ -10,7 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import {
-  ApiError, canNavigate, request, shouldEndSession, streamMatchesSession, STREAM_CHROME_SCRIPT, validateApiUrl, validateStreamUrl,
+  ApiError, canNavigate, OPEN_REMOTE_KEYBOARD_SCRIPT, request, shouldEndSession, streamMatchesSession,
+  STREAM_CHROME_SCRIPT, validateApiUrl, validateStreamUrl,
   type AvailablePod, type LoginResult, type PodStatus, type Session,
 } from './src/api';
 
@@ -34,9 +35,9 @@ function IconButton({ icon, label, onPress, danger = false }: {
   </Pressable>;
 }
 
-function AppFrame({ frame, focused, onFocus, onMinimize, onMaximize, onClose, children }: {
+function AppFrame({ frame, focused, immersive = false, onFocus, onMinimize, onMaximize, onClose, children }: {
   frame: FrameState; focused: boolean; onFocus: () => void; onMinimize: () => void;
-  onMaximize: () => void; onClose: () => void; children: React.ReactNode;
+  onMaximize: () => void; onClose: () => void; immersive?: boolean; children: React.ReactNode;
 }) {
   const { width, height } = useWindowDimensions();
   const position = useRef(new Animated.ValueXY()).current;
@@ -59,10 +60,10 @@ function AppFrame({ frame, focused, onFocus, onMinimize, onMaximize, onClose, ch
     position.setValue({ x: 0, y: 0 });
   }, [frame.maximized, width, height, position]);
   return <Animated.View onTouchStart={onFocus} pointerEvents={frame.minimized ? 'none' : 'auto'}
-    style={[styles.frame, frame.maximized ? styles.maximized : styles.floating,
+    style={[styles.frame, immersive ? styles.immersiveFrame : frame.maximized ? styles.maximized : styles.floating,
       { zIndex: focused ? 10 : 5, opacity: frame.minimized ? 0 : 1,
         transform: frame.maximized ? [] : position.getTranslateTransform() }]}>
-    <View style={styles.titlebar}>
+    {!immersive && <View style={styles.titlebar}>
       <View style={styles.dragHandle} {...drag.panHandlers}>
         <Ionicons name="logo-windows" size={15} color="#79ccff" />
         <Text numberOfLines={1} style={styles.windowTitle}>{frame.title}</Text>
@@ -71,7 +72,7 @@ function AppFrame({ frame, focused, onFocus, onMinimize, onMaximize, onClose, ch
       <IconButton icon={frame.maximized ? 'copy-outline' : 'square-outline'}
         label={`Resize ${frame.title}`} onPress={onMaximize} />
       <IconButton icon="close-outline" label={`Close ${frame.title}`} onPress={onClose} danger />
-    </View>
+    </View>}
     <View style={styles.frameContent}>{children}</View>
   </Animated.View>;
 }
@@ -88,6 +89,7 @@ function Shell() {
   const [startOpen, setStartOpen] = useState(false);
   const [frames, setFrames] = useState<FrameState[]>([]);
   const [active, setActive] = useState<WindowId>('workstation');
+  const [immersive, setImmersive] = useState(Platform.OS !== 'web');
   const [clock, setClock] = useState(new Date());
   const [streamError, setStreamError] = useState('');
   const [streamLoaded, setStreamLoaded] = useState(false);
@@ -96,6 +98,7 @@ function Shell() {
   const [streamPassword, setStreamPassword] = useState('');
   const [streamAuthAttempted, setStreamAuthAttempted] = useState(false);
   const [streamReloadVersion, setStreamReloadVersion] = useState(0);
+  const [keyboardPending, setKeyboardPending] = useState(false);
   const [availablePods, setAvailablePods] = useState<AvailablePod[]>([]);
   const [selectedPodId, setSelectedPodId] = useState('');
   const [chromeHidden, setChromeHidden] = useState(true);
@@ -105,6 +108,8 @@ function Shell() {
   const bootPulse = useRef(new Animated.Value(0.35)).current;
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
+  const workstationImmersive = Platform.OS !== 'web' && phase === 'desktop' &&
+    active === 'workstation' && immersive;
   const apiConfig = useMemo(() => {
     try { return { url: validateApiUrl(process.env.EXPO_PUBLIC_API_URL), error: '' }; }
     catch (cause) { return { url: '', error: (cause as Error).message }; }
@@ -114,6 +119,7 @@ function Shell() {
     setSession(null); setPhase('locked'); setFrames([]); setStatus(null);
     setStartOpen(false); setPassword(''); setNotice(message); setStreamLoaded(false);
     setStreamAuthPrompt(false); setStreamPassword(''); setStreamAuthAttempted(false);
+    setKeyboardPending(false);
     setAvailablePods([]); setSelectedPodId('');
   }, []);
   useEffect(() => {
@@ -261,11 +267,33 @@ function Shell() {
     lock('Workstation locked. Sign in again to reconnect.');
   }
 
+  function openRemoteKeyboard() {
+    if (!webview.current) return;
+    if (chromeHidden) {
+      setKeyboardPending(true);
+      setChromeHidden(false);
+      setStreamLoaded(false);
+      setStreamReloadVersion(version => version + 1);
+      return;
+    }
+    webview.current.injectJavaScript(OPEN_REMOTE_KEYBOARD_SCRIPT);
+  }
+
+  function toggleRemoteToolbar() {
+    setChromeHidden(value => !value);
+    setStreamLoaded(false);
+    setStreamReloadVersion(version => version + 1);
+  }
+
   useEffect(() => {
     if (phase !== 'desktop') return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (startOpen) {
         setStartOpen(false);
+        return true;
+      }
+      if (workstationImmersive) {
+        setImmersive(false);
         return true;
       }
       const focused = frames.find(frame => frame.id === active && !frame.minimized);
@@ -276,7 +304,7 @@ function Shell() {
       return false;
     });
     return () => subscription.remove();
-  }, [phase, startOpen, frames, active]);
+  }, [phase, startOpen, frames, active, workstationImmersive]);
 
   return <View style={styles.root}>
     <BlurTargetView ref={wallpaper} style={StyleSheet.absoluteFill}>
@@ -284,8 +312,8 @@ function Shell() {
         <View pointerEvents="none" style={styles.orbOne} /><View pointerEvents="none" style={styles.orbTwo} />
       </LinearGradient>
     </BlurTargetView>
-    <StatusBar style="light" />
-    <SafeAreaView style={styles.safe}>
+    <StatusBar style="light" hidden={workstationImmersive} />
+    <SafeAreaView edges={workstationImmersive ? ['bottom'] : undefined} style={styles.safe}>
       {phase === 'locked' ? <KeyboardAvoidingView style={styles.lockLayout}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.lockScroll} keyboardShouldPersistTaps="handled">
@@ -339,19 +367,19 @@ function Shell() {
           <Text style={styles.body}>{busy ? 'Stopping…' : 'Cancel and shut down'}</Text>
         </Pressable>
       </View> : <View style={styles.desktop}>
-        <View style={styles.desktopHeader}><View><Text style={styles.eyebrow}>PERSONAL CLOUD</Text>
+        {!workstationImmersive && <View style={styles.desktopHeader}><View><Text style={styles.eyebrow}>PERSONAL CLOUD</Text>
           <Text style={styles.desktopTitle}>A little more possibility.</Text></View>
           <Pressable accessibilityRole="button" accessibilityLabel="Open GPU performance" onPress={() => openApp('performance')}
             style={styles.telemetry}><View style={styles.onlineDot} /><Text style={styles.telemetryText}>
               GPU {percent(status?.gpu.gpuUtilPercent)}{ '\n' }VRAM {percent(status?.gpu.memoryUtilPercent)}</Text></Pressable>
-        </View>
-        <View style={styles.desktopIcons}>{apps.map(app => <Pressable key={app.id} accessibilityRole="button"
+        </View>}
+        {!workstationImmersive && <View style={styles.desktopIcons}>{apps.map(app => <Pressable key={app.id} accessibilityRole="button"
           onPress={() => openApp(app.id)} style={styles.desktopIcon}>
           <View style={styles.appTile}><Ionicons name={app.icon} size={30} color={app.color} /></View>
           <Text style={styles.appLabel}>{app.title}</Text>
-        </Pressable>)}</View>
-        <View style={styles.workspace}>
-          {frames.length === 0 && <View style={styles.emptyWorkspace}>
+        </Pressable>)}</View>}
+        <View style={workstationImmersive ? styles.immersiveWorkspace : styles.workspace}>
+          {!workstationImmersive && frames.length === 0 && <View style={styles.emptyWorkspace}>
             <View style={styles.emptyCard}>
               <View style={styles.appTile}><Ionicons name="desktop-outline" size={30} color="#6ed7ff" /></View>
               <Text style={styles.panelTitle}>Your workspace is ready</Text>
@@ -362,31 +390,43 @@ function Shell() {
             </View>
           </View>}
           {frames.map(frame => <AppFrame key={frame.id} frame={frame}
+          immersive={workstationImmersive && frame.id === 'workstation'}
           focused={active === frame.id} onFocus={() => setActive(frame.id)}
           onMinimize={() => patchFrame(frame.id, { minimized: true })}
-          onMaximize={() => patchFrame(frame.id, { maximized: !frame.maximized })}
+          onMaximize={() => {
+            if (Platform.OS !== 'web' && frame.id === 'workstation') {
+              patchFrame(frame.id, { maximized: true }); setImmersive(true);
+            } else patchFrame(frame.id, { maximized: !frame.maximized });
+          }}
           onClose={() => setFrames(previous => previous.filter(item => item.id !== frame.id))}>
           {frame.id === 'workstation' && session ? <View style={styles.streamContainer}>
-            <View style={styles.streamToolbar}><Text style={styles.smallText}>{streamLoaded ? 'Remote desktop' : 'Connecting stream…'}</Text>
+            {!workstationImmersive && <View style={styles.streamToolbar}><Text style={styles.smallText}>{streamLoaded ? 'Remote desktop' : 'Connecting stream…'}</Text>
               <IconButton icon="refresh-outline" label="Reload desktop stream" onPress={() => {
                 setStreamError(''); setStreamLoaded(false); webview.current?.reload();
               }} />
-              <IconButton icon={chromeHidden ? 'eye-outline' : 'eye-off-outline'} label="Toggle stream toolbar"
-                onPress={() => { setChromeHidden(value => !value); setStreamLoaded(false); }} />
-            </View>
+              {!workstationImmersive && <IconButton icon={chromeHidden ? 'eye-outline' : 'eye-off-outline'} label="Toggle stream toolbar"
+                onPress={toggleRemoteToolbar} />}
+            </View>}
             {Platform.OS === 'web' ? <View style={styles.panel}><Text style={styles.body}>
               Use the Android or iOS app for the hardware-accelerated desktop stream.</Text></View> : <WebView<object>
               key={`${chromeHidden ? 'hidden-chrome' : 'visible-chrome'}-${streamReloadVersion}`} ref={webview}
               source={{ uri: session.streamUrl }}
               basicAuthCredential={streamAuthAttempted ? { username: streamUsername, password: streamPassword } : undefined}
               style={styles.webview} androidLayerType="hardware" javaScriptEnabled domStorageEnabled
+              keyboardDisplayRequiresUserAction={false}
               originWhitelist={[new URL(session.streamUrl).origin, 'about:blank']}
               onShouldStartLoadWithRequest={navigation => canNavigate(navigation.url, session.streamUrl)}
               injectedJavaScript={chromeHidden ? STREAM_CHROME_SCRIPT : 'true;'}
               allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false}
               mixedContentMode="never" setSupportMultipleWindows={false}
               allowFileAccess={false} allowUniversalAccessFromFileURLs={false}
-              onLoadEnd={() => setStreamLoaded(true)}
+              onLoadEnd={() => {
+                setStreamLoaded(true);
+                if (keyboardPending) {
+                  setKeyboardPending(false);
+                  webview.current?.injectJavaScript(OPEN_REMOTE_KEYBOARD_SCRIPT);
+                }
+              }}
               onError={event => {
                 if (event.nativeEvent.description === 'net::ERR_HTTP_RESPONSE_CODE_FAILURE') return;
                 setStreamError('Stream disconnected. Reload to reconnect.');
@@ -403,6 +443,25 @@ function Shell() {
               }}
               onContentProcessDidTerminate={() => { setStreamError('Stream process restarted. Reload to reconnect.'); }}
             />}
+            {workstationImmersive && <View pointerEvents="box-none" style={styles.mobileStreamControls}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Reload remote desktop"
+                onPress={() => { setStreamError(''); setStreamLoaded(false); webview.current?.reload(); }}
+                style={styles.mobileControlButton}>
+                <Ionicons name="refresh-outline" size={22} color="#f2f7ff" />
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Show remote keyboard"
+                onPress={openRemoteKeyboard} style={styles.mobileControlButton}>
+                <Ionicons name="keypad-outline" size={22} color="#f2f7ff" />
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={chromeHidden ? 'Show remote desktop controls' : 'Hide remote desktop controls'}
+                onPress={toggleRemoteToolbar} style={styles.mobileControlButton}>
+                <Ionicons name={chromeHidden ? 'eye-outline' : 'eye-off-outline'} size={22} color="#f2f7ff" />
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Exit full screen"
+                onPress={() => setImmersive(false)} style={styles.mobileControlButton}>
+                <Ionicons name="contract-outline" size={22} color="#f2f7ff" />
+              </Pressable>
+            </View>}
             {Platform.OS !== 'web' && streamAuthPrompt && <View style={styles.streamAuthShade}>
               <View style={styles.streamAuthPanel}>
                 <Text style={styles.panelTitle}>Sign in to the desktop</Text>
@@ -447,8 +506,8 @@ function Shell() {
           </ScrollView>}
         </AppFrame>)}
         </View>
-        {!!notice && <View style={styles.noticeBanner}><Text style={styles.smallText}>{notice}</Text></View>}
-        {startOpen && <BlurView blurTarget={wallpaper} blurMethod="dimezisBlurViewSdk31Plus" intensity={80} tint="dark" style={styles.startMenu}>
+        {!workstationImmersive && !!notice && <View style={styles.noticeBanner}><Text style={styles.smallText}>{notice}</Text></View>}
+        {!workstationImmersive && startOpen && <BlurView blurTarget={wallpaper} blurMethod="dimezisBlurViewSdk31Plus" intensity={80} tint="dark" style={styles.startMenu}>
           <Text style={styles.panelTitle}>Pinned</Text><View style={styles.pinnedApps}>{apps.map(app =>
             <Pressable accessibilityRole="button" key={app.id} style={styles.pinnedApp} onPress={() => openApp(app.id)}>
               <Ionicons name={app.icon} color={app.color} size={27} /><Text style={styles.appLabel}>{app.title}</Text>
@@ -464,7 +523,7 @@ function Shell() {
               <Ionicons name="power-outline" size={20} color="#fff" /><Text style={styles.body}>{busy ? 'Stopping…' : 'Shut down'}</Text>
             </Pressable></View>
         </BlurView>}
-        <BlurView blurTarget={wallpaper} blurMethod="dimezisBlurViewSdk31Plus" intensity={70} tint="dark" style={styles.taskbar}>
+        {!workstationImmersive && <BlurView blurTarget={wallpaper} blurMethod="dimezisBlurViewSdk31Plus" intensity={70} tint="dark" style={styles.taskbar}>
           <IconButton icon="logo-windows" label="Toggle Start menu" onPress={() => setStartOpen(value => !value)} />
           {apps.map(app => <Pressable key={app.id} accessibilityRole="button"
             accessibilityLabel={frames.some(frame => frame.id === app.id && active === app.id && !frame.minimized)
@@ -474,7 +533,7 @@ function Shell() {
             onPress={() => toggleTaskbarApp(app.id)}>
             <Ionicons name={app.icon} size={23} color={app.color} /></Pressable>)}
           <View style={styles.taskClock}><Text style={styles.smallText}>{clock.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text></View>
-        </BlurView>
+        </BlurView>}
       </View>}
     </SafeAreaView>
   </View>;
@@ -523,6 +582,7 @@ const styles = StyleSheet.create({
   appTile: { height: 52, width: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#d1e9ff12', borderWidth: 1, borderColor: '#cbe5ff24' },
   appLabel: { color: '#e1edff', fontSize: 11, textAlign: 'center', lineHeight: 15 },
   workspace: { flex: 1, marginHorizontal: 10, marginBottom: 8 },
+  immersiveWorkspace: { flex: 1, margin: 0, overflow: 'hidden' },
   emptyWorkspace: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   emptyCard: { width: '100%', maxWidth: 360, alignItems: 'center', gap: 12, padding: 24,
     borderRadius: 18, backgroundColor: '#12223bd9', borderWidth: 1, borderColor: '#9dc5f22b' },
@@ -530,6 +590,7 @@ const styles = StyleSheet.create({
     borderRadius: 10, backgroundColor: '#89d1ff', marginTop: 4 },
   emptyActionLabel: { color: '#0b1933', fontSize: 13, fontWeight: '700' },
   frame: { position: 'absolute', backgroundColor: '#101e35', borderWidth: 1, borderColor: '#8bacdf55', borderRadius: 12, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 18, elevation: 6 },
+  immersiveFrame: { top: 0, left: 0, right: 0, bottom: 0, borderWidth: 0, borderRadius: 0, elevation: 0, shadowOpacity: 0 },
   maximized: { top: 0, left: 0, right: 0, bottom: 0 },
   floating: { top: 12, left: '4%', width: '92%', height: '78%', minHeight: 180 },
   titlebar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#233654', height: 42 },
@@ -540,6 +601,10 @@ const styles = StyleSheet.create({
   streamContainer: { flex: 1, backgroundColor: '#050d19' }, streamToolbar: { flexDirection: 'row', alignItems: 'center', paddingLeft: 12, backgroundColor: '#14223b' },
   smallText: { color: '#bbcde6', fontSize: 11, lineHeight: 16, flexShrink: 1 },
   webview: { flex: 1, backgroundColor: '#050d19' },
+  mobileStreamControls: { position: 'absolute', left: 12, right: 12, bottom: 14, zIndex: 30,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  mobileControlButton: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#0a1732df', borderWidth: 1, borderColor: '#b6d5ff55' },
   streamError: { position: 'absolute', left: 8, right: 8, bottom: 8, padding: 16, borderRadius: 10, backgroundColor: '#17243af5' },
   streamAuthShade: { ...StyleSheet.absoluteFill, justifyContent: 'center', padding: 12, backgroundColor: '#071226d9' },
   streamAuthPanel: { borderRadius: 14, padding: 18, gap: 12, backgroundColor: '#17243af5', borderWidth: 1, borderColor: '#8bacdf55' },

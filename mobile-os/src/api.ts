@@ -84,13 +84,36 @@ export const STREAM_CHROME_SCRIPT = `
 (function () {
   if (window.__cloudGpuChrome) return true;
   window.__cloudGpuChrome = true;
+  window.__cloudGpuChromeEnabled = true;
   var style = document.createElement('style');
+  style.id = 'cloudGpuHiddenStreamChrome';
   style.textContent = '#noVNC_control_bar, #noVNC_control_bar_anchor, #controlBar, .selkies-toolbar { display:none !important; }';
   function install() {
+    if (!window.__cloudGpuChromeEnabled) return;
     if (document.head && !style.isConnected) document.head.appendChild(style);
   }
   install();
   new MutationObserver(install).observe(document.documentElement, {childList:true, subtree:true});
   return true;
+})(); true;
+`;
+
+// Kasm/noVNC receive mobile keystrokes through their own hidden keyboard input.
+// Reveal the viewer toolbar before focusing it so Android can display its IME.
+export const OPEN_REMOTE_KEYBOARD_SCRIPT = `
+(function () {
+  window.__cloudGpuChromeEnabled = false;
+  var hiddenChrome = document.getElementById('cloudGpuHiddenStreamChrome');
+  if (hiddenChrome) hiddenChrome.remove();
+  var attempts = 0;
+  function openKeyboard() {
+    var button = document.querySelector('#noVNC_keyboard_button, [aria-label*="keyboard" i], [title*="keyboard" i]');
+    if (button) button.click();
+    var input = document.querySelector('#noVNC_keyboardinput, #noVNC_keyboard_input, textarea');
+    if (input) { input.focus(); return; }
+    if (button || attempts++ > 20) return;
+    setTimeout(openKeyboard, 250);
+  }
+  openKeyboard();
 })(); true;
 `;

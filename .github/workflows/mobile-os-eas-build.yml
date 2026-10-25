@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'codex/mobile-os-dynamic-pod'
+      - 'codex/mobile-os-touch-immersive'
     paths:
       - '.github/workflows/mobile-os-eas-build.yml'
       - 'mobile-os/**'
