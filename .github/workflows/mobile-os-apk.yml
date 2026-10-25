@@ -1,0 +1,57 @@
+name: Mobile OS preview APK
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/mobile-os-apk.yml'
+      - 'mobile-os/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-os-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: mobile-os
+    env:
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_API_URL: https://cloud-gpu-os-orchestrator.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: mobile-os/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --no-install
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build installable preview APK
+        run: ./gradlew assembleDebug --no-daemon
+        working-directory: mobile-os/android
+      - name: Verify APK
+        run: |
+          test -s android/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" \
+            verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cloud-gpu-mobile-os-preview-apk
+          path: mobile-os/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
