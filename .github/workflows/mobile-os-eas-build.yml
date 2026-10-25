@@ -5,6 +5,7 @@ on:
     branches:
       - 'codex/mobile-os-dynamic-pod'
       - 'codex/mobile-os-touch-immersive'
+      - 'codex/mobile-os-mobile-optimized'
     paths:
       - '.github/workflows/mobile-os-eas-build.yml'
       - 'mobile-os/**'

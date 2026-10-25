@@ -7,8 +7,8 @@ GPU Workstation embeds your authenticated browser desktop in a WebView;
 Performance and System are local apps. It is not a Windows kernel or a Windows
 license: the operating system inside the stream comes from your RunPod image.
 On Android and iOS the workstation opens edge to edge in immersive full screen.
-Floating controls reload the stream, open the remote on-screen keyboard, reveal
-the viewer toolbar, or return to the Cloud GPU OS shell.
+A small floating dock keeps the keyboard one tap away; reload, viewer-toolbar,
+and exit controls stay in its expandable menu.
 
 ## Development
 
@@ -31,7 +31,7 @@ on the lock screen. Password and session token are not persisted by this app.
 
 After host login, the app discovers Pods in the linked RunPod account. A single
 Pod opens automatically; if there are several, select the workstation to open.
-The app polls every 3 seconds during boot and 10 seconds on the desktop, with
+The app polls every 3 seconds during boot and 30 seconds on the desktop, with
 30-second foreground heartbeats. It pauses requests in the background and
 cancels pending requests on session changes. Locking or closing the app leaves
 the Pod running. Use Start → Shut down when you want to stop the selected Pod.

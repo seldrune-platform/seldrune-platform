@@ -90,6 +90,7 @@ function Shell() {
   const [frames, setFrames] = useState<FrameState[]>([]);
   const [active, setActive] = useState<WindowId>('workstation');
   const [immersive, setImmersive] = useState(Platform.OS !== 'web');
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [clock, setClock] = useState(new Date());
   const [streamError, setStreamError] = useState('');
   const [streamLoaded, setStreamLoaded] = useState(false);
@@ -123,9 +124,10 @@ function Shell() {
     setAvailablePods([]); setSelectedPodId('');
   }, []);
   useEffect(() => {
+    if (workstationImmersive) return;
     const timer = setInterval(() => setClock(new Date()), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [workstationImmersive]);
   useEffect(() => {
     if (phase !== 'booting') return;
     const animation = Animated.loop(Animated.sequence([
@@ -182,7 +184,7 @@ function Shell() {
         } else { setNotice(''); }
       } catch (cause) { handleFailure(cause, run); }
       if (!cancelled && foreground && run === generation) {
-        pollTimer = setTimeout(() => { void poll(run); }, phaseRef.current === 'booting' ? 3000 : 10_000);
+        pollTimer = setTimeout(() => { void poll(run); }, phaseRef.current === 'booting' ? 3000 : 30_000);
       }
     };
     const heartbeat = async (run = generation) => {
@@ -281,6 +283,7 @@ function Shell() {
 
   function toggleRemoteToolbar() {
     setChromeHidden(value => !value);
+    setMobileToolsOpen(false);
     setStreamLoaded(false);
     setStreamReloadVersion(version => version + 1);
   }
@@ -307,11 +310,11 @@ function Shell() {
   }, [phase, startOpen, frames, active, workstationImmersive]);
 
   return <View style={styles.root}>
-    <BlurTargetView ref={wallpaper} style={StyleSheet.absoluteFill}>
+    {!workstationImmersive && <BlurTargetView ref={wallpaper} style={StyleSheet.absoluteFill}>
       <LinearGradient colors={['#091a38', '#142760', '#41265e']} style={styles.root}>
         <View pointerEvents="none" style={styles.orbOne} /><View pointerEvents="none" style={styles.orbTwo} />
       </LinearGradient>
-    </BlurTargetView>
+    </BlurTargetView>}
     <StatusBar style="light" hidden={workstationImmersive} />
     <SafeAreaView edges={workstationImmersive ? ['bottom'] : undefined} style={styles.safe}>
       {phase === 'locked' ? <KeyboardAvoidingView style={styles.lockLayout}
@@ -414,6 +417,7 @@ function Shell() {
               basicAuthCredential={streamAuthAttempted ? { username: streamUsername, password: streamPassword } : undefined}
               style={styles.webview} androidLayerType="hardware" javaScriptEnabled domStorageEnabled
               keyboardDisplayRequiresUserAction={false}
+              scrollEnabled={false} bounces={false}
               originWhitelist={[new URL(session.streamUrl).origin, 'about:blank']}
               onShouldStartLoadWithRequest={navigation => canNavigate(navigation.url, session.streamUrl)}
               injectedJavaScript={chromeHidden ? STREAM_CHROME_SCRIPT : 'true;'}
@@ -443,23 +447,29 @@ function Shell() {
               }}
               onContentProcessDidTerminate={() => { setStreamError('Stream process restarted. Reload to reconnect.'); }}
             />}
-            {workstationImmersive && <View pointerEvents="box-none" style={styles.mobileStreamControls}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Reload remote desktop"
-                onPress={() => { setStreamError(''); setStreamLoaded(false); webview.current?.reload(); }}
-                style={styles.mobileControlButton}>
-                <Ionicons name="refresh-outline" size={22} color="#f2f7ff" />
-              </Pressable>
+            {workstationImmersive && <View pointerEvents="box-none" style={styles.mobileControlDock}>
+              {mobileToolsOpen && <View style={styles.mobileControlGroup}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Reload remote desktop"
+                  onPress={() => { setMobileToolsOpen(false); setStreamError(''); setStreamLoaded(false); webview.current?.reload(); }}
+                  style={styles.mobileControlButton}>
+                  <Ionicons name="refresh-outline" size={21} color="#f2f7ff" />
+                </Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={chromeHidden ? 'Show remote desktop controls' : 'Hide remote desktop controls'}
+                  onPress={toggleRemoteToolbar} style={styles.mobileControlButton}>
+                  <Ionicons name={chromeHidden ? 'eye-outline' : 'eye-off-outline'} size={21} color="#f2f7ff" />
+                </Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel="Exit full screen"
+                  onPress={() => { setMobileToolsOpen(false); setImmersive(false); }} style={styles.mobileControlButton}>
+                  <Ionicons name="contract-outline" size={21} color="#f2f7ff" />
+                </Pressable>
+              </View>}
               <Pressable accessibilityRole="button" accessibilityLabel="Show remote keyboard"
                 onPress={openRemoteKeyboard} style={styles.mobileControlButton}>
                 <Ionicons name="keypad-outline" size={22} color="#f2f7ff" />
               </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel={chromeHidden ? 'Show remote desktop controls' : 'Hide remote desktop controls'}
-                onPress={toggleRemoteToolbar} style={styles.mobileControlButton}>
-                <Ionicons name={chromeHidden ? 'eye-outline' : 'eye-off-outline'} size={22} color="#f2f7ff" />
-              </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Exit full screen"
-                onPress={() => setImmersive(false)} style={styles.mobileControlButton}>
-                <Ionicons name="contract-outline" size={22} color="#f2f7ff" />
+              <Pressable accessibilityRole="button" accessibilityLabel={mobileToolsOpen ? 'Hide remote desktop options' : 'Show remote desktop options'}
+                onPress={() => setMobileToolsOpen(value => !value)} style={styles.mobileControlButton}>
+                <Ionicons name={mobileToolsOpen ? 'close-outline' : 'ellipsis-horizontal'} size={22} color="#f2f7ff" />
               </Pressable>
             </View>}
             {Platform.OS !== 'web' && streamAuthPrompt && <View style={styles.streamAuthShade}>
@@ -601,8 +611,9 @@ const styles = StyleSheet.create({
   streamContainer: { flex: 1, backgroundColor: '#050d19' }, streamToolbar: { flexDirection: 'row', alignItems: 'center', paddingLeft: 12, backgroundColor: '#14223b' },
   smallText: { color: '#bbcde6', fontSize: 11, lineHeight: 16, flexShrink: 1 },
   webview: { flex: 1, backgroundColor: '#050d19' },
-  mobileStreamControls: { position: 'absolute', left: 12, right: 12, bottom: 14, zIndex: 30,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  mobileControlDock: { position: 'absolute', right: 12, bottom: 12, zIndex: 30,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
+  mobileControlGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   mobileControlButton: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#0a1732df', borderWidth: 1, borderColor: '#b6d5ff55' },
   streamError: { position: 'absolute', left: 8, right: 8, bottom: 8, padding: 16, borderRadius: 10, backgroundColor: '#17243af5' },

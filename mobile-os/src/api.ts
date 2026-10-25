@@ -78,31 +78,24 @@ export async function request<T>(base: string, path: string, token?: string,
   }
 }
 
-// Only hide known desktop-stream chrome; never remove login fields or arbitrary
-// controls. MutationObserver handles late-loaded Selkies/noVNC toolbars.
+// Keep this to one stylesheet. CSS also applies to viewer controls that mount
+// after page load, without observing every remote desktop DOM mutation.
 export const STREAM_CHROME_SCRIPT = `
 (function () {
   if (window.__cloudGpuChrome) return true;
   window.__cloudGpuChrome = true;
-  window.__cloudGpuChromeEnabled = true;
   var style = document.createElement('style');
   style.id = 'cloudGpuHiddenStreamChrome';
   style.textContent = '#noVNC_control_bar, #noVNC_control_bar_anchor, #controlBar, .selkies-toolbar { display:none !important; }';
-  function install() {
-    if (!window.__cloudGpuChromeEnabled) return;
-    if (document.head && !style.isConnected) document.head.appendChild(style);
-  }
-  install();
-  new MutationObserver(install).observe(document.documentElement, {childList:true, subtree:true});
+  if (document.head) document.head.appendChild(style);
   return true;
 })(); true;
 `;
 
 // Kasm/noVNC receive mobile keystrokes through their own hidden keyboard input.
-// Reveal the viewer toolbar before focusing it so Android can display its IME.
+// Reveal the viewer toolbar before focusing it so the device can display its IME.
 export const OPEN_REMOTE_KEYBOARD_SCRIPT = `
 (function () {
-  window.__cloudGpuChromeEnabled = false;
   var hiddenChrome = document.getElementById('cloudGpuHiddenStreamChrome');
   if (hiddenChrome) hiddenChrome.remove();
   var attempts = 0;
