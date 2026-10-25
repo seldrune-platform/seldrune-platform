@@ -29,7 +29,7 @@ services:
       - key: RUNPOD_API_KEY
         sync: false
       - key: RUNPOD_POD_ID
-        value: rwwvlvv34gw0dy
+        value: o4nqpenvxvk9gw
       - key: STREAM_PORT
         value: "6901"
       - key: STATE_FILE
