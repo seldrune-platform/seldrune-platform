@@ -42,7 +42,7 @@ jobs:
         working-directory: mobile-os
     env:
       EXPO_NO_TELEMETRY: '1'
-      EXPO_PUBLIC_API_URL: https://example.com
+      EXPO_PUBLIC_API_URL: https://cloud-gpu-os-orchestrator.onrender.com
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

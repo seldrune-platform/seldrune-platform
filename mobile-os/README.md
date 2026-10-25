@@ -13,15 +13,16 @@ license: the operating system inside the stream comes from your RunPod image.
 cd mobile-os
 npm ci
 cp .env.example .env
-# Set EXPO_PUBLIC_API_URL to your deployed HTTPS orchestrator origin.
 npm start
 ```
 
 Use an Expo Go version supporting SDK 58, or a native development build:
 `npm run android` / `npm run ios` (Android SDK or macOS/Xcode required). The
 streaming client targets Android/iOS; web builds do not embed the WebView.
-The API URL is a public, build-time Expo setting. Rebuild/reload the bundle
-after changing it. Never put API keys, JWT secrets, or host passwords into
+The example file and EAS build profiles are preconfigured with the deployed
+Render orchestrator URL. Change `EXPO_PUBLIC_API_URL` only when switching to a
+different service; it is a public, build-time Expo setting. Rebuild/reload the
+bundle after changing it. Never put API keys, JWT secrets, or host passwords into
 `EXPO_PUBLIC_*` variables. Host username defaults to `admin`; enter the password
 on the lock screen. Password and session token are not persisted by this app.
 
@@ -68,11 +69,12 @@ audio, reconnect, and shutdown on your target devices. Verify that GPU/VRAM
 readings match RunPod and that a lost phone heartbeat stops the dedicated pod.
 Configure native signing and store identities before distributing a release.
 `eas.json` includes internal APK and production app-bundle profiles. After
-linking your Expo project and configuring secure signing credentials, set
-`EXPO_PUBLIC_API_URL` in the corresponding EAS build environment and run
-`npx eas-cli build --platform android --profile production` (or `--platform ios`).
-EAS builds, signing, store submission and physical-device tests are not executed
-by this repository's CI workflow.
+linking your Expo project (`npx eas-cli login`, then `npx eas-cli init`) and
+configuring secure signing credentials, build an installable Android APK with
+`npx eas-cli build --platform android --profile preview`; use the `production`
+profile for a Play Store app bundle. The profiles already set the production API
+URL. EAS builds, signing, store submission and physical-device tests are not
+executed by this repository's CI workflow.
 
 Dependency audit at implementation time reports high-severity advisories in
 the current Expo/Metro build-tool chains (`braces` and `node-forge`). The registry
