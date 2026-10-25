@@ -91,6 +91,11 @@ function Shell() {
   const [clock, setClock] = useState(new Date());
   const [streamError, setStreamError] = useState('');
   const [streamLoaded, setStreamLoaded] = useState(false);
+  const [streamAuthPrompt, setStreamAuthPrompt] = useState(false);
+  const [streamUsername, setStreamUsername] = useState('kasm_user');
+  const [streamPassword, setStreamPassword] = useState('');
+  const [streamAuthAttempted, setStreamAuthAttempted] = useState(false);
+  const [streamReloadVersion, setStreamReloadVersion] = useState(0);
   const [chromeHidden, setChromeHidden] = useState(true);
   const webview = useRef<WebView<object>>(null);
   const wallpaper = useRef<React.ComponentRef<typeof View>>(null);
@@ -106,6 +111,7 @@ function Shell() {
   const lock = useCallback((message = '') => {
     setSession(null); setPhase('locked'); setFrames([]); setStatus(null);
     setStartOpen(false); setPassword(''); setNotice(message); setStreamLoaded(false);
+    setStreamAuthPrompt(false); setStreamPassword(''); setStreamAuthAttempted(false);
   }, []);
   useEffect(() => {
     const timer = setInterval(() => setClock(new Date()), 1000);
@@ -199,6 +205,7 @@ function Shell() {
       const next = await request<Session>(apiConfig.url, '/api/login', undefined, { username, password });
       validateStreamUrl(next.streamUrl, next.podId, next.streamPort);
       setPassword(''); setStatus(null); setStreamError(''); setStreamLoaded(false);
+      setStreamAuthPrompt(false); setStreamPassword(''); setStreamAuthAttempted(false);
       progress.setValue(0.08); setSession(next); setPhase('booting');
     } catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
@@ -342,7 +349,9 @@ function Shell() {
             </View>
             {Platform.OS === 'web' ? <View style={styles.panel}><Text style={styles.body}>
               Use the Android or iOS app for the hardware-accelerated desktop stream.</Text></View> : <WebView<object>
-              key={chromeHidden ? 'hidden-chrome' : 'visible-chrome'} ref={webview} source={{ uri: session.streamUrl }}
+              key={`${chromeHidden ? 'hidden-chrome' : 'visible-chrome'}-${streamReloadVersion}`} ref={webview}
+              source={{ uri: session.streamUrl }}
+              basicAuthCredential={streamAuthAttempted ? { username: streamUsername, password: streamPassword } : undefined}
               style={styles.webview} androidLayerType="hardware" javaScriptEnabled domStorageEnabled
               originWhitelist={[new URL(session.streamUrl).origin, 'about:blank']}
               onShouldStartLoadWithRequest={navigation => canNavigate(navigation.url, session.streamUrl)}
@@ -351,10 +360,48 @@ function Shell() {
               mixedContentMode="never" setSupportMultipleWindows={false}
               allowFileAccess={false} allowUniversalAccessFromFileURLs={false}
               onLoadEnd={() => setStreamLoaded(true)}
-              onError={() => setStreamError('Stream disconnected. Reload to reconnect.')}
-              onHttpError={event => setStreamError(`Stream returned HTTP ${event.nativeEvent.statusCode}. Check the desktop service.`)}
+              onError={event => {
+                if (event.nativeEvent.description === 'net::ERR_HTTP_RESPONSE_CODE_FAILURE') return;
+                setStreamError('Stream disconnected. Reload to reconnect.');
+              }}
+              onHttpError={event => {
+                const statusCode = event.nativeEvent.statusCode;
+                if (statusCode === 401) {
+                  setStreamAuthPrompt(true);
+                  setStreamError(streamAuthAttempted
+                    ? 'The desktop rejected these credentials. Check the Kasm username and Pod password.' : '');
+                } else {
+                  setStreamError(`Stream returned HTTP ${statusCode}. Check the desktop service.`);
+                }
+              }}
               onContentProcessDidTerminate={() => { setStreamError('Stream process restarted. Reload to reconnect.'); }}
             />}
+            {Platform.OS !== 'web' && streamAuthPrompt && <View style={styles.streamAuthShade}>
+              <View style={styles.streamAuthPanel}>
+                <Text style={styles.panelTitle}>Sign in to the desktop</Text>
+                <Text style={styles.body}>Use the Kasm credentials configured for this RunPod Pod. They are separate from your Cloud GPU OS login.</Text>
+                <TextInput accessibilityLabel="Kasm username" value={streamUsername} onChangeText={setStreamUsername}
+                  placeholder="Kasm username" placeholderTextColor="#99abc5" autoCapitalize="none"
+                  autoCorrect={false} textContentType="username" style={styles.input} />
+                <TextInput accessibilityLabel="Kasm password" value={streamPassword} onChangeText={setStreamPassword}
+                  placeholder="Desktop password (VNC_PW)" placeholderTextColor="#99abc5" secureTextEntry
+                  textContentType="password" onSubmitEditing={() => {
+                    if (!streamUsername || !streamPassword) return;
+                    setStreamError(''); setStreamAuthPrompt(false); setStreamAuthAttempted(true);
+                    setStreamReloadVersion(version => version + 1);
+                  }} style={styles.input} />
+                {!!streamError && <Text accessibilityRole="alert" style={styles.error}>{streamError}</Text>}
+                <Pressable accessibilityRole="button" disabled={!streamUsername || !streamPassword}
+                  style={({ pressed }) => [styles.streamAuthButton, pressed && styles.pressed,
+                    (!streamUsername || !streamPassword) && styles.disabled]}
+                  onPress={() => {
+                    setStreamError(''); setStreamAuthPrompt(false); setStreamAuthAttempted(true);
+                    setStreamReloadVersion(version => version + 1);
+                  }}>
+                  <Text style={styles.primaryLabel}>Connect desktop</Text>
+                </Pressable>
+              </View>
+            </View>}
             {!!streamError && <View style={styles.streamError}><Text style={styles.error}>{streamError}</Text>
               <Pressable accessibilityRole="button" onPress={() => { setStreamError(''); webview.current?.reload(); }}>
                 <Text style={styles.link}>Reconnect</Text></Pressable></View>}
@@ -458,6 +505,9 @@ const styles = StyleSheet.create({
   smallText: { color: '#bbcde6', fontSize: 11, lineHeight: 16, flexShrink: 1 },
   webview: { flex: 1, backgroundColor: '#050d19' },
   streamError: { position: 'absolute', left: 8, right: 8, bottom: 8, padding: 16, borderRadius: 10, backgroundColor: '#17243af5' },
+  streamAuthShade: { ...StyleSheet.absoluteFill, justifyContent: 'center', padding: 12, backgroundColor: '#071226d9' },
+  streamAuthPanel: { borderRadius: 14, padding: 18, gap: 12, backgroundColor: '#17243af5', borderWidth: 1, borderColor: '#8bacdf55' },
+  streamAuthButton: { minHeight: 46, marginTop: 4, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: '#89d1ff' },
   link: { color: '#85d4ff', fontWeight: '600', paddingVertical: 8 },
   panel: { padding: 22, gap: 12 }, panelTitle: { color: '#f1f6ff', fontSize: 18, fontWeight: '600' },
   metric: { fontSize: 40, color: '#8bd6ff', fontWeight: '300' },
