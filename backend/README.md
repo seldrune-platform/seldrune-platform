@@ -86,9 +86,9 @@ in `ALLOWED_ORIGINS` (comma-separated); CORS is not authentication.
 ## Pod shutdown and recovery
 
 Automatic idle shutdown is **disabled by default**. Locking or closing the app
-does not stop a Pod. The user can explicitly shut down the selected Pod from
-the app's Start menu. Set `AUTO_STOP_IDLE=true` only when unattended shutdown is
-intended.
+does not stop a Pod. The user can explicitly shut down the current Pod from
+the mobile control dock. Set `AUTO_STOP_IDLE=true` only when unattended
+shutdown is intended.
 
 The configured Pod gets a lease file derived from `STATE_FILE`, containing
 the Pod identity, epoch, activity flag and timestamp but no credentials. Store it
