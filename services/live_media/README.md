@@ -106,8 +106,12 @@ the deployment:
 
 Adapter and evaluator values must resolve to installed async callables, and the
 transform adapter modules must each expose an async `prepare_profile` function.
-Mount reviewed private profile media at `/workspace/seldrune-live-profiles`; do not
-put profile media in the image. Expose the worker's TCP port 8765 to the gateway,
+Mount reviewed private profile media and the `HF_HOME` cache at
+`/workspace/seldrune-live-profiles`; do not put profile media in the image.
+Each voice profile needs a private 1–30 second reference recording and a
+`voice-reference.json` manifest containing its relative filename and SHA-256
+digest. The media must match the profile approved by the Seldrune registry.
+Expose the worker's TCP port 8765 to the gateway,
 use a certificate valid for the exposed hostname, and provision an accelerator that
 the worker recognizes before enabling live sessions.
 
@@ -137,14 +141,32 @@ similarity, latency or production readiness from signaling alone.
 Install only the media dependencies with the gateway Dockerfile. The normal Seldrune
 API image remains independent of aiortc.
 
-## Voice styling
+## Pretrained voice conversion
 
-`voice_style_adapter.py` supports bounded live PCM styling and per-profile
-`pitch_semitones` controls from -8 to +8. Its streaming pitch shifter is adapted
-from the locally available MIT-licensed OpenVoiceChanger source; see
-`OPENVOICECHANGER-LICENSE`. This is a same-speaker effect and does not synthesize
-or imitate a different enrolled speaker. Set the value in the private
-`voice-style.json` for that approved profile.
+The default adapter is
+`services.live_media.seedvc_voice_adapter:transform_voice`. It uses the
+pretrained Seed-VC v1 real-time checkpoint for zero-shot conversion from a
+1–30 second reference clip. It performs inference only; it does not train a
+profile model. Input and output use the worker's 48 kHz PCM format, with 240 ms
+model blocks and cross-fade alignment.
+
+Provision each approved voice profile under the private
+`/workspace/seldrune-live-profiles/<profile-id>/` directory with a reference
+audio file and a `voice-reference.json` manifest containing only its filename
+and SHA-256 digest. The worker rejects paths outside the profile, symlinks,
+files over 50 MiB, digest mismatches, and references outside 1–30 seconds.
+Keep the audio and model cache on a private persistent volume; do not add either
+to Git or the container image. Set
+`SELDRUNE_VOICE_TRANSFORM_ADAPTER=services.live_media.seedvc_voice_adapter:transform_voice`.
+The same-speaker DSP effect remains available through the optional
+`voice_style_adapter`.
+
+Seed-VC source and model weights are GPL-3.0. The image pins the upstream source
+commit and includes its corresponding source and license at `/opt/seed-vc`.
+Review GPL-3.0 distribution obligations before redistributing the worker image.
+The pretrained checkpoints are downloaded into the private `HF_HOME` cache on
+first profile preparation.
+
 
 
 ## Change the visible disclosure wording
