@@ -84,16 +84,14 @@ class IceServer:
 def _turn_transport(url: str) -> str | None:
     scheme, _, rest = url.partition(":")
     scheme = scheme.lower()
-    if scheme == "turns":
-        return "tcp"
-    if scheme != "turn":
+    if scheme not in {"turn", "turns"}:
         return None
     query = rest.partition("?")[2]
     for parameter in query.split("&"):
         key, separator, value = parameter.partition("=")
         if separator and key.casefold() == "transport":
             return value.casefold()
-    return "udp"
+    return "tcp" if scheme == "turns" else "udp"
 
 
 def _select_gateway_turn_transport(
@@ -478,14 +476,15 @@ def _default_description_factory(sdp: str, kind: str) -> object:
 
 def _worker_ssl_context() -> ssl.SSLContext:
     """Verify RunPod TLS with system roots and an optional operator-managed CA."""
+    context = ssl.create_default_context()
     ca_pem = os.getenv("SELDRUNE_LIVE_WORKER_CA_PEM", "").strip()
     if ca_pem:
         ca_pem = ca_pem.replace("\\n", "\n")
         try:
-            return ssl.create_default_context(cadata=ca_pem)
+            context.load_verify_locations(cadata=ca_pem)
         except (ssl.SSLError, ValueError) as exc:
             raise RuntimeError("configured RunPod worker CA is invalid") from exc
-    return ssl.create_default_context()
+    return context
 
 
 class LiveMediaGateway:
@@ -501,6 +500,7 @@ class LiveMediaGateway:
         description_factory: Callable[[str, str], object] = _default_description_factory,
     ) -> None:
         self.settings = settings
+        self._worker_tls_context = _worker_ssl_context()
         self.profile_authorizer = profile_authorizer
         self.worker_session_factory = worker_session_factory or self._connect_worker
         self.peer_factory = peer_factory
@@ -583,7 +583,7 @@ class LiveMediaGateway:
             face_profile_id=kwargs["face_profile_id"],
             voice_profile_id=kwargs["voice_profile_id"],
             region=self.settings.worker_region,
-            ssl_context=_worker_ssl_context(),
+            ssl_context=self._worker_tls_context,
             server_hostname=self.settings.worker_tls_server_name,
             max_inflight=self.settings.max_inflight,
         )

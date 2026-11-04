@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -43,17 +44,57 @@ def test_worker_tls_context_uses_system_roots_by_default(monkeypatch):
 def test_worker_tls_context_adds_operator_ca_without_disabling_verification(monkeypatch):
     ca_pem = "-----BEGIN CERTIFICATE-----\\npublic-test-ca\\n-----END CERTIFICATE-----"
     calls = []
-    context = object()
+    context = SimpleNamespace(
+        load_verify_locations=lambda **kwargs: calls.append(
+            ("load_verify_locations", kwargs)
+        )
+    )
 
     monkeypatch.setenv("SELDRUNE_LIVE_WORKER_CA_PEM", ca_pem)
     monkeypatch.setattr(
         gateway_module.ssl,
         "create_default_context",
-        lambda **kwargs: calls.append(kwargs) or context,
+        lambda **kwargs: calls.append(("create_default_context", kwargs)) or context,
     )
 
     assert gateway_module._worker_ssl_context() is context
-    assert calls == [{"cadata": ca_pem.replace("\\n", "\n")}]
+    assert calls == [
+        ("create_default_context", {}),
+        ("load_verify_locations", {"cadata": ca_pem.replace("\\n", "\n")}),
+    ]
+
+
+def test_gateway_rejects_invalid_worker_ca_during_construction(monkeypatch):
+    monkeypatch.setenv("SELDRUNE_LIVE_WORKER_CA_PEM", "not a PEM certificate")
+
+    with pytest.raises(RuntimeError, match="configured RunPod worker CA is invalid"):
+        LiveMediaGateway(
+            settings(),
+            profile_authorizer=lambda *_: ProfileAuthorization(True, True),
+        )
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("turn:relay.example.test:3478", "udp"),
+        ("turn:relay.example.test:3478?transport=tcp", "tcp"),
+        ("turns:relay.example.test:5349", "tcp"),
+        ("turns:relay.example.test:5349?transport=tcp", "tcp"),
+        ("turns:relay.example.test:5349?transport=udp", "udp"),
+    ],
+)
+def test_turn_transport_honors_explicit_query_before_scheme_default(url, expected):
+    assert gateway_module._turn_transport(url) == expected
+
+
+def test_turn_selector_honors_explicit_udp_on_turns_url():
+    url = "turns:relay.example.test:5349?transport=udp"
+    server = IceServer([url], "user", "credential")
+
+    selected = gateway_module._select_gateway_turn_transport([server], "udp")
+
+    assert selected == [server]
 
 
 class FakePeer:
@@ -200,6 +241,19 @@ def test_gateway_closes_worker_after_sustained_disconnection(monkeypatch):
         assert session_id not in gateway._sessions
 
     asyncio.run(scenario())
+
+
+def test_render_blueprint_exposes_optional_live_worker_ca():
+    render_yaml = Path(__file__).resolve().parents[1].joinpath("render.yaml").read_text(
+        encoding="utf-8"
+    )
+    gateway_section = render_yaml.split("    name: seldrune-live-gateway\n", 1)[1]
+    gateway_section = gateway_section.split("\ndatabases:\n", 1)[0]
+
+    assert (
+        "      - key: SELDRUNE_LIVE_WORKER_CA_PEM\n        sync: false"
+        in gateway_section
+    )
 
 
 def test_gateway_preserves_reconnected_session(monkeypatch):
