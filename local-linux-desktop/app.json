@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Local Linux Desktop",
+    "slug": "local-linux-desktop",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "package": "com.seldrune.locallinuxdesktop",
+      "softwareKeyboardLayoutMode": "resize",
+      "usesCleartextTraffic": false
+    },
+    "plugins": ["./plugins/withLocalLinux.cjs"]
+  }
+}

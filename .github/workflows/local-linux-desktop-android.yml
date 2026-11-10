@@ -1,0 +1,50 @@
+name: Local Linux Desktop Android APK
+
+on:
+  pull_request:
+    paths:
+      - 'local-linux-desktop/**'
+      - '.github/workflows/local-linux-desktop-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: local-linux-desktop
+    env:
+      EXPO_NO_TELEMETRY: '1'
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: local-linux-desktop/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm ci
+      - run: npm run typecheck
+      - run: python3 -m unittest discover -s test
+      - run: npx expo prebuild --platform android --no-install
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build installable debug APK
+        working-directory: local-linux-desktop/android
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Verify APK signature
+        run: |
+          test -s android/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: local-linux-desktop-debug-apk
+          path: local-linux-desktop/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
