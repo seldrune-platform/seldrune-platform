@@ -1,0 +1,32 @@
+{
+  "name": "local-linux-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "embed-scripts": "node scripts/embed-termux.mjs",
+    "prestart": "npm run embed-scripts",
+    "start": "expo start",
+    "preandroid": "npm run embed-scripts",
+    "android": "expo run:android",
+    "pretypecheck": "npm run embed-scripts",
+    "typecheck": "tsc --noEmit",
+    "eas-build-pre-install": "node scripts/embed-termux.mjs"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
+    "expo": "~58.0.17",
+    "expo-blur": "~58.0.5",
+    "expo-linear-gradient": "~58.0.3",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-native": "0.88.0",
+    "react-native-safe-area-context": "~5.10.1",
+    "react-native-webview": "14.0.1"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "@types/react": "~19.3.0"
+  }
+}
